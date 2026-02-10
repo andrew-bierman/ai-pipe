@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import pkg from "../../package.json";
 
 const CLI = join(import.meta.dir, "..", "index.ts");
 const tmpDir = tmpdir();
@@ -89,13 +90,13 @@ describe("CLI: help and version", () => {
 
   test("prints version with --version", async () => {
     const { stdout, exitCode } = await runCLI(["--version"]);
-    expect(stdout.trim()).toBe("1.0.0");
+    expect(stdout.trim()).toBe(pkg.version);
     expect(exitCode).toBe(0);
   });
 
   test("prints version with -V", async () => {
     const { stdout, exitCode } = await runCLI(["-V"]);
-    expect(stdout.trim()).toBe("1.0.0");
+    expect(stdout.trim()).toBe(pkg.version);
     expect(exitCode).toBe(0);
   });
 });
