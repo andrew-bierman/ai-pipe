@@ -81,6 +81,10 @@ describe("parseModel", () => {
     ["deepseek/deepseek-chat", "deepseek", "deepseek-chat", "deepseek/deepseek-chat"],
     ["cohere/command-r-plus", "cohere", "command-r-plus", "cohere/command-r-plus"],
     ["openrouter/openrouter", "openrouter", "openrouter", "openrouter/openrouter"],
+    ["azure/azure-model-id", "azure", "azure-model-id", "azure/azure-model-id"],
+    ["togetherai/meta-llama/Llama-3.3-70b-Instruct", "togetherai", "meta-llama/Llama-3.3-70b-Instruct", "togetherai/meta-llama/Llama-3.3-70b-Instruct"],
+    ["bedrock/anthropic.claude-sonnet-4-2025-02-19", "bedrock", "anthropic.claude-sonnet-4-2025-02-19", "bedrock/anthropic.claude-sonnet-4-2025-02-19"],
+    ["vertex/google/cloud/llama-3.1", "vertex", "google/cloud/llama-3.1", "vertex/google/cloud/llama-3.1"],
     ["ollama/llama3", "ollama", "llama3", "ollama/llama3"],
   ];
 
@@ -114,12 +118,12 @@ describe("parseModel", () => {
 // ── SUPPORTED_PROVIDERS ────────────────────────────────────────────────
 
 describe("SUPPORTED_PROVIDERS", () => {
-  test("has exactly 11 providers", () => {
-    expect(SUPPORTED_PROVIDERS).toHaveLength(11);
+  test("has exactly 15 providers", () => {
+    expect(SUPPORTED_PROVIDERS).toHaveLength(15);
   });
 
   test("includes all expected providers", () => {
-    const expected: ProviderId[] = ["openai", "anthropic", "google", "perplexity", "xai", "mistral", "groq", "deepseek", "cohere", "openrouter", "ollama"];
+    const expected: ProviderId[] = ["openai", "anthropic", "google", "perplexity", "xai", "mistral", "groq", "deepseek", "cohere", "openrouter", "azure", "togetherai", "bedrock", "vertex", "ollama"];
     for (const p of expected) {
       expect(SUPPORTED_PROVIDERS).toContain(p);
     }
@@ -134,31 +138,35 @@ describe("SUPPORTED_PROVIDERS", () => {
 // ── PROVIDER_ENV_VARS ──────────────────────────────────────────────────
 
 describe("PROVIDER_ENV_VARS", () => {
-  test("maps every provider to an env var", () => {
+  test("maps every provider to at least one env var", () => {
     for (const provider of SUPPORTED_PROVIDERS) {
       expect(PROVIDER_ENV_VARS[provider]).toBeDefined();
-      expect(typeof PROVIDER_ENV_VARS[provider]).toBe("string");
+      expect(Array.isArray(PROVIDER_ENV_VARS[provider])).toBe(true);
       expect(PROVIDER_ENV_VARS[provider].length).toBeGreaterThan(0);
     }
   });
 
-  const expected: Record<ProviderId, string> = {
-    openai: "OPENAI_API_KEY",
-    anthropic: "ANTHROPIC_API_KEY",
-    google: "GOOGLE_GENERATIVE_AI_API_KEY",
-    perplexity: "PERPLEXITY_API_KEY",
-    xai: "XAI_API_KEY",
-    mistral: "MISTRAL_API_KEY",
-    groq: "GROQ_API_KEY",
-    deepseek: "DEEPSEEK_API_KEY",
-    cohere: "COHERE_API_KEY",
-    openrouter: "OPENROUTER_API_KEY",
-    ollama: "OLLAMA_HOST",
+  const expected: Record<ProviderId, string[]> = {
+    openai: ["OPENAI_API_KEY"],
+    anthropic: ["ANTHROPIC_API_KEY"],
+    google: ["GOOGLE_GENERATIVE_AI_API_KEY"],
+    perplexity: ["PERPLEXITY_API_KEY"],
+    xai: ["XAI_API_KEY"],
+    mistral: ["MISTRAL_API_KEY"],
+    groq: ["GROQ_API_KEY"],
+    deepseek: ["DEEPSEEK_API_KEY"],
+    cohere: ["COHERE_API_KEY"],
+    openrouter: ["OPENROUTER_API_KEY"],
+    azure: ["AZURE_AI_API_KEY"],
+    togetherai: ["TOGETHERAI_API_KEY"],
+    bedrock: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
+    vertex: ["GOOGLE_VERTEX_PROJECT", "GOOGLE_VERTEX_LOCATION"],
+    ollama: ["OLLAMA_HOST"],
   };
 
-  for (const [provider, envVar] of Object.entries(expected)) {
-    test(`${provider} → ${envVar}`, () => {
-      expect(PROVIDER_ENV_VARS[provider as ProviderId]).toBe(envVar);
+  for (const [provider, envVars] of Object.entries(expected)) {
+    test(`${provider} → ${envVars.join(", ")}`, () => {
+      expect(PROVIDER_ENV_VARS[provider as ProviderId]).toEqual(envVars);
     });
   }
 });
@@ -184,23 +192,29 @@ describe("resolveModel", () => {
     process.env = { ...originalEnv };
   });
 
-  const providerCases: Array<{ provider: ProviderId; model: string; envVar: string; expectedModelId: string }> = [
-    { provider: "openai", model: "openai/gpt-4o", envVar: "OPENAI_API_KEY", expectedModelId: "gpt-4o" },
-    { provider: "anthropic", model: "anthropic/claude-sonnet-4-5", envVar: "ANTHROPIC_API_KEY", expectedModelId: "claude-sonnet-4-5" },
-    { provider: "google", model: "google/gemini-2.5-flash", envVar: "GOOGLE_GENERATIVE_AI_API_KEY", expectedModelId: "gemini-2.5-flash" },
-    { provider: "perplexity", model: "perplexity/sonar", envVar: "PERPLEXITY_API_KEY", expectedModelId: "sonar" },
-    { provider: "xai", model: "xai/grok-3", envVar: "XAI_API_KEY", expectedModelId: "grok-3" },
-    { provider: "mistral", model: "mistral/mistral-large-latest", envVar: "MISTRAL_API_KEY", expectedModelId: "mistral-large-latest" },
-    { provider: "groq", model: "groq/llama-3.3-70b-versatile", envVar: "GROQ_API_KEY", expectedModelId: "llama-3.3-70b-versatile" },
-    { provider: "deepseek", model: "deepseek/deepseek-chat", envVar: "DEEPSEEK_API_KEY", expectedModelId: "deepseek-chat" },
-    { provider: "cohere", model: "cohere/command-r-plus", envVar: "COHERE_API_KEY", expectedModelId: "command-r-plus" },
-    { provider: "openrouter", model: "openrouter/openrouter", envVar: "OPENROUTER_API_KEY", expectedModelId: "openrouter" },
-    { provider: "ollama", model: "ollama/llama3", envVar: "OLLAMA_HOST", expectedModelId: "llama3" },
+  const providerCases: Array<{ provider: ProviderId; model: string; envVars: string[]; expectedModelId: string }> = [
+    { provider: "openai", model: "openai/gpt-4o", envVars: ["OPENAI_API_KEY"], expectedModelId: "gpt-4o" },
+    { provider: "anthropic", model: "anthropic/claude-sonnet-4-5", envVars: ["ANTHROPIC_API_KEY"], expectedModelId: "claude-sonnet-4-5" },
+    { provider: "google", model: "google/gemini-2.5-flash", envVars: ["GOOGLE_GENERATIVE_AI_API_KEY"], expectedModelId: "gemini-2.5-flash" },
+    { provider: "perplexity", model: "perplexity/sonar", envVars: ["PERPLEXITY_API_KEY"], expectedModelId: "sonar" },
+    { provider: "xai", model: "xai/grok-3", envVars: ["XAI_API_KEY"], expectedModelId: "grok-3" },
+    { provider: "mistral", model: "mistral/mistral-large-latest", envVars: ["MISTRAL_API_KEY"], expectedModelId: "mistral-large-latest" },
+    { provider: "groq", model: "groq/llama-3.3-70b-versatile", envVars: ["GROQ_API_KEY"], expectedModelId: "llama-3.3-70b-versatile" },
+    { provider: "deepseek", model: "deepseek/deepseek-chat", envVars: ["DEEPSEEK_API_KEY"], expectedModelId: "deepseek-chat" },
+    { provider: "cohere", model: "cohere/command-r-plus", envVars: ["COHERE_API_KEY"], expectedModelId: "command-r-plus" },
+    { provider: "openrouter", model: "openrouter/openrouter", envVars: ["OPENROUTER_API_KEY"], expectedModelId: "openrouter" },
+    { provider: "azure", model: "azure/azure-model-id", envVars: ["AZURE_AI_API_KEY"], expectedModelId: "azure-model-id" },
+    { provider: "togetherai", model: "togetherai/meta-llama/Llama-3.3-70b-Instruct", envVars: ["TOGETHERAI_API_KEY"], expectedModelId: "meta-llama/Llama-3.3-70b-Instruct" },
+    { provider: "bedrock", model: "bedrock/anthropic.claude-sonnet-4-2025-02-19", envVars: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"], expectedModelId: "anthropic.claude-sonnet-4-2025-02-19" },
+    { provider: "vertex", model: "vertex/google/cloud/llama-3.1", envVars: ["GOOGLE_VERTEX_PROJECT", "GOOGLE_VERTEX_LOCATION"], expectedModelId: "google/cloud/llama-3.1" },
+    { provider: "ollama", model: "ollama/llama3", envVars: ["OLLAMA_HOST"], expectedModelId: "llama3" },
   ];
 
-  for (const { provider, model, envVar, expectedModelId } of providerCases) {
-    test(`resolves ${provider} model when ${envVar.includes("HOST") ? "host URL is set" : "API key is set"}`, () => {
-      process.env[envVar] = envVar.includes("HOST") ? "http://localhost:11434" : "test-key";
+  for (const { provider, model, envVars, expectedModelId } of providerCases) {
+    test(`resolves ${provider} model when required env vars are set`, () => {
+      for (const envVar of envVars) {
+        process.env[envVar] = "test-value";
+      }
       const m = resolveModel(model);
       expect(m).toBeDefined();
       expect(m.modelId).toBe(expectedModelId);

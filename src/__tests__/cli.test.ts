@@ -16,6 +16,14 @@ const CLEAN_ENV = {
   GROQ_API_KEY: "",
   DEEPSEEK_API_KEY: "",
   COHERE_API_KEY: "",
+  OPENROUTER_API_KEY: "",
+  AZURE_AI_API_KEY: "",
+  TOGETHERAI_API_KEY: "",
+  AWS_ACCESS_KEY_ID: "",
+  AWS_SECRET_ACCESS_KEY: "",
+  GOOGLE_VERTEX_PROJECT: "",
+  GOOGLE_VERTEX_LOCATION: "",
+  OLLAMA_HOST: "",
 };
 
 async function runCLI(
@@ -118,7 +126,7 @@ describe("CLI: API key validation", () => {
         ["-m", model, "hello"],
         { env: CLEAN_ENV }
       );
-      expect(stderr).toContain("Missing API key");
+      expect(stderr).toContain("Missing required environment variable");
       expect(stderr).toContain(envVar);
       expect(exitCode).toBe(1);
     });
@@ -161,7 +169,7 @@ describe("CLI: short flags", () => {
       ["-s", "you are a poet", "hello"],
       { env: CLEAN_ENV }
     );
-    expect(stderr).toContain("Missing API key");
+    expect(stderr).toContain("Missing required environment variable");
     expect(exitCode).toBe(1);
   });
 });
@@ -199,7 +207,7 @@ describe("CLI: config file", () => {
       { env: CLEAN_ENV }
     );
     // Should get to API key error, not config file error
-    expect(stderr).toContain("Missing API key");
+    expect(stderr).toContain("Missing required environment variable");
     expect(exitCode).toBe(1);
   });
 
@@ -211,7 +219,7 @@ describe("CLI: config file", () => {
       ["-c", configPath, "hello"],
       { env: CLEAN_ENV }
     );
-    expect(stderr).toContain("Missing API key");
+    expect(stderr).toContain("Missing required environment variable");
     expect(exitCode).toBe(1);
   });
 
@@ -229,8 +237,8 @@ describe("CLI: config file", () => {
       ["-c", configPath, "hello"],
       { env: CLEAN_ENV }
     );
-    // Should NOT get "Missing API key" — the config key was injected
-    expect(stderr).not.toContain("Missing API key");
+    // Should NOT get "Missing required environment variable" — the config key was injected
+    expect(stderr).not.toContain("Missing required environment variable");
   });
 
   test("env var takes precedence over config apiKeys", async () => {
@@ -247,8 +255,8 @@ describe("CLI: config file", () => {
       ["-c", configPath, "hello"],
       { env: { ...CLEAN_ENV, ANTHROPIC_API_KEY: "sk-env-key" } }
     );
-    // Should NOT get "Missing API key" — env var is set
-    expect(stderr).not.toContain("Missing API key");
+    // Should NOT get "Missing required environment variable" — env var is set
+    expect(stderr).not.toContain("Missing required environment variable");
   });
 });
 
@@ -318,7 +326,7 @@ describe("CLI: stdin handling", () => {
       stdin: "hello from stdin",
       env: CLEAN_ENV,
     });
-    expect(stderr).toContain("Missing API key");
+    expect(stderr).toContain("Missing required environment variable");
     expect(exitCode).toBe(1);
   });
 
@@ -327,7 +335,7 @@ describe("CLI: stdin handling", () => {
       stdin: "const x = 1;",
       env: CLEAN_ENV,
     });
-    expect(stderr).toContain("Missing API key");
+    expect(stderr).toContain("Missing required environment variable");
     expect(exitCode).toBe(1);
   });
 });
@@ -341,7 +349,7 @@ describe("CLI: prompt joining", () => {
       { env: CLEAN_ENV }
     );
     // Reaches API key check, meaning prompt was successfully constructed
-    expect(stderr).toContain("Missing API key");
+    expect(stderr).toContain("Missing required environment variable");
     expect(exitCode).toBe(1);
   });
 });
