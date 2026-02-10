@@ -217,4 +217,4 @@ bun run typecheck     # TypeScript type checking
 
 ## License
 
-MIT
+GPL-3.0 — see [LICENSE](LICENSE) for details.

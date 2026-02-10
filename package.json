@@ -44,7 +44,7 @@
   "bugs": {
     "url": "https://github.com/andrew-bierman/ai-pipe/issues"
   },
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "dependencies": {
     "@ai-sdk/amazon-bedrock": "^4.0.54",
     "@ai-sdk/anthropic": "^3.0.39",
