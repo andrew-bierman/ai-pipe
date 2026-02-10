@@ -1,14 +1,18 @@
 #!/usr/bin/env bun
 
-import { z } from "zod";
+import { generateText, streamText } from "ai";
 import { program } from "commander";
-import { streamText, generateText, type LanguageModelUsage, type FinishReason } from "ai";
-import { resolveModel, printProviders, PROVIDER_ENV_VARS, ProviderIdSchema } from "./provider.ts";
-import { loadConfig, type Config } from "./config.ts";
-import { generateCompletions } from "./completions.ts";
-import { APP } from "./constants.ts";
-
+import { z } from "zod";
 import pkg from "../package.json";
+import { generateCompletions } from "./completions.ts";
+import { type Config, loadConfig } from "./config.ts";
+import { APP } from "./constants.ts";
+import {
+  PROVIDER_ENV_VARS,
+  ProviderIdSchema,
+  printProviders,
+  resolveModel,
+} from "./provider.ts";
 
 export interface CLIOptions {
   model?: string;
@@ -29,7 +33,11 @@ export const CLIOptionsSchema = z.object({
   file: z.array(z.string()).optional(),
   json: z.boolean(),
   stream: z.boolean(),
-  temperature: z.number().min(APP.temperature.min).max(APP.temperature.max).optional(),
+  temperature: z
+    .number()
+    .min(APP.temperature.min)
+    .max(APP.temperature.max)
+    .optional(),
   maxOutputTokens: z.number().int().positive().optional(),
   config: z.string().optional(),
   providers: z.boolean().optional(),
@@ -78,7 +86,7 @@ export async function readFiles(paths: string[]): Promise<string> {
 export function buildPrompt(
   argPrompt: string | null,
   fileContent: string | null = null,
-  stdinContent: string | null = null
+  stdinContent: string | null = null,
 ): string | null {
   const parts: string[] = [];
   if (argPrompt) parts.push(argPrompt);
@@ -89,7 +97,7 @@ export function buildPrompt(
 
 export function resolveOptions(
   opts: CLIOptions,
-  config: Config
+  config: Config,
 ): {
   modelString: string;
   system: string | undefined;
@@ -100,7 +108,8 @@ export function resolveOptions(
     modelString: opts.model ?? config.model ?? APP.defaultModel,
     system: opts.system ?? config.system ?? undefined,
     temperature: opts.temperature ?? config.temperature ?? undefined,
-    maxOutputTokens: opts.maxOutputTokens ?? config.maxOutputTokens ?? undefined,
+    maxOutputTokens:
+      opts.maxOutputTokens ?? config.maxOutputTokens ?? undefined,
   };
 }
 
@@ -116,7 +125,9 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
   const parsed = CLIOptionsSchema.safeParse(rawOpts);
   if (!parsed.success) {
     for (const issue of parsed.error.issues) {
-      console.error(`Error: Invalid option "${issue.path.join(".")}": ${issue.message}`);
+      console.error(
+        `Error: Invalid option "${issue.path.join(".")}": ${issue.message}`,
+      );
     }
     process.exit(1);
   }
@@ -129,7 +140,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
   }
 
   if (opts.completions) {
-    process.stdout.write(generateCompletions(opts.completions) + "\n");
+    process.stdout.write(`${generateCompletions(opts.completions)}\n`);
     return;
   }
 
@@ -167,7 +178,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
 
   const { modelString, system, temperature, maxOutputTokens } = resolveOptions(
     opts,
-    config
+    config,
   );
 
   const model = resolveModel(modelString);
@@ -189,9 +200,9 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
           usage: result.usage,
           finishReason: result.finishReason,
         };
-        process.stdout.write(JSON.stringify(output, null, 2) + "\n");
+        process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
       } else {
-        process.stdout.write(result.text + "\n");
+        process.stdout.write(`${result.text}\n`);
       }
     } else {
       const result = streamText({
@@ -221,20 +232,35 @@ export function setupCLI() {
     .argument("[prompt...]", "Prompt text. Multiple words are joined.")
     .option("-m, --model <model>", "Model in provider/model-id format")
     .option("-s, --system <prompt>", "System prompt")
-    .option("-f, --file <path>", "Include file contents in prompt (repeatable)", (val: string, acc: string[]) => { acc.push(val); return acc; }, [] as string[])
+    .option(
+      "-f, --file <path>",
+      "Include file contents in prompt (repeatable)",
+      (val: string, acc: string[]) => {
+        acc.push(val);
+        return acc;
+      },
+      [] as string[],
+    )
     .option("-j, --json", "Output full JSON response object", false)
     .option("--no-stream", "Wait for full response, then print")
-    .option("-t, --temperature <n>", `Sampling temperature (${APP.temperature.min}-${APP.temperature.max})`, parseFloat)
+    .option(
+      "-t, --temperature <n>",
+      `Sampling temperature (${APP.temperature.min}-${APP.temperature.max})`,
+      parseFloat,
+    )
     .option("--max-output-tokens <n>", "Maximum tokens to generate", parseInt)
     .option("-c, --config <path>", "Path to config directory")
     .option("--providers", "List supported providers and their API key status")
-    .option("--completions <shell>", `Generate shell completions (${APP.supportedShells.join(", ")})`)
+    .option(
+      "--completions <shell>",
+      `Generate shell completions (${APP.supportedShells.join(", ")})`,
+    )
     .action(run);
 
-  program.parse();
+  return program;
 }
 
 // Only run CLI when executed directly (Bun), not when imported
 if (import.meta.main) {
-  setupCLI();
+  setupCLI().parse();
 }
