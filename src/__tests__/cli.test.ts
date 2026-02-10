@@ -214,6 +214,42 @@ describe("CLI: config file", () => {
     expect(stderr).toContain("Missing API key");
     expect(exitCode).toBe(1);
   });
+
+  test("config apiKeys provides API key (bypasses missing key error)", async () => {
+    const configPath = join(tmpDir, `ai-cfg-${uid()}.json`);
+    await Bun.write(
+      configPath,
+      JSON.stringify({
+        model: "openai/gpt-4o",
+        apiKeys: { openai: "sk-fake-config-key" },
+      })
+    );
+
+    const { stderr } = await runCLI(
+      ["-c", configPath, "hello"],
+      { env: CLEAN_ENV }
+    );
+    // Should NOT get "Missing API key" — the config key was injected
+    expect(stderr).not.toContain("Missing API key");
+  });
+
+  test("env var takes precedence over config apiKeys", async () => {
+    const configPath = join(tmpDir, `ai-cfg-${uid()}.json`);
+    await Bun.write(
+      configPath,
+      JSON.stringify({
+        model: "anthropic/claude-sonnet-4-5",
+        apiKeys: { anthropic: "sk-config-key" },
+      })
+    );
+
+    const { stderr } = await runCLI(
+      ["-c", configPath, "hello"],
+      { env: { ...CLEAN_ENV, ANTHROPIC_API_KEY: "sk-env-key" } }
+    );
+    // Should NOT get "Missing API key" — env var is set
+    expect(stderr).not.toContain("Missing API key");
+  });
 });
 
 // ── --providers ────────────────────────────────────────────────────────
