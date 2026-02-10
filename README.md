@@ -301,6 +301,7 @@ The release workflow handles `bun publish`, binary builds, and GitHub release.
 - [ ] **Markdown rendering** — syntax-highlighted, formatted output in the terminal
 - [ ] **Cost tracking** — show estimated token costs per request
 - [ ] **Response caching** — skip duplicate API calls for identical prompts
+- [ ] **Update notifications** — check for new versions and prompt to upgrade
 - [ ] **Tool use** — function calling and MCP support
 
 ## 📚 Documentation
