@@ -29,7 +29,6 @@ export type Config = z.infer<typeof ConfigSchema> & {
 };
 
 const ROLES_DIR = "roles";
-const getConfigDir = () => join(APP.configDirName, ROLES_DIR);
 
 async function loadJsonFile<T>(
   path: string,
@@ -45,10 +44,14 @@ async function loadJsonFile<T>(
   }
 }
 
-export async function loadRole(roleName: string): Promise<string | null> {
+export async function loadRole(
+  roleName: string,
+  configDir?: string,
+): Promise<string | null> {
+  const dir = configDir ?? APP.configDirName;
   // Sanitize roleName to prevent path traversal attacks
   const sanitizedName = basename(roleName);
-  const rolesPath = join(APP.configDirName, ROLES_DIR, sanitizedName);
+  const rolesPath = join(dir, ROLES_DIR, sanitizedName);
 
   // Try with .txt extension first
   const txtFile = Bun.file(`${rolesPath}.txt`);
@@ -73,16 +76,13 @@ export async function loadRole(roleName: string): Promise<string | null> {
   return null;
 }
 
-export async function listRoles(): Promise<string[]> {
-  const rolesPath = join(APP.configDirName, ROLES_DIR);
+export async function listRoles(configDir?: string): Promise<string[]> {
+  const dir = configDir ?? APP.configDirName;
+  const rolesPath = join(dir, ROLES_DIR);
 
   try {
-    const dir = Bun.file(rolesPath);
-    if (!(await dir.exists())) {
-      return [];
-    }
-
     // Use glob to find .txt and .md role files
+    // Note: Bun.file().exists() doesn't work for directories, so we rely on the glob catching the error
     const glob = new Bun.Glob("*.{txt,md}");
     const roleFiles = await Array.fromAsync(glob.scan(rolesPath));
     const roles: string[] = roleFiles.map((path) =>
