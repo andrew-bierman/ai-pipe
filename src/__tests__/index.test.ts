@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Config } from "../config.ts";
@@ -348,5 +349,135 @@ describe("JsonOutputSchema", () => {
         usage: {},
       }).success,
     ).toBe(false);
+  });
+});
+
+// ── Role options ───────────────────────────────────────────────────────
+
+describe("CLIOptionsSchema with role options", () => {
+  test("accepts --role option", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      role: "reviewer",
+    });
+    expect(result.role).toBe("reviewer");
+  });
+
+  test("accepts --roles option", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      roles: true,
+    });
+    expect(result.roles).toBe(true);
+  });
+
+  test("accepts both --role and --system options", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      role: "reviewer",
+      system: "You are a reviewer",
+    });
+    expect(result.role).toBe("reviewer");
+    expect(result.system).toBe("You are a reviewer");
+  });
+});
+
+// ── Role loading and precedence ───────────────────────────────────────
+
+import { listRoles, loadRole } from "../config.ts";
+
+describe("loadRole", () => {
+  const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const baseDir = join(tmpdir(), `roles-test-${uid()}`);
+  const rolesDir = join(baseDir, "roles");
+
+  test("loads a .txt role file", async () => {
+    mkdirSync(rolesDir, { recursive: true });
+    const rolePath = join(rolesDir, "testrole.txt");
+    await Bun.write(rolePath, "You are a test role");
+    const result = await loadRole("testrole", baseDir);
+    rmSync(baseDir, { recursive: true });
+    expect(result).toBe("You are a test role");
+  });
+
+  test("returns null for nonexistent role", async () => {
+    const result = await loadRole("nonexistent", baseDir);
+    expect(result).toBeNull();
+  });
+
+  test("sanitizes role name to prevent path traversal", async () => {
+    mkdirSync(rolesDir, { recursive: true });
+    // Create a file outside the roles directory
+    const outsidePath = join(tmpdir(), `outside-${uid()}.txt`);
+    await Bun.write(outsidePath, "secret content");
+
+    try {
+      // Try to access a file outside the roles directory
+      const result = await loadRole("../outside", baseDir);
+      expect(result).toBeNull();
+    } finally {
+      rmSync(outsidePath);
+      rmSync(baseDir, { recursive: true });
+    }
+  });
+
+  test("rejects role names with path separators", async () => {
+    mkdirSync(rolesDir, { recursive: true });
+    const result = await loadRole("subdir/role", baseDir);
+    rmSync(baseDir, { recursive: true });
+    expect(result).toBeNull();
+  });
+});
+
+describe("listRoles", () => {
+  const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const baseDir = join(tmpdir(), `roles-list-test-${uid()}`);
+  const rolesDir = join(baseDir, "roles");
+
+  test("lists only .txt role files", async () => {
+    // Create test fixtures
+    mkdirSync(rolesDir, { recursive: true });
+    await Bun.write(join(rolesDir, "role1.txt"), "Role 1 content");
+    await Bun.write(join(rolesDir, "role2.txt"), "Role 2 content");
+    // Create a .md file (should be ignored)
+    await Bun.write(join(rolesDir, "role3.md"), "Role 3 content");
+    // Create a duplicate (both .txt and plain file)
+    await Bun.write(join(rolesDir, "role4.txt"), "Role 4 content");
+    await Bun.write(join(rolesDir, "role4"), "Duplicate plain file");
+
+    const roles = await listRoles(baseDir);
+    rmSync(baseDir, { recursive: true });
+    expect(roles).toContain("role1");
+    expect(roles).toContain("role2");
+    expect(roles).not.toContain("role3"); // .md file should be ignored
+  });
+
+  test("sorts roles alphabetically", async () => {
+    mkdirSync(rolesDir, { recursive: true });
+    await Bun.write(join(rolesDir, "brole.txt"), "Role B");
+    await Bun.write(join(rolesDir, "arole.txt"), "Role A");
+
+    const roles = await listRoles(baseDir);
+    rmSync(baseDir, { recursive: true });
+    expect(roles).toEqual(["arole", "brole"]);
+  });
+
+  test("deduplicates roles", async () => {
+    mkdirSync(rolesDir, { recursive: true });
+    await Bun.write(join(rolesDir, "dup.txt"), "Role content");
+    await Bun.write(join(rolesDir, "dup"), "Duplicate plain file");
+
+    const roles = await listRoles(baseDir);
+    rmSync(baseDir, { recursive: true });
+    const counts = roles.filter((r) => r === "dup").length;
+    expect(counts).toBe(1);
+  });
+
+  test("returns empty array for nonexistent directory", async () => {
+    const roles = await listRoles("/nonexistent/path");
+    expect(roles).toEqual([]);
   });
 });

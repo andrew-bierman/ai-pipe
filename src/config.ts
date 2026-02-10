@@ -81,15 +81,15 @@ export async function listRoles(configDir?: string): Promise<string[]> {
   const rolesPath = join(dir, ROLES_DIR);
 
   try {
-    // Use glob to find .txt and .md role files
-    // Note: Bun.file().exists() doesn't work for directories, so we rely on the glob catching the error
-    const glob = new Bun.Glob("*.{txt,md}");
+    // Only scan for .txt role files as per the design
+    const glob = new Bun.Glob("*.txt");
     const roleFiles = await Array.fromAsync(glob.scan(rolesPath));
-    const roles: string[] = roleFiles.map((path) =>
-      basename(path, path.endsWith(".md") ? ".md" : ".txt"),
-    );
+    const roles: string[] = roleFiles.map((path) => basename(path, ".txt"));
 
-    return roles.sort();
+    // Deduplicate in case both "name" and "name.txt" exist
+    const uniqueRoles = [...new Set(roles)];
+
+    return uniqueRoles.sort();
   } catch {
     return [];
   }
