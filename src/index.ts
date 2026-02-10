@@ -201,7 +201,7 @@ if (import.meta.main) {
     .option("--no-stream", "Wait for full response, then print")
     .option("-t, --temperature <n>", `Sampling temperature (${APP.temperature.min}-${APP.temperature.max})`, parseFloat)
     .option("--max-output-tokens <n>", "Maximum tokens to generate", parseInt)
-    .option("-c, --config <path>", "Path to config file")
+    .option("-c, --config <path>", "Path to config directory")
     .option("--providers", "List supported providers and their API key status")
     .option("--completions <shell>", `Generate shell completions (${APP.supportedShells.join(", ")})`)
     .action(run);

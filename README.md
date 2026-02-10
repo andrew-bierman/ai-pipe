@@ -10,7 +10,7 @@ Built on the [Vercel AI SDK](https://sdk.vercel.ai/) with [Bun](https://bun.sh/)
 - **Streaming by default** — tokens print as they arrive
 - **Pipe-friendly** — reads from stdin, writes to stdout, errors to stderr
 - **JSON output** — structured response with usage and finish reason
-- **Config files** — set defaults in `~/.ai-pipe.json`
+- **Config directory** — set defaults in `~/.ai-pipe/`
 - **Shell completions** — bash, zsh, fish
 - **Standalone binary** — compile to a single executable with `bun build --compile`
 
@@ -100,32 +100,39 @@ If no `provider/` prefix is given, the model defaults to `openai`. If no `-m` fl
 | ollama | `OLLAMA_HOST` | `ollama/llama3` |
 | huggingface | `HF_TOKEN` | `huggingface/meta-llama/Llama-3.3-70b-Instruct` |
 
-## Config File
+## Config Directory
 
-Create `~/.ai-pipe.json` to set defaults:
+Create `~/.ai-pipe/` with two optional files:
+
+**`~/.ai-pipe/config.json`** — settings:
 
 ```json
 {
   "model": "anthropic/claude-sonnet-4-5",
   "system": "Be concise.",
   "temperature": 0.7,
-  "maxOutputTokens": 1000,
-  "apiKeys": {
-    "anthropic": "sk-ant-...",
-    "openai": "sk-..."
-  }
+  "maxOutputTokens": 1000
 }
 ```
 
-API keys in the config file work as an alternative to environment variables. Environment variables always take precedence over config file keys.
+**`~/.ai-pipe/apiKeys.json`** — API keys:
 
-Use a custom config path with `-c`:
-
-```sh
-ai-pipe -c ./my-config.json "hello"
+```json
+{
+  "anthropic": "sk-ant-...",
+  "openai": "sk-..."
+}
 ```
 
-CLI flags always override config file values.
+API keys in `apiKeys.json` work as an alternative to environment variables. Environment variables always take precedence.
+
+Use a custom config directory with `-c`:
+
+```sh
+ai-pipe -c ./my-config-dir "hello"
+```
+
+CLI flags always override config values.
 
 ## Shell Completions
 
@@ -175,7 +182,7 @@ Options:
   --no-stream                  Wait for full response, then print
   -t, --temperature <n>        Sampling temperature (0-2)
   --max-output-tokens <n>      Maximum tokens to generate
-  -c, --config <path>          Path to config file
+  -c, --config <path>          Path to config directory
   --providers                  List supported providers and their API key status
   --completions <shell>        Generate shell completions (bash, zsh, fish)
   -V, --version                Print version

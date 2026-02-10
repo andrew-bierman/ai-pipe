@@ -1,10 +1,17 @@
 import { test, expect, describe } from "bun:test";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { mkdirSync } from "node:fs";
 
 const CLI = join(import.meta.dir, "..", "index.ts");
 const tmpDir = tmpdir();
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+function makeTmpDir(): string {
+  const dir = join(tmpDir, `ai-cfg-${uid()}`);
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
 
 const CLEAN_ENV = {
   OPENAI_API_KEY: "",
@@ -175,85 +182,79 @@ describe("CLI: short flags", () => {
   });
 });
 
-// ── Config File ────────────────────────────────────────────────────────
+// ── Config Directory ───────────────────────────────────────────────────
 
-describe("CLI: config file", () => {
-  test("uses config file when specified with -c", async () => {
-    const configPath = join(tmpDir, `ai-cfg-${uid()}.json`);
-    await Bun.write(configPath, JSON.stringify({ model: "fakeprovider/model" }));
+describe("CLI: config directory", () => {
+  test("uses config directory when specified with -c", async () => {
+    const dir = makeTmpDir();
+    await Bun.write(join(dir, "config.json"), JSON.stringify({ model: "fakeprovider/model" }));
 
     const { stderr, exitCode } = await runCLI(
-      ["-c", configPath, "hello"],
+      ["-c", dir, "hello"],
       { env: CLEAN_ENV }
     );
     expect(stderr).toContain('Unknown provider "fakeprovider"');
     expect(exitCode).toBe(1);
   });
 
-  test("CLI flag overrides config file model", async () => {
-    const configPath = join(tmpDir, `ai-cfg-${uid()}.json`);
-    await Bun.write(configPath, JSON.stringify({ model: "openai/gpt-4o" }));
+  test("CLI flag overrides config directory model", async () => {
+    const dir = makeTmpDir();
+    await Bun.write(join(dir, "config.json"), JSON.stringify({ model: "openai/gpt-4o" }));
 
     const { stderr, exitCode } = await runCLI(
-      ["-c", configPath, "-m", "badprovider/model", "hello"],
+      ["-c", dir, "-m", "badprovider/model", "hello"],
       { env: { ...CLEAN_ENV, OPENAI_API_KEY: "fake" } }
     );
     expect(stderr).toContain('Unknown provider "badprovider"');
     expect(exitCode).toBe(1);
   });
 
-  test("ignores missing config file gracefully", async () => {
+  test("ignores missing config directory gracefully", async () => {
     const { stderr, exitCode } = await runCLI(
-      ["-c", "/nonexistent/config.json", "hello"],
+      ["-c", "/nonexistent/config-dir", "hello"],
       { env: CLEAN_ENV }
     );
-    // Should get to API key error, not config file error
+    // Should get to API key error, not config directory error
     expect(stderr).toContain("Missing required environment variable");
     expect(exitCode).toBe(1);
   });
 
-  test("ignores invalid config file gracefully", async () => {
-    const configPath = join(tmpDir, `ai-cfg-${uid()}.json`);
-    await Bun.write(configPath, "not json");
+  test("ignores invalid config.json gracefully", async () => {
+    const dir = makeTmpDir();
+    await Bun.write(join(dir, "config.json"), "not json");
 
     const { stderr, exitCode } = await runCLI(
-      ["-c", configPath, "hello"],
+      ["-c", dir, "hello"],
       { env: CLEAN_ENV }
     );
     expect(stderr).toContain("Missing required environment variable");
     expect(exitCode).toBe(1);
   });
 
-  test("config apiKeys provides API key (bypasses missing key error)", async () => {
-    const configPath = join(tmpDir, `ai-cfg-${uid()}.json`);
-    await Bun.write(
-      configPath,
-      JSON.stringify({
-        model: "openai/gpt-4o",
-        apiKeys: { openai: "sk-fake-config-key" },
-      })
-    );
+  test("apiKeys.json provides API key (bypasses missing key error)", async () => {
+    const dir = makeTmpDir();
+    await Promise.all([
+      Bun.write(join(dir, "config.json"), JSON.stringify({ model: "openai/gpt-4o" })),
+      Bun.write(join(dir, "apiKeys.json"), JSON.stringify({ openai: "sk-fake-config-key" })),
+    ]);
 
     const { stderr } = await runCLI(
-      ["-c", configPath, "hello"],
+      ["-c", dir, "hello"],
       { env: CLEAN_ENV }
     );
     // Should NOT get "Missing required environment variable" — the config key was injected
     expect(stderr).not.toContain("Missing required environment variable");
   });
 
-  test("env var takes precedence over config apiKeys", async () => {
-    const configPath = join(tmpDir, `ai-cfg-${uid()}.json`);
-    await Bun.write(
-      configPath,
-      JSON.stringify({
-        model: "anthropic/claude-sonnet-4-5",
-        apiKeys: { anthropic: "sk-config-key" },
-      })
-    );
+  test("env var takes precedence over apiKeys.json", async () => {
+    const dir = makeTmpDir();
+    await Promise.all([
+      Bun.write(join(dir, "config.json"), JSON.stringify({ model: "anthropic/claude-sonnet-4-5" })),
+      Bun.write(join(dir, "apiKeys.json"), JSON.stringify({ anthropic: "sk-config-key" })),
+    ]);
 
     const { stderr } = await runCLI(
-      ["-c", configPath, "hello"],
+      ["-c", dir, "hello"],
       { env: { ...CLEAN_ENV, ANTHROPIC_API_KEY: "sk-env-key" } }
     );
     // Should NOT get "Missing required environment variable" — env var is set
