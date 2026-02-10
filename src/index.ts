@@ -2,7 +2,6 @@
 
 import { generateText, streamText } from "ai";
 import { program } from "commander";
-import { marked } from "marked";
 import { z } from "zod";
 import pkg from "../package.json";
 import { generateCompletions } from "./completions.ts";
@@ -205,7 +204,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
         };
         process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
       } else if (markdown) {
-        const rendered = await marked(result.text);
+        const rendered = Bun.markdown.html(result.text);
         process.stdout.write(rendered + "\n");
       } else {
         process.stdout.write(`${result.text}\n`);
@@ -225,7 +224,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
           chunks.push(chunk);
         }
         const fullText = chunks.join("");
-        const rendered = await marked(fullText);
+        const rendered = Bun.markdown.html(fullText);
         process.stdout.write(rendered + "\n");
       } else {
         for await (const chunk of result.textStream) {
