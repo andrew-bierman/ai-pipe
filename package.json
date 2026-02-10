@@ -35,7 +35,11 @@
     "pipe",
     "terminal",
     "openrouter",
-    "vercel-ai-sdk"
+    "vercel-ai-sdk",
+    "command-line-tool",
+    "developer-tools",
+    "generative-ai",
+    "shell"
   ],
   "author": "Andrew Bierman",
   "repository": {
