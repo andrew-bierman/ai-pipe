@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Config } from "../config.ts";
@@ -8,6 +9,7 @@ import {
   CLIOptionsSchema,
   JsonOutputSchema,
   readFiles,
+  readImages,
   resolveOptions,
 } from "../index.ts";
 
@@ -27,8 +29,8 @@ describe("buildPrompt", () => {
     expect(result).toBe("review this code\n\nconst x = 1;");
   });
 
-  test("returns null when neither provided", () => {
-    expect(buildPrompt(null, null)).toBeNull();
+  test("returns empty string when neither provided", () => {
+    expect(buildPrompt(null, null)).toBe("");
   });
 
   test("arg prompt comes first in combined output", () => {
@@ -72,8 +74,8 @@ describe("buildPrompt", () => {
     expect(result).toBe("# f.txt\n```\ncontent\n```\n\nstdin");
   });
 
-  test("returns null when all three are null", () => {
-    expect(buildPrompt(null, null, null)).toBeNull();
+  test("returns empty string when all three are null", () => {
+    expect(buildPrompt(null, null, null)).toBe("");
   });
 
   test("file content default param preserves two-arg behavior", () => {
@@ -117,10 +119,69 @@ describe("readFiles", () => {
   });
 });
 
+// ── readImages ────────────────────────────────────────────────────────
+
+describe("readImages", () => {
+  const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  test("reads a single image and returns data URL", async () => {
+    const path = join(tmpdir(), `test-${uid()}.png`);
+    await Bun.write(path, "fake png content");
+    const result = await readImages([path]);
+    expect(result).toHaveLength(1);
+    expect(result[0].url).toMatch(/^data:image\/png;base64,/);
+    expect(result[0].url).toContain("ZmFrZSBwbmcgY29udGVudA=="); // "fake png content" in base64
+  });
+
+  test("reads multiple images and returns data URLs", async () => {
+    const path1 = join(tmpdir(), `test-${uid()}-a.png`);
+    const path2 = join(tmpdir(), `test-${uid()}-b.jpg`);
+    await Bun.write(path1, "image one");
+    await Bun.write(path2, "image two");
+    const result = await readImages([path1, path2]);
+    expect(result).toHaveLength(2);
+    expect(result[0].url).toMatch(/^data:image\/png;base64,/);
+    expect(result[1].url).toMatch(/^data:image\/jpeg;base64,/);
+  });
+
+  test("throws on nonexistent image file", async () => {
+    const missing = join(tmpdir(), `nonexistent-${uid()}.png`);
+    await expect(readImages([missing])).rejects.toThrow(
+      `Image not found: ${missing}`,
+    );
+  });
+
+  test("throws on nonexistent file among valid images", async () => {
+    const validPath = join(tmpdir(), `test-${uid()}-valid.png`);
+    const missingPath = join(tmpdir(), `missing-${uid()}.png`);
+    await Bun.write(validPath, "valid image");
+    await expect(readImages([validPath, missingPath])).rejects.toThrow(
+      `Image not found: ${missingPath}`,
+    );
+  });
+
+  test("detects PNG mime type from file content", async () => {
+    // PNG magic bytes
+    const pngPath = join(tmpdir(), `test-${uid()}.png`);
+    await Bun.write(pngPath, "\x89PNG\r\n\x1a\n");
+    const result = await readImages([pngPath]);
+    expect(result[0].url).toMatch(/^data:image\/png;base64,/);
+  });
+
+  test("handles empty image array", async () => {
+    const result = await readImages([]);
+    expect(result).toEqual([]);
+  });
+});
+
 // ── resolveOptions ─────────────────────────────────────────────────────
 
 describe("resolveOptions", () => {
-  const defaultOpts: CLIOptions = { json: false, stream: true };
+  const defaultOpts: CLIOptions = {
+    json: false,
+    stream: true,
+    markdown: false,
+  };
   const emptyConfig: Config = {};
 
   test("uses built-in defaults when no flags or config", () => {
@@ -197,9 +258,14 @@ describe("resolveOptions", () => {
 
 describe("CLIOptionsSchema", () => {
   test("accepts minimal valid options", () => {
-    const result = CLIOptionsSchema.parse({ json: false, stream: true });
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      markdown: false,
+    });
     expect(result.json).toBe(false);
     expect(result.stream).toBe(true);
+    expect(result.markdown).toBe(false);
   });
 
   test("accepts full valid options", () => {
@@ -220,15 +286,23 @@ describe("CLIOptionsSchema", () => {
 
   test("rejects temperature below 0", () => {
     expect(
-      CLIOptionsSchema.safeParse({ json: false, stream: true, temperature: -1 })
-        .success,
+      CLIOptionsSchema.safeParse({
+        json: false,
+        stream: true,
+        markdown: false,
+        temperature: -1,
+      }).success,
     ).toBe(false);
   });
 
   test("rejects temperature above 2", () => {
     expect(
-      CLIOptionsSchema.safeParse({ json: false, stream: true, temperature: 3 })
-        .success,
+      CLIOptionsSchema.safeParse({
+        json: false,
+        stream: true,
+        markdown: false,
+        temperature: 3,
+      }).success,
     ).toBe(false);
   });
 
@@ -237,6 +311,7 @@ describe("CLIOptionsSchema", () => {
       CLIOptionsSchema.safeParse({
         json: false,
         stream: true,
+        markdown: false,
         maxOutputTokens: -5,
       }).success,
     ).toBe(false);
@@ -247,6 +322,7 @@ describe("CLIOptionsSchema", () => {
       CLIOptionsSchema.safeParse({
         json: false,
         stream: true,
+        markdown: false,
         maxOutputTokens: 10.5,
       }).success,
     ).toBe(false);
@@ -254,7 +330,8 @@ describe("CLIOptionsSchema", () => {
 
   test("rejects non-boolean json", () => {
     expect(
-      CLIOptionsSchema.safeParse({ json: "yes", stream: true }).success,
+      CLIOptionsSchema.safeParse({ json: "yes", stream: true, markdown: false })
+        .success,
     ).toBe(false);
   });
 
@@ -262,13 +339,18 @@ describe("CLIOptionsSchema", () => {
     const result = CLIOptionsSchema.parse({
       json: false,
       stream: true,
+      markdown: false,
       file: ["a.txt", "b.txt"],
     });
     expect(result.file).toEqual(["a.txt", "b.txt"]);
   });
 
   test("file is optional", () => {
-    const result = CLIOptionsSchema.parse({ json: false, stream: true });
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      markdown: false,
+    });
     expect(result.file).toBeUndefined();
   });
 });
@@ -348,5 +430,135 @@ describe("JsonOutputSchema", () => {
         usage: {},
       }).success,
     ).toBe(false);
+  });
+});
+
+// ── Role options ───────────────────────────────────────────────────────
+
+describe("CLIOptionsSchema with role options", () => {
+  test("accepts --role option", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      role: "reviewer",
+    });
+    expect(result.role).toBe("reviewer");
+  });
+
+  test("accepts --roles option", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      roles: true,
+    });
+    expect(result.roles).toBe(true);
+  });
+
+  test("accepts both --role and --system options", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      role: "reviewer",
+      system: "You are a reviewer",
+    });
+    expect(result.role).toBe("reviewer");
+    expect(result.system).toBe("You are a reviewer");
+  });
+});
+
+// ── Role loading and precedence ───────────────────────────────────────
+
+import { listRoles, loadRole } from "../config.ts";
+
+describe("loadRole", () => {
+  const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const baseDir = join(tmpdir(), `roles-test-${uid()}`);
+  const rolesDir = join(baseDir, "roles");
+
+  test("loads a .txt role file", async () => {
+    mkdirSync(rolesDir, { recursive: true });
+    const rolePath = join(rolesDir, "testrole.txt");
+    await Bun.write(rolePath, "You are a test role");
+    const result = await loadRole("testrole", baseDir);
+    rmSync(baseDir, { recursive: true });
+    expect(result).toBe("You are a test role");
+  });
+
+  test("returns null for nonexistent role", async () => {
+    const result = await loadRole("nonexistent", baseDir);
+    expect(result).toBeNull();
+  });
+
+  test("sanitizes role name to prevent path traversal", async () => {
+    mkdirSync(rolesDir, { recursive: true });
+    // Create a file outside the roles directory
+    const outsidePath = join(tmpdir(), `outside-${uid()}.txt`);
+    await Bun.write(outsidePath, "secret content");
+
+    try {
+      // Try to access a file outside the roles directory
+      const result = await loadRole("../outside", baseDir);
+      expect(result).toBeNull();
+    } finally {
+      rmSync(outsidePath);
+      rmSync(baseDir, { recursive: true });
+    }
+  });
+
+  test("rejects role names with path separators", async () => {
+    mkdirSync(rolesDir, { recursive: true });
+    const result = await loadRole("subdir/role", baseDir);
+    rmSync(baseDir, { recursive: true });
+    expect(result).toBeNull();
+  });
+});
+
+describe("listRoles", () => {
+  const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const baseDir = join(tmpdir(), `roles-list-test-${uid()}`);
+  const rolesDir = join(baseDir, "roles");
+
+  test("lists only .txt role files", async () => {
+    // Create test fixtures
+    mkdirSync(rolesDir, { recursive: true });
+    await Bun.write(join(rolesDir, "role1.txt"), "Role 1 content");
+    await Bun.write(join(rolesDir, "role2.txt"), "Role 2 content");
+    // Create a .md file (should be ignored)
+    await Bun.write(join(rolesDir, "role3.md"), "Role 3 content");
+    // Create a duplicate (both .txt and plain file)
+    await Bun.write(join(rolesDir, "role4.txt"), "Role 4 content");
+    await Bun.write(join(rolesDir, "role4"), "Duplicate plain file");
+
+    const roles = await listRoles(baseDir);
+    rmSync(baseDir, { recursive: true });
+    expect(roles).toContain("role1");
+    expect(roles).toContain("role2");
+    expect(roles).not.toContain("role3"); // .md file should be ignored
+  });
+
+  test("sorts roles alphabetically", async () => {
+    mkdirSync(rolesDir, { recursive: true });
+    await Bun.write(join(rolesDir, "brole.txt"), "Role B");
+    await Bun.write(join(rolesDir, "arole.txt"), "Role A");
+
+    const roles = await listRoles(baseDir);
+    rmSync(baseDir, { recursive: true });
+    expect(roles).toEqual(["arole", "brole"]);
+  });
+
+  test("deduplicates roles", async () => {
+    mkdirSync(rolesDir, { recursive: true });
+    await Bun.write(join(rolesDir, "dup.txt"), "Role content");
+    await Bun.write(join(rolesDir, "dup"), "Duplicate plain file");
+
+    const roles = await listRoles(baseDir);
+    rmSync(baseDir, { recursive: true });
+    const counts = roles.filter((r) => r === "dup").length;
+    expect(counts).toBe(1);
+  });
+
+  test("returns empty array for nonexistent directory", async () => {
+    const roles = await listRoles("/nonexistent/path");
+    expect(roles).toEqual([]);
   });
 });

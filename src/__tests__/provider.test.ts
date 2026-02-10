@@ -180,31 +180,31 @@ describe("parseModel", () => {
 // ── SUPPORTED_PROVIDERS ────────────────────────────────────────────────
 
 describe("SUPPORTED_PROVIDERS", () => {
-  const expected: ProviderId[] = [
-    "openai",
-    "anthropic",
-    "google",
-    "perplexity",
-    "xai",
-    "mistral",
-    "groq",
-    "deepseek",
-    "cohere",
-    "openrouter",
-    "azure",
-    "togetherai",
-    "bedrock",
-    "vertex",
-    "ollama",
-    "huggingface",
-    "cerebras",
-  ];
-
-  test("has exactly the expected number of providers", () => {
-    expect(SUPPORTED_PROVIDERS).toHaveLength(expected.length);
+  test("has exactly 18 providers", () => {
+    expect(SUPPORTED_PROVIDERS).toHaveLength(18);
   });
 
   test("includes all expected providers", () => {
+    const expected: ProviderId[] = [
+      "openai",
+      "anthropic",
+      "google",
+      "perplexity",
+      "xai",
+      "mistral",
+      "groq",
+      "deepseek",
+      "cohere",
+      "fireworks",
+      "openrouter",
+      "azure",
+      "togetherai",
+      "bedrock",
+      "vertex",
+      "ollama",
+      "huggingface",
+      "cerebras",
+    ];
     for (const p of expected) {
       expect(SUPPORTED_PROVIDERS).toContain(p);
     }
@@ -237,6 +237,7 @@ describe("PROVIDER_ENV_VARS", () => {
     groq: ["GROQ_API_KEY"],
     deepseek: ["DEEPSEEK_API_KEY"],
     cohere: ["COHERE_API_KEY"],
+    fireworks: ["FIREWORKS_API_KEY"],
     openrouter: ["OPENROUTER_API_KEY"],
     azure: ["AZURE_AI_API_KEY"],
     togetherai: ["TOGETHERAI_API_KEY"],
@@ -334,6 +335,12 @@ describe("resolveModel", () => {
       model: "cohere/command-r-plus",
       envVars: ["COHERE_API_KEY"],
       expectedModelId: "command-r-plus",
+    },
+    {
+      provider: "fireworks",
+      model: "fireworks/accounts/fireworks/models/deepseek-v3",
+      envVars: ["FIREWORKS_API_KEY"],
+      expectedModelId: "accounts/fireworks/models/deepseek-v3",
     },
     {
       provider: "openrouter",

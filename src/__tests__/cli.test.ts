@@ -360,6 +360,23 @@ describe("CLI: --providers flag", () => {
   });
 });
 
+// ── --markdown ─────────────────────────────────────────────────────────
+
+describe("CLI: --markdown flag", () => {
+  test("--markdown appears in help", async () => {
+    const { stdout } = await runCLI(["--help"]);
+    expect(stdout).toContain("--markdown");
+  });
+
+  test("--markdown without API key reaches API key check", async () => {
+    const { stderr, exitCode } = await runCLI(["--markdown", "hello"], {
+      env: CLEAN_ENV,
+    });
+    expect(stderr).toContain("Missing required environment variable");
+    expect(exitCode).toBe(1);
+  });
+});
+
 // ── --completions ──────────────────────────────────────────────────────
 
 describe("CLI: --completions flag", () => {

@@ -5,9 +5,16 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (leave empty to use package.json version)"
+        required: false
+        type: string
 
 permissions:
   contents: write
+  packages: write
+  pull-requests: write
 
 jobs:
   test:
@@ -28,9 +35,53 @@ jobs:
       - name: Test
         run: bun test
 
+  resolve-version:
+    name: Resolve Version
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: resolve
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION=$(bun -e "console.log(require('./package.json').version)")
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $VERSION (tag: v$VERSION)"
+
+  ensure-tag:
+    name: Ensure Tag Exists
+    if: github.event_name == 'workflow_dispatch'
+    needs: [test, resolve-version]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create tag if missing
+        run: |
+          TAG="${{ needs.resolve-version.outputs.tag }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists"
+          else
+            echo "Creating tag $TAG"
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+
   publish:
     name: Publish to npm
-    needs: test
+    needs: [test, resolve-version]
+    if: always() && needs.test.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,13 +92,90 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
+      - name: Bump version if needed
+        if: needs.resolve-version.outputs.version != ''
+        run: |
+          CURRENT=$(bun -e "console.log(require('./package.json').version)")
+          TARGET="${{ needs.resolve-version.outputs.version }}"
+          if [ "$CURRENT" != "$TARGET" ]; then
+            echo "Bumping $CURRENT → $TARGET"
+            bun pm version "$TARGET" --no-git-tag-version
+          else
+            echo "Already at $TARGET"
+          fi
+
       - run: bun publish
         env:
           NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+  publish-github:
+    name: Publish to GitHub Packages
+    needs: [test, resolve-version, publish]
+    if: always() && needs.publish.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      - name: Bump version if needed
+        if: needs.resolve-version.outputs.version != ''
+        run: |
+          CURRENT=$(bun -e "console.log(require('./package.json').version)")
+          TARGET="${{ needs.resolve-version.outputs.version }}"
+          if [ "$CURRENT" != "$TARGET" ]; then
+            bun pm version "$TARGET" --no-git-tag-version
+          fi
+
+      - name: Publish to GitHub Packages
+        run: |
+          bun pm pkg set name="@andrew-bierman/ai-pipe"
+          bun publish --registry https://npm.pkg.github.com
+        env:
+          NPM_CONFIG_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  sync-version:
+    name: Sync version to repo
+    needs: [publish, resolve-version]
+    if: always() && needs.publish.result == 'success' && needs.resolve-version.outputs.version != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Bump package.json version
+        run: |
+          CURRENT=$(bun -e "console.log(require('./package.json').version)")
+          TARGET="${{ needs.resolve-version.outputs.version }}"
+          if [ "$CURRENT" != "$TARGET" ]; then
+            bun pm version "$TARGET" --no-git-tag-version
+            echo "BUMPED=true" >> "$GITHUB_ENV"
+          else
+            echo "package.json already at $TARGET"
+          fi
+
+      - name: Create PR
+        if: env.BUMPED == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "📦 Bump version to ${{ needs.resolve-version.outputs.version }}"
+          branch: chore/bump-v${{ needs.resolve-version.outputs.version }}
+          title: "📦 Bump version to ${{ needs.resolve-version.outputs.version }}"
+          body: "Auto-generated after successful publish of v${{ needs.resolve-version.outputs.version }}."
+
   github-release:
     name: GitHub Release
-    needs: [test, publish]
+    needs: [test, publish, ensure-tag, resolve-version]
+    if: always() && needs.test.result == 'success' && needs.publish.result == 'success' && (needs.ensure-tag.result == 'success' || needs.ensure-tag.result == 'skipped')
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -79,7 +207,8 @@ jobs:
 
   create-release:
     name: Create GitHub Release
-    needs: github-release
+    needs: [github-release, resolve-version]
+    if: always() && needs.github-release.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -92,5 +221,6 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.resolve-version.outputs.tag || github.ref_name }}
           generate_release_notes: true
           files: dist/*
