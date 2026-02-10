@@ -5,7 +5,8 @@
   "module": "src/index.ts",
   "type": "module",
   "bin": {
-    "ai-pipe": "src/index.ts"
+    "ai-pipe": "src/index.ts",
+    "ai": "src/index.ts"
   },
   "files": [
     "src",
