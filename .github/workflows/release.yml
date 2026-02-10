@@ -137,6 +137,35 @@ jobs:
         env:
           NPM_CONFIG_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  sync-version:
+    name: Sync version to repo
+    needs: [publish, resolve-version]
+    if: always() && needs.publish.result == 'success' && needs.resolve-version.outputs.version != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Update package.json version
+        run: |
+          CURRENT=$(bun -e "console.log(require('./package.json').version)")
+          TARGET="${{ needs.resolve-version.outputs.version }}"
+          if [ "$CURRENT" != "$TARGET" ]; then
+            bun pm version "$TARGET" --no-git-tag-version
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add package.json
+            git commit -m "📦 Bump version to $TARGET"
+            git push
+          else
+            echo "package.json already at $TARGET"
+          fi
+
   github-release:
     name: GitHub Release
     needs: [test, publish, ensure-tag, resolve-version]
