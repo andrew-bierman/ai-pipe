@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { createProviderRegistry, ProviderV3 } from "ai";
+import { createProviderRegistry } from "ai";
+import type { ProviderV3 } from "@ai-sdk/provider";
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { google } from "@ai-sdk/google";

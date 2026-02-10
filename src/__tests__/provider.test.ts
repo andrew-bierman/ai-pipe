@@ -80,6 +80,7 @@ describe("parseModel", () => {
     ["groq/llama-3.3-70b-versatile", "groq", "llama-3.3-70b-versatile", "groq/llama-3.3-70b-versatile"],
     ["deepseek/deepseek-chat", "deepseek", "deepseek-chat", "deepseek/deepseek-chat"],
     ["cohere/command-r-plus", "cohere", "command-r-plus", "cohere/command-r-plus"],
+    ["openrouter/openrouter", "openrouter", "openrouter", "openrouter/openrouter"],
   ];
 
   for (const [input, provider, modelId, fullId] of cases) {
@@ -191,6 +192,7 @@ describe("resolveModel", () => {
     { provider: "groq", model: "groq/llama-3.3-70b-versatile", envVar: "GROQ_API_KEY", expectedModelId: "llama-3.3-70b-versatile" },
     { provider: "deepseek", model: "deepseek/deepseek-chat", envVar: "DEEPSEEK_API_KEY", expectedModelId: "deepseek-chat" },
     { provider: "cohere", model: "cohere/command-r-plus", envVar: "COHERE_API_KEY", expectedModelId: "command-r-plus" },
+    { provider: "openrouter", model: "openrouter/openrouter", envVar: "OPENROUTER_API_KEY", expectedModelId: "openrouter" },
   ];
 
   for (const { provider, model, envVar, expectedModelId } of providerCases) {
