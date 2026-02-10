@@ -213,4 +213,11 @@ describe("resolveModel", () => {
     expect(m).toBeDefined();
     expect(m.modelId).toBe("gpt-4o-mini");
   });
+
+  test("resolves ollama model without API key (local provider)", () => {
+    delete process.env.OLLAMA_HOST;
+    const m = resolveModel("ollama/llama3");
+    expect(m).toBeDefined();
+    expect(m.modelId).toBe("llama3");
+  });
 });
