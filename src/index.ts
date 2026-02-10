@@ -5,7 +5,7 @@ import { program } from "commander";
 import { z } from "zod";
 import pkg from "../package.json";
 import { generateCompletions } from "./completions.ts";
-import { type Config, loadConfig } from "./config.ts";
+import { type Config, listRoles, loadConfig, loadRole } from "./config.ts";
 import { APP } from "./constants.ts";
 import {
   PROVIDER_ENV_VARS,
@@ -17,6 +17,7 @@ import {
 export interface CLIOptions {
   model?: string;
   system?: string;
+  role?: string;
   file?: string[];
   json: boolean;
   stream: boolean;
@@ -25,11 +26,13 @@ export interface CLIOptions {
   config?: string;
   providers?: boolean;
   completions?: string;
+  roles?: boolean;
 }
 
 export const CLIOptionsSchema = z.object({
   model: z.string().optional(),
   system: z.string().optional(),
+  role: z.string().optional(),
   file: z.array(z.string()).optional(),
   json: z.boolean(),
   stream: z.boolean(),
@@ -42,6 +45,7 @@ export const CLIOptionsSchema = z.object({
   config: z.string().optional(),
   providers: z.boolean().optional(),
   completions: z.string().optional(),
+  roles: z.boolean().optional(),
 });
 
 export const JsonOutputSchema = z.object({
@@ -144,6 +148,21 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
     return;
   }
 
+  // List available roles
+  if (opts.roles) {
+    const roles = await listRoles();
+    if (roles.length === 0) {
+      console.log("No roles found. Create role files in ~/.ai-pipe/roles/");
+      console.log("Example: ~/.ai-pipe/roles/reviewer.txt");
+    } else {
+      console.log("Available roles:");
+      for (const role of roles) {
+        console.log(`  - ${role}`);
+      }
+    }
+    return;
+  }
+
   const config = await loadConfig(opts.config);
 
   // Inject config API keys into process.env (env vars take precedence)
@@ -176,7 +195,24 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
     return;
   }
 
-  const { modelString, system, temperature, maxOutputTokens } = resolveOptions(
+  // Resolve system prompt from role, CLI --system, or config
+  let systemPrompt = opts.system ?? config.system ?? undefined;
+
+  // If role is specified, load it (CLI --system takes precedence over role)
+  if (opts.role && !opts.system) {
+    const roleContent = await loadRole(opts.role);
+    if (roleContent) {
+      systemPrompt = roleContent;
+    } else {
+      console.error(
+        `Error: Role "${opts.role}" not found in ~/.ai-pipe/roles/`,
+      );
+      console.error("Use --roles to list available roles.");
+      process.exit(1);
+    }
+  }
+
+  const { modelString, temperature, maxOutputTokens } = resolveOptions(
     opts,
     config,
   );
@@ -187,7 +223,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
     if (opts.json || !opts.stream) {
       const result = await generateText({
         model,
-        system,
+        system: systemPrompt,
         prompt,
         temperature,
         maxOutputTokens,
@@ -207,7 +243,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
     } else {
       const result = streamText({
         model,
-        system,
+        system: systemPrompt,
         prompt,
         temperature,
         maxOutputTokens,
@@ -232,6 +268,7 @@ export function setupCLI() {
     .argument("[prompt...]", "Prompt text. Multiple words are joined.")
     .option("-m, --model <model>", "Model in provider/model-id format")
     .option("-s, --system <prompt>", "System prompt")
+    .option("-r, --role <name>", "Use a role from ~/.ai-pipe/roles/")
     .option(
       "-f, --file <path>",
       "Include file contents in prompt (repeatable)",
@@ -251,6 +288,7 @@ export function setupCLI() {
     .option("--max-output-tokens <n>", "Maximum tokens to generate", parseInt)
     .option("-c, --config <path>", "Path to config directory")
     .option("--providers", "List supported providers and their API key status")
+    .option("--roles", "List available roles from ~/.ai-pipe/roles/")
     .option(
       "--completions <shell>",
       `Generate shell completions (${APP.supportedShells.join(", ")})`,
