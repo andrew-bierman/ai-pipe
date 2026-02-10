@@ -67,8 +67,7 @@ export async function readFiles(paths: string[]): Promise<string> {
   for (const path of paths) {
     const file = Bun.file(path);
     if (!(await file.exists())) {
-      console.error(`Error: File not found: ${path}`);
-      process.exit(1);
+      throw new Error(`File not found: ${path}`);
     }
     const content = await file.text();
     parts.push(`# ${path}\n\`\`\`\n${content}\n\`\`\``);
@@ -78,8 +77,8 @@ export async function readFiles(paths: string[]): Promise<string> {
 
 export function buildPrompt(
   argPrompt: string | null,
-  stdinContent: string | null,
-  fileContent: string | null = null
+  fileContent: string | null = null,
+  stdinContent: string | null = null
 ): string | null {
   const parts: string[] = [];
   if (argPrompt) parts.push(argPrompt);
@@ -151,9 +150,16 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
   const hasStdin = !process.stdin.isTTY;
   const argPrompt = promptArgs.length > 0 ? promptArgs.join(" ") : null;
   const stdinContent = hasStdin ? await readStdin() : null;
-  const fileContent = opts.file?.length ? await readFiles(opts.file) : null;
 
-  const prompt = buildPrompt(argPrompt, stdinContent, fileContent);
+  let fileContent: string | null = null;
+  try {
+    fileContent = opts.file?.length ? await readFiles(opts.file) : null;
+  } catch (err: unknown) {
+    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+
+  const prompt = buildPrompt(argPrompt, fileContent, stdinContent);
   if (!prompt) {
     program.help();
     return;
@@ -207,8 +213,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
   }
 }
 
-// Only run CLI when executed directly, not when imported
-if (import.meta.main) {
+export function setupCLI() {
   program
     .name(APP.name)
     .description(APP.description)
@@ -227,4 +232,9 @@ if (import.meta.main) {
     .action(run);
 
   program.parse();
+}
+
+// Only run CLI when executed directly (Bun), not when imported
+if (import.meta.main) {
+  setupCLI();
 }

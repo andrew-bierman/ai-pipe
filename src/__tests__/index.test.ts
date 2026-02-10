@@ -12,11 +12,11 @@ describe("buildPrompt", () => {
   });
 
   test("returns stdin when only stdin provided", () => {
-    expect(buildPrompt(null, "hello world")).toBe("hello world");
+    expect(buildPrompt(null, null, "hello world")).toBe("hello world");
   });
 
   test("combines arg prompt and stdin with double newline", () => {
-    const result = buildPrompt("review this code", "const x = 1;");
+    const result = buildPrompt("review this code", null, "const x = 1;");
     expect(result).toBe("review this code\n\nconst x = 1;");
   });
 
@@ -25,13 +25,13 @@ describe("buildPrompt", () => {
   });
 
   test("arg prompt comes first in combined output", () => {
-    const result = buildPrompt("summarize", "long document text")!;
+    const result = buildPrompt("summarize", null, "long document text")!;
     expect(result.startsWith("summarize")).toBe(true);
     expect(result.endsWith("long document text")).toBe(true);
   });
 
   test("preserves multiline stdin content", () => {
-    const result = buildPrompt("review", "line1\nline2\nline3");
+    const result = buildPrompt("review", null, "line1\nline2\nline3");
     expect(result).toBe("review\n\nline1\nline2\nline3");
   });
 
@@ -41,22 +41,22 @@ describe("buildPrompt", () => {
   });
 
   test("includes file content between arg and stdin", () => {
-    const result = buildPrompt("review", "stdin data", "# file.ts\n```\ncode\n```");
+    const result = buildPrompt("review", "# file.ts\n```\ncode\n```", "stdin data");
     expect(result).toBe("review\n\n# file.ts\n```\ncode\n```\n\nstdin data");
   });
 
   test("returns file content only", () => {
-    const result = buildPrompt(null, null, "# f.txt\n```\nhello\n```");
+    const result = buildPrompt(null, "# f.txt\n```\nhello\n```");
     expect(result).toBe("# f.txt\n```\nhello\n```");
   });
 
   test("combines arg and file content without stdin", () => {
-    const result = buildPrompt("summarize", null, "# f.txt\n```\ncontent\n```");
+    const result = buildPrompt("summarize", "# f.txt\n```\ncontent\n```");
     expect(result).toBe("summarize\n\n# f.txt\n```\ncontent\n```");
   });
 
   test("combines file content and stdin without arg", () => {
-    const result = buildPrompt(null, "stdin", "# f.txt\n```\ncontent\n```");
+    const result = buildPrompt(null, "# f.txt\n```\ncontent\n```", "stdin");
     expect(result).toBe("# f.txt\n```\ncontent\n```\n\nstdin");
   });
 
@@ -66,8 +66,8 @@ describe("buildPrompt", () => {
 
   test("file content default param preserves two-arg behavior", () => {
     expect(buildPrompt("hello", null)).toBe("hello");
-    expect(buildPrompt(null, "stdin")).toBe("stdin");
-    expect(buildPrompt("a", "b")).toBe("a\n\nb");
+    expect(buildPrompt(null, null, "stdin")).toBe("stdin");
+    expect(buildPrompt("a", null, "b")).toBe("a\n\nb");
   });
 });
 
@@ -81,6 +81,10 @@ describe("readFiles", () => {
     await Bun.write(path, "hello world");
     const result = await readFiles([path]);
     expect(result).toBe(`# ${path}\n\`\`\`\nhello world\n\`\`\``);
+  });
+
+  test("throws on nonexistent file", async () => {
+    expect(readFiles(["/nonexistent/file.txt"])).rejects.toThrow("File not found: /nonexistent/file.txt");
   });
 
   test("reads multiple files", async () => {
