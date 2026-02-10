@@ -2,6 +2,7 @@ import { z } from "zod";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { ProviderIdSchema, SUPPORTED_PROVIDERS } from "./provider.ts";
+import { APP } from "./constants.ts";
 
 const ApiKeysSchema = z.record(z.string(), z.string()).refine(
   (obj) => Object.keys(obj).every((k) => ProviderIdSchema.safeParse(k).success),
@@ -11,14 +12,14 @@ const ApiKeysSchema = z.record(z.string(), z.string()).refine(
 export const ConfigSchema = z.object({
   model: z.string().optional(),
   system: z.string().optional(),
-  temperature: z.number().min(0).max(2).optional(),
+  temperature: z.number().min(APP.temperature.min).max(APP.temperature.max).optional(),
   maxOutputTokens: z.number().int().positive().optional(),
   apiKeys: ApiKeysSchema.optional(),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
 
-const DEFAULT_CONFIG_PATH = join(homedir(), ".ai-pipe.json");
+const DEFAULT_CONFIG_PATH = join(homedir(), APP.configFileName);
 
 export async function loadConfig(configPath?: string): Promise<Config> {
   const path = configPath ?? DEFAULT_CONFIG_PATH;

@@ -1,27 +1,33 @@
 import { SUPPORTED_PROVIDERS } from "./provider.ts";
+import { APP, ShellSchema, type Shell } from "./constants.ts";
 
 const providers = SUPPORTED_PROVIDERS.join(" ");
+const shells = APP.supportedShells.join(" ");
+const name = APP.name;
+const funcName = APP.name.replace(/-/g, "_");
 
 export function generateCompletions(shell: string): string {
-  switch (shell) {
-    case "bash":
-      return bash();
-    case "zsh":
-      return zsh();
-    case "fish":
-      return fish();
-    default:
-      console.error(
-        `Error: Unknown shell "${shell}". Supported: bash, zsh, fish`
-      );
-      process.exit(1);
+  const result = ShellSchema.safeParse(shell);
+  if (!result.success) {
+    console.error(
+      `Error: Unknown shell "${shell}". Supported: ${shells}`
+    );
+    process.exit(1);
   }
+
+  const generators: Record<Shell, () => string> = {
+    bash,
+    zsh,
+    fish,
+  };
+
+  return generators[result.data]();
 }
 
 function bash(): string {
-  return `# ai-pipe bash completions
-# Add to ~/.bashrc: eval "$(ai-pipe --completions bash)"
-_ai_pipe_completions() {
+  return `# ${name} bash completions
+# Add to ~/.bashrc: eval "$(${name} --completions bash)"
+_${funcName}_completions() {
   local cur prev opts providers
   COMPREPLY=()
   cur="\${COMP_WORDS[COMP_CWORD]}"
@@ -44,7 +50,7 @@ _ai_pipe_completions() {
       return 0
       ;;
     --completions)
-      COMPREPLY=( $(compgen -W "bash zsh fish" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "${shells}" -- "\${cur}") )
       return 0
       ;;
     -s|--system|-t|--temperature|--max-output-tokens)
@@ -57,13 +63,13 @@ _ai_pipe_completions() {
     return 0
   fi
 }
-complete -F _ai_pipe_completions ai-pipe`;
+complete -F _${funcName}_completions ${name}`;
 }
 
 function zsh(): string {
-  return `# ai-pipe zsh completions
-# Add to ~/.zshrc: eval "$(ai-pipe --completions zsh)"
-_ai_pipe() {
+  return `# ${name} zsh completions
+# Add to ~/.zshrc: eval "$(${name} --completions zsh)"
+_${funcName}() {
   local -a providers
   providers=(${SUPPORTED_PROVIDERS.map((p) => `'${p}/'`).join(" ")})
 
@@ -72,11 +78,11 @@ _ai_pipe() {
     '(-s --system)'{-s,--system}'[System prompt]:prompt:' \\
     '(-j --json)'{-j,--json}'[Output full JSON response object]' \\
     '--no-stream[Wait for full response, then print]' \\
-    '(-t --temperature)'{-t,--temperature}'[Sampling temperature (0-2)]:temp:' \\
+    '(-t --temperature)'{-t,--temperature}'[Sampling temperature (${APP.temperature.min}-${APP.temperature.max})]:temp:' \\
     '--max-output-tokens[Maximum tokens to generate]:tokens:' \\
     '(-c --config)'{-c,--config}'[Path to config file]:file:_files' \\
     '--providers[List supported providers]' \\
-    '--completions[Generate shell completions]:shell:(bash zsh fish)' \\
+    '--completions[Generate shell completions]:shell:(${shells})' \\
     '(-V --version)'{-V,--version}'[Print version]' \\
     '(-h --help)'{-h,--help}'[Print help]' \\
     '*:prompt:' \\
@@ -88,21 +94,21 @@ _ai_pipe() {
       ;;
   esac
 }
-compdef _ai_pipe ai-pipe`;
+compdef _${funcName} ${name}`;
 }
 
 function fish(): string {
-  return `# ai-pipe fish completions
-# Add to ~/.config/fish/completions/ai-pipe.fish
-complete -c ai-pipe -s m -l model -d 'Model in provider/model-id format' -x -a '${SUPPORTED_PROVIDERS.map((p) => `${p}/`).join(" ")}'
-complete -c ai-pipe -s s -l system -d 'System prompt' -x
-complete -c ai-pipe -s j -l json -d 'Output full JSON response object'
-complete -c ai-pipe -l no-stream -d 'Wait for full response, then print'
-complete -c ai-pipe -s t -l temperature -d 'Sampling temperature (0-2)' -x
-complete -c ai-pipe -l max-output-tokens -d 'Maximum tokens to generate' -x
-complete -c ai-pipe -s c -l config -d 'Path to config file' -r -F
-complete -c ai-pipe -l providers -d 'List supported providers'
-complete -c ai-pipe -l completions -d 'Generate shell completions' -x -a 'bash zsh fish'
-complete -c ai-pipe -s V -l version -d 'Print version'
-complete -c ai-pipe -s h -l help -d 'Print help'`;
+  return `# ${name} fish completions
+# Add to ~/.config/fish/completions/${name}.fish
+complete -c ${name} -s m -l model -d 'Model in provider/model-id format' -x -a '${SUPPORTED_PROVIDERS.map((p) => `${p}/`).join(" ")}'
+complete -c ${name} -s s -l system -d 'System prompt' -x
+complete -c ${name} -s j -l json -d 'Output full JSON response object'
+complete -c ${name} -l no-stream -d 'Wait for full response, then print'
+complete -c ${name} -s t -l temperature -d 'Sampling temperature (${APP.temperature.min}-${APP.temperature.max})' -x
+complete -c ${name} -l max-output-tokens -d 'Maximum tokens to generate' -x
+complete -c ${name} -s c -l config -d 'Path to config file' -r -F
+complete -c ${name} -l providers -d 'List supported providers'
+complete -c ${name} -l completions -d 'Generate shell completions' -x -a '${shells}'
+complete -c ${name} -s V -l version -d 'Print version'
+complete -c ${name} -s h -l help -d 'Print help'`;
 }
