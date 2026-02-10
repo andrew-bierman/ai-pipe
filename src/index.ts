@@ -199,7 +199,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
   let systemPrompt = opts.system ?? config.system ?? undefined;
 
   // If role is specified, load it (CLI --system takes precedence over role)
-  if (opts.role && !opts.system) {
+  if (opts.role && opts.system === undefined) {
     const roleContent = await loadRole(opts.role);
     if (roleContent) {
       systemPrompt = roleContent;
@@ -268,7 +268,10 @@ export function setupCLI() {
     .argument("[prompt...]", "Prompt text. Multiple words are joined.")
     .option("-m, --model <model>", "Model in provider/model-id format")
     .option("-s, --system <prompt>", "System prompt")
-    .option("-r, --role <name>", "Use a role from ~/.ai-pipe/roles/")
+    .option(
+      "-r, --role <name>",
+      `Use a role from ~/${APP.configDirName}/roles/`,
+    )
     .option(
       "-f, --file <path>",
       "Include file contents in prompt (repeatable)",
@@ -288,7 +291,10 @@ export function setupCLI() {
     .option("--max-output-tokens <n>", "Maximum tokens to generate", parseInt)
     .option("-c, --config <path>", "Path to config directory")
     .option("--providers", "List supported providers and their API key status")
-    .option("--roles", "List available roles from ~/.ai-pipe/roles/")
+    .option(
+      "--roles",
+      `List available roles from ~/${APP.configDirName}/roles/`,
+    )
     .option(
       "--completions <shell>",
       `Generate shell completions (${APP.supportedShells.join(", ")})`,
