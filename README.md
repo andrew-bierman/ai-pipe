@@ -6,7 +6,7 @@ Built on the [Vercel AI SDK](https://sdk.vercel.ai/) with [Bun](https://bun.sh/)
 
 ## Features
 
-- **13 providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, OpenRouter, Azure AI, Together AI, Amazon Bedrock
+- **14 providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, OpenRouter, Azure AI, Together AI, Amazon Bedrock, Google Vertex AI
 - **Streaming by default** — tokens print as they arrive
 - **Pipe-friendly** — reads from stdin, writes to stdout, errors to stderr
 - **JSON output** — structured response with usage and finish reason
@@ -87,7 +87,8 @@ If no `provider/` prefix is given, the model defaults to `openai`. If no `-m` fl
 | openrouter | `OPENROUTER_API_KEY` | `openrouter/openrouter` |
 | azure | `AZURE_AI_API_KEY` | `azure/azure-model-id` |
 | togetherai | `TOGETHERAI_API_KEY` | `togetherai/meta-llama/Llama-3.3-70b-Instruct` |
-| bedrock | `AWS_ACCESS_KEY_ID` | `bedrock/anthropic.claude-sonnet-4-2025-02-19` |
+| bedrock | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `bedrock/anthropic.claude-sonnet-4-2025-02-19` |
+| vertex | `GOOGLE_VERTEX_AI_PROJECT_ID` | `vertex/google/cloud/llama-3.1` |
 
 ## Config File
 
