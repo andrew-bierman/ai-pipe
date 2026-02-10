@@ -3,9 +3,10 @@
 import { z } from "zod";
 import { program } from "commander";
 import { streamText, generateText, type LanguageModelUsage, type FinishReason } from "ai";
-import { resolveModel, printProviders, PROVIDER_ENV_VARS, type ProviderId } from "./provider.ts";
+import { resolveModel, printProviders, PROVIDER_ENV_VARS, ProviderIdSchema } from "./provider.ts";
 import { loadConfig, type Config } from "./config.ts";
 import { generateCompletions } from "./completions.ts";
+import { APP } from "./constants.ts";
 
 import pkg from "../package.json";
 
@@ -26,7 +27,7 @@ export const CLIOptionsSchema = z.object({
   system: z.string().optional(),
   json: z.boolean(),
   stream: z.boolean(),
-  temperature: z.number().min(0).max(2).optional(),
+  temperature: z.number().min(APP.temperature.min).max(APP.temperature.max).optional(),
   maxOutputTokens: z.number().int().positive().optional(),
   config: z.string().optional(),
   providers: z.boolean().optional(),
@@ -79,7 +80,7 @@ export function resolveOptions(
   maxOutputTokens: number | undefined;
 } {
   return {
-    modelString: opts.model ?? config.model ?? "openai/gpt-4o",
+    modelString: opts.model ?? config.model ?? APP.defaultModel,
     system: opts.system ?? config.system ?? undefined,
     temperature: opts.temperature ?? config.temperature ?? undefined,
     maxOutputTokens: opts.maxOutputTokens ?? config.maxOutputTokens ?? undefined,
@@ -120,9 +121,11 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
   // Inject config API keys into process.env (env vars take precedence)
   if (config.apiKeys) {
     for (const [provider, key] of Object.entries(config.apiKeys)) {
-      const envVar = PROVIDER_ENV_VARS[provider as ProviderId];
-      if (envVar && !process.env[envVar]) {
-        process.env[envVar] = key;
+      const providerId = ProviderIdSchema.safeParse(provider);
+      if (!providerId.success) continue;
+      const envVars = PROVIDER_ENV_VARS[providerId.data];
+      if (envVars[0] && !process.env[envVars[0]]) {
+        process.env[envVars[0]] = key;
       }
     }
   }
@@ -180,8 +183,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
       process.stdout.write("\n");
     }
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(`Error: ${message}`);
+    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
   }
 }
@@ -189,19 +191,19 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
 // Only run CLI when executed directly, not when imported
 if (import.meta.main) {
   program
-    .name("ai-pipe")
-    .description("A lean CLI for calling LLMs from the terminal.")
+    .name(APP.name)
+    .description(APP.description)
     .version(pkg.version)
     .argument("[prompt...]", "Prompt text. Multiple words are joined.")
     .option("-m, --model <model>", "Model in provider/model-id format")
     .option("-s, --system <prompt>", "System prompt")
     .option("-j, --json", "Output full JSON response object", false)
     .option("--no-stream", "Wait for full response, then print")
-    .option("-t, --temperature <n>", "Sampling temperature (0-2)", parseFloat)
+    .option("-t, --temperature <n>", `Sampling temperature (${APP.temperature.min}-${APP.temperature.max})`, parseFloat)
     .option("--max-output-tokens <n>", "Maximum tokens to generate", parseInt)
     .option("-c, --config <path>", "Path to config file")
     .option("--providers", "List supported providers and their API key status")
-    .option("--completions <shell>", "Generate shell completions (bash, zsh, fish)")
+    .option("--completions <shell>", `Generate shell completions (${APP.supportedShells.join(", ")})`)
     .action(run);
 
   program.parse();

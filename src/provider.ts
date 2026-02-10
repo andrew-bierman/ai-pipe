@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createProviderRegistry } from "ai";
 import type { ProviderV3 } from "@ai-sdk/provider";
+import { APP } from "./constants.ts";
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { google } from "@ai-sdk/google";
@@ -67,15 +68,13 @@ export const PROVIDER_ENV_VARS: Record<ProviderId, string[]> = {
   huggingface: ["HF_TOKEN"],
 };
 
-const DEFAULT_PROVIDER: ProviderId = "openai";
-
 export const ModelStringSchema = z
   .string()
   .min(1, "Model string cannot be empty")
   .transform((val) => {
     const slashIndex = val.indexOf("/");
     if (slashIndex === -1) {
-      return { provider: DEFAULT_PROVIDER, modelId: val, fullId: `${DEFAULT_PROVIDER}/${val}` };
+      return { provider: APP.defaultProvider, modelId: val, fullId: `${APP.defaultProvider}/${val}` };
     }
     return {
       provider: val.slice(0, slashIndex),

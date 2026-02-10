@@ -17,11 +17,13 @@ Built on the [Vercel AI SDK](https://sdk.vercel.ai/) with [Bun](https://bun.sh/)
 ## Install
 
 ```sh
-git clone https://github.com/andrew-bierman/ai-cli.git
-cd ai-cli
+git clone https://github.com/andrew-bierman/ai-pipe.git
+cd ai-pipe
 bun install
 bun link
 ```
+
+This installs both `ai-pipe` and `ai` as CLI commands.
 
 ## Setup
 
@@ -35,6 +37,8 @@ export AZURE_AI_API_KEY="..."
 export TOGETHERAI_API_KEY="..."
 export AWS_ACCESS_KEY_ID="..."
 export AWS_SECRET_ACCESS_KEY="..."
+export GOOGLE_VERTEX_PROJECT="my-project"
+export GOOGLE_VERTEX_LOCATION="us-central1"
 export HF_TOKEN="hf_..."
 
 # Ollama (local)
@@ -92,7 +96,7 @@ If no `provider/` prefix is given, the model defaults to `openai`. If no `-m` fl
 | azure | `AZURE_AI_API_KEY` | `azure/azure-model-id` |
 | togetherai | `TOGETHERAI_API_KEY` | `togetherai/meta-llama/Llama-3.3-70b-Instruct` |
 | bedrock | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `bedrock/anthropic.claude-sonnet-4-2025-02-19` |
-| vertex | `GOOGLE_VERTEX_PROJECT` | `vertex/google/cloud/llama-3.1` |
+| vertex | `GOOGLE_VERTEX_PROJECT`, `GOOGLE_VERTEX_LOCATION` | `vertex/google/cloud/llama-3.1` |
 | ollama | `OLLAMA_HOST` | `ollama/llama3` |
 | huggingface | `HF_TOKEN` | `huggingface/meta-llama/Llama-3.3-70b-Instruct` |
 
@@ -200,7 +204,7 @@ Binaries are output to `dist/`.
 
 ```sh
 bun install
-bun test              # 172 tests across 6 files
+bun test              # 210 tests across 7 files
 bun run typecheck     # TypeScript type checking
 ```
 
