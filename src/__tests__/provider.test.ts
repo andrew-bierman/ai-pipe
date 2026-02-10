@@ -5,63 +5,91 @@ import {
   SUPPORTED_PROVIDERS,
   PROVIDER_ENV_VARS,
   registry,
+  ModelStringSchema,
+  ProviderIdSchema,
+  type ProviderId,
 } from "../provider.ts";
 
-describe("parseModel", () => {
-  test("parses provider/model format", () => {
-    const result = parseModel("anthropic/claude-sonnet-4-5");
+// ── ModelStringSchema ──────────────────────────────────────────────────
+
+describe("ModelStringSchema", () => {
+  test("transforms provider/model string", () => {
+    const result = ModelStringSchema.parse("anthropic/claude-sonnet-4-5");
     expect(result.provider).toBe("anthropic");
     expect(result.modelId).toBe("claude-sonnet-4-5");
     expect(result.fullId).toBe("anthropic/claude-sonnet-4-5");
   });
 
-  test("parses openai/gpt-4o", () => {
-    const result = parseModel("openai/gpt-4o");
+  test("defaults to openai when no slash", () => {
+    const result = ModelStringSchema.parse("gpt-4o-mini");
     expect(result.provider).toBe("openai");
-    expect(result.modelId).toBe("gpt-4o");
+    expect(result.modelId).toBe("gpt-4o-mini");
+    expect(result.fullId).toBe("openai/gpt-4o-mini");
   });
 
-  test("parses google/gemini-2.5-flash", () => {
-    const result = parseModel("google/gemini-2.5-flash");
-    expect(result.provider).toBe("google");
-    expect(result.modelId).toBe("gemini-2.5-flash");
+  test("rejects empty string", () => {
+    const result = ModelStringSchema.safeParse("");
+    expect(result.success).toBe(false);
   });
 
-  test("parses perplexity/sonar", () => {
-    const result = parseModel("perplexity/sonar");
-    expect(result.provider).toBe("perplexity");
-    expect(result.modelId).toBe("sonar");
+  test("handles model with multiple slashes", () => {
+    const result = ModelStringSchema.parse("openai/o1/variant");
+    expect(result.provider).toBe("openai");
+    expect(result.modelId).toBe("o1/variant");
   });
 
-  test("parses xai/grok-3", () => {
-    const result = parseModel("xai/grok-3");
-    expect(result.provider).toBe("xai");
-    expect(result.modelId).toBe("grok-3");
+  test("handles provider with empty model after slash", () => {
+    const result = ModelStringSchema.parse("openai/");
+    expect(result.provider).toBe("openai");
+    expect(result.modelId).toBe("");
+  });
+});
+
+// ── ProviderIdSchema ───────────────────────────────────────────────────
+
+describe("ProviderIdSchema", () => {
+  for (const p of SUPPORTED_PROVIDERS) {
+    test(`accepts "${p}"`, () => {
+      expect(ProviderIdSchema.parse(p)).toBe(p);
+    });
+  }
+
+  test("rejects unknown provider", () => {
+    expect(ProviderIdSchema.safeParse("llama").success).toBe(false);
   });
 
-  test("parses mistral/mistral-large-latest", () => {
-    const result = parseModel("mistral/mistral-large-latest");
-    expect(result.provider).toBe("mistral");
-    expect(result.modelId).toBe("mistral-large-latest");
+  test("rejects empty string", () => {
+    expect(ProviderIdSchema.safeParse("").success).toBe(false);
   });
 
-  test("parses groq/llama-3.3-70b-versatile", () => {
-    const result = parseModel("groq/llama-3.3-70b-versatile");
-    expect(result.provider).toBe("groq");
-    expect(result.modelId).toBe("llama-3.3-70b-versatile");
+  test("is case-sensitive", () => {
+    expect(ProviderIdSchema.safeParse("OpenAI").success).toBe(false);
   });
+});
 
-  test("parses deepseek/deepseek-chat", () => {
-    const result = parseModel("deepseek/deepseek-chat");
-    expect(result.provider).toBe("deepseek");
-    expect(result.modelId).toBe("deepseek-chat");
-  });
+// ── parseModel ─────────────────────────────────────────────────────────
 
-  test("parses cohere/command-r-plus", () => {
-    const result = parseModel("cohere/command-r-plus");
-    expect(result.provider).toBe("cohere");
-    expect(result.modelId).toBe("command-r-plus");
-  });
+describe("parseModel", () => {
+  const cases: Array<[string, string, string, string]> = [
+    ["openai/gpt-4o", "openai", "gpt-4o", "openai/gpt-4o"],
+    ["anthropic/claude-sonnet-4-5", "anthropic", "claude-sonnet-4-5", "anthropic/claude-sonnet-4-5"],
+    ["google/gemini-2.5-flash", "google", "gemini-2.5-flash", "google/gemini-2.5-flash"],
+    ["perplexity/sonar", "perplexity", "sonar", "perplexity/sonar"],
+    ["xai/grok-3", "xai", "grok-3", "xai/grok-3"],
+    ["mistral/mistral-large-latest", "mistral", "mistral-large-latest", "mistral/mistral-large-latest"],
+    ["groq/llama-3.3-70b-versatile", "groq", "llama-3.3-70b-versatile", "groq/llama-3.3-70b-versatile"],
+    ["deepseek/deepseek-chat", "deepseek", "deepseek-chat", "deepseek/deepseek-chat"],
+    ["cohere/command-r-plus", "cohere", "command-r-plus", "cohere/command-r-plus"],
+  ];
+
+  for (const [input, provider, modelId, fullId] of cases) {
+    test(`parses "${input}"`, () => {
+      const result = parseModel(input);
+      expect(result.provider).toBe(provider);
+      expect(result.modelId).toBe(modelId);
+      expect(result.fullId).toBe(fullId);
+    });
+  }
 
   test("defaults to openai when no provider prefix", () => {
     const result = parseModel("gpt-4o-mini");
@@ -70,51 +98,68 @@ describe("parseModel", () => {
     expect(result.fullId).toBe("openai/gpt-4o-mini");
   });
 
-  test("handles model IDs with multiple slashes", () => {
+  test("handles model with multiple slashes", () => {
     const result = parseModel("openai/gpt-4o/some-variant");
     expect(result.provider).toBe("openai");
     expect(result.modelId).toBe("gpt-4o/some-variant");
   });
+
+  test("throws on empty string (zod min length)", () => {
+    expect(() => parseModel("")).toThrow();
+  });
 });
+
+// ── SUPPORTED_PROVIDERS ────────────────────────────────────────────────
 
 describe("SUPPORTED_PROVIDERS", () => {
-  test("includes all expected providers", () => {
-    expect(SUPPORTED_PROVIDERS).toContain("openai");
-    expect(SUPPORTED_PROVIDERS).toContain("anthropic");
-    expect(SUPPORTED_PROVIDERS).toContain("google");
-    expect(SUPPORTED_PROVIDERS).toContain("perplexity");
-    expect(SUPPORTED_PROVIDERS).toContain("xai");
-    expect(SUPPORTED_PROVIDERS).toContain("mistral");
-    expect(SUPPORTED_PROVIDERS).toContain("groq");
-    expect(SUPPORTED_PROVIDERS).toContain("deepseek");
-    expect(SUPPORTED_PROVIDERS).toContain("cohere");
-  });
-
-  test("has 9 providers", () => {
+  test("has exactly 9 providers", () => {
     expect(SUPPORTED_PROVIDERS).toHaveLength(9);
   });
+
+  test("includes all expected providers", () => {
+    const expected: ProviderId[] = ["openai", "anthropic", "google", "perplexity", "xai", "mistral", "groq", "deepseek", "cohere"];
+    for (const p of expected) {
+      expect(SUPPORTED_PROVIDERS).toContain(p);
+    }
+  });
+
+  test("is a readonly tuple", () => {
+    // @ts-expect-error -- should not allow push on readonly
+    expect(() => (SUPPORTED_PROVIDERS as string[]).push("test")).toThrow();
+  });
 });
+
+// ── PROVIDER_ENV_VARS ──────────────────────────────────────────────────
 
 describe("PROVIDER_ENV_VARS", () => {
   test("maps every provider to an env var", () => {
     for (const provider of SUPPORTED_PROVIDERS) {
       expect(PROVIDER_ENV_VARS[provider]).toBeDefined();
       expect(typeof PROVIDER_ENV_VARS[provider]).toBe("string");
+      expect(PROVIDER_ENV_VARS[provider].length).toBeGreaterThan(0);
     }
   });
 
-  test("has correct env var for each provider", () => {
-    expect(PROVIDER_ENV_VARS.openai).toBe("OPENAI_API_KEY");
-    expect(PROVIDER_ENV_VARS.anthropic).toBe("ANTHROPIC_API_KEY");
-    expect(PROVIDER_ENV_VARS.google).toBe("GOOGLE_GENERATIVE_AI_API_KEY");
-    expect(PROVIDER_ENV_VARS.perplexity).toBe("PERPLEXITY_API_KEY");
-    expect(PROVIDER_ENV_VARS.xai).toBe("XAI_API_KEY");
-    expect(PROVIDER_ENV_VARS.mistral).toBe("MISTRAL_API_KEY");
-    expect(PROVIDER_ENV_VARS.groq).toBe("GROQ_API_KEY");
-    expect(PROVIDER_ENV_VARS.deepseek).toBe("DEEPSEEK_API_KEY");
-    expect(PROVIDER_ENV_VARS.cohere).toBe("COHERE_API_KEY");
-  });
+  const expected: Record<ProviderId, string> = {
+    openai: "OPENAI_API_KEY",
+    anthropic: "ANTHROPIC_API_KEY",
+    google: "GOOGLE_GENERATIVE_AI_API_KEY",
+    perplexity: "PERPLEXITY_API_KEY",
+    xai: "XAI_API_KEY",
+    mistral: "MISTRAL_API_KEY",
+    groq: "GROQ_API_KEY",
+    deepseek: "DEEPSEEK_API_KEY",
+    cohere: "COHERE_API_KEY",
+  };
+
+  for (const [provider, envVar] of Object.entries(expected)) {
+    test(`${provider} → ${envVar}`, () => {
+      expect(PROVIDER_ENV_VARS[provider as ProviderId]).toBe(envVar);
+    });
+  }
 });
+
+// ── registry ───────────────────────────────────────────────────────────
 
 describe("registry", () => {
   test("is defined", () => {
@@ -126,6 +171,8 @@ describe("registry", () => {
   });
 });
 
+// ── resolveModel ───────────────────────────────────────────────────────
+
 describe("resolveModel", () => {
   const originalEnv = { ...process.env };
 
@@ -133,45 +180,31 @@ describe("resolveModel", () => {
     process.env = { ...originalEnv };
   });
 
-  test("resolves openai model when API key is set", () => {
-    process.env.OPENAI_API_KEY = "test-key";
-    const model = resolveModel("openai/gpt-4o");
-    expect(model).toBeDefined();
-    expect(model.modelId).toBe("gpt-4o");
-  });
+  const providerCases: Array<{ provider: ProviderId; model: string; envVar: string; expectedModelId: string }> = [
+    { provider: "openai", model: "openai/gpt-4o", envVar: "OPENAI_API_KEY", expectedModelId: "gpt-4o" },
+    { provider: "anthropic", model: "anthropic/claude-sonnet-4-5", envVar: "ANTHROPIC_API_KEY", expectedModelId: "claude-sonnet-4-5" },
+    { provider: "google", model: "google/gemini-2.5-flash", envVar: "GOOGLE_GENERATIVE_AI_API_KEY", expectedModelId: "gemini-2.5-flash" },
+    { provider: "perplexity", model: "perplexity/sonar", envVar: "PERPLEXITY_API_KEY", expectedModelId: "sonar" },
+    { provider: "xai", model: "xai/grok-3", envVar: "XAI_API_KEY", expectedModelId: "grok-3" },
+    { provider: "mistral", model: "mistral/mistral-large-latest", envVar: "MISTRAL_API_KEY", expectedModelId: "mistral-large-latest" },
+    { provider: "groq", model: "groq/llama-3.3-70b-versatile", envVar: "GROQ_API_KEY", expectedModelId: "llama-3.3-70b-versatile" },
+    { provider: "deepseek", model: "deepseek/deepseek-chat", envVar: "DEEPSEEK_API_KEY", expectedModelId: "deepseek-chat" },
+    { provider: "cohere", model: "cohere/command-r-plus", envVar: "COHERE_API_KEY", expectedModelId: "command-r-plus" },
+  ];
 
-  test("resolves anthropic model when API key is set", () => {
-    process.env.ANTHROPIC_API_KEY = "test-key";
-    const model = resolveModel("anthropic/claude-sonnet-4-5");
-    expect(model).toBeDefined();
-    expect(model.modelId).toBe("claude-sonnet-4-5");
-  });
-
-  test("resolves google model when API key is set", () => {
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY = "test-key";
-    const model = resolveModel("google/gemini-2.5-flash");
-    expect(model).toBeDefined();
-    expect(model.modelId).toBe("gemini-2.5-flash");
-  });
-
-  test("resolves perplexity model when API key is set", () => {
-    process.env.PERPLEXITY_API_KEY = "test-key";
-    const model = resolveModel("perplexity/sonar");
-    expect(model).toBeDefined();
-    expect(model.modelId).toBe("sonar");
-  });
-
-  test("resolves xai model when API key is set", () => {
-    process.env.XAI_API_KEY = "test-key";
-    const model = resolveModel("xai/grok-3");
-    expect(model).toBeDefined();
-    expect(model.modelId).toBe("grok-3");
-  });
+  for (const { provider, model, envVar, expectedModelId } of providerCases) {
+    test(`resolves ${provider} model when API key is set`, () => {
+      process.env[envVar] = "test-key";
+      const m = resolveModel(model);
+      expect(m).toBeDefined();
+      expect(m.modelId).toBe(expectedModelId);
+    });
+  }
 
   test("resolves model without prefix using openai as default", () => {
     process.env.OPENAI_API_KEY = "test-key";
-    const model = resolveModel("gpt-4o-mini");
-    expect(model).toBeDefined();
-    expect(model.modelId).toBe("gpt-4o-mini");
+    const m = resolveModel("gpt-4o-mini");
+    expect(m).toBeDefined();
+    expect(m.modelId).toBe("gpt-4o-mini");
   });
 });

@@ -40,6 +40,19 @@ export const JsonOutputSchema = z.object({
     inputTokens: z.number().optional(),
     outputTokens: z.number().optional(),
     totalTokens: z.number().optional(),
+    inputTokenDetails: z
+      .object({
+        noCacheTokens: z.number().optional(),
+        cacheReadTokens: z.number().optional(),
+        cacheWriteTokens: z.number().optional(),
+      })
+      .optional(),
+    outputTokenDetails: z
+      .object({
+        textTokens: z.number().optional(),
+        reasoningTokens: z.number().optional(),
+      })
+      .optional(),
   }),
   finishReason: z.string(),
 });

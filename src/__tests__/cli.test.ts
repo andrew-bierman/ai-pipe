@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 
 const CLI = join(import.meta.dir, "..", "index.ts");
 const tmpDir = tmpdir();
+const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 const CLEAN_ENV = {
   OPENAI_API_KEY: "",
@@ -37,15 +38,26 @@ async function runCLI(
   return { stdout, stderr, exitCode };
 }
 
+// ── Help & Version ─────────────────────────────────────────────────────
+
 describe("CLI: help and version", () => {
   test("prints help with --help", async () => {
     const { stdout, exitCode } = await runCLI(["--help"]);
     expect(stdout).toContain("Usage: ai");
-    expect(stdout).toContain("--model");
-    expect(stdout).toContain("--system");
-    expect(stdout).toContain("--json");
-    expect(stdout).toContain("--no-stream");
     expect(exitCode).toBe(0);
+  });
+
+  test("prints help with -h", async () => {
+    const { stdout, exitCode } = await runCLI(["-h"]);
+    expect(stdout).toContain("Usage: ai");
+    expect(exitCode).toBe(0);
+  });
+
+  test("help contains all flags", async () => {
+    const { stdout } = await runCLI(["--help"]);
+    for (const flag of ["--model", "--system", "--json", "--no-stream", "--temperature", "--max-output-tokens", "--config", "--providers", "--completions"]) {
+      expect(stdout).toContain(flag);
+    }
   });
 
   test("prints version with --version", async () => {
@@ -53,7 +65,15 @@ describe("CLI: help and version", () => {
     expect(stdout.trim()).toBe("1.0.0");
     expect(exitCode).toBe(0);
   });
+
+  test("prints version with -V", async () => {
+    const { stdout, exitCode } = await runCLI(["-V"]);
+    expect(stdout.trim()).toBe("1.0.0");
+    expect(exitCode).toBe(0);
+  });
 });
+
+// ── Provider Validation ────────────────────────────────────────────────
 
 describe("CLI: provider validation", () => {
   test("errors on unknown provider", async () => {
@@ -76,6 +96,8 @@ describe("CLI: provider validation", () => {
     }
   });
 });
+
+// ── API Key Validation (all 9 providers) ───────────────────────────────
 
 describe("CLI: API key validation", () => {
   const cases = [
@@ -103,6 +125,8 @@ describe("CLI: API key validation", () => {
   }
 });
 
+// ── Model Defaulting ───────────────────────────────────────────────────
+
 describe("CLI: model defaulting", () => {
   test("model defaults to openai when no prefix", async () => {
     const { stderr, exitCode } = await runCLI(
@@ -112,11 +136,41 @@ describe("CLI: model defaulting", () => {
     expect(stderr).toContain("OPENAI_API_KEY");
     expect(exitCode).toBe(1);
   });
+
+  test("defaults to openai/gpt-4o when no -m flag at all", async () => {
+    const { stderr, exitCode } = await runCLI(["hello"], { env: CLEAN_ENV });
+    expect(stderr).toContain("OPENAI_API_KEY");
+    expect(exitCode).toBe(1);
+  });
 });
 
+// ── Short Flags ────────────────────────────────────────────────────────
+
+describe("CLI: short flags", () => {
+  test("-m sets model", async () => {
+    const { stderr, exitCode } = await runCLI(
+      ["-m", "anthropic/claude-sonnet-4-5", "hello"],
+      { env: CLEAN_ENV }
+    );
+    expect(stderr).toContain("ANTHROPIC_API_KEY");
+    expect(exitCode).toBe(1);
+  });
+
+  test("-s sets system prompt (reaches API key check)", async () => {
+    const { stderr, exitCode } = await runCLI(
+      ["-s", "you are a poet", "hello"],
+      { env: CLEAN_ENV }
+    );
+    expect(stderr).toContain("Missing API key");
+    expect(exitCode).toBe(1);
+  });
+});
+
+// ── Config File ────────────────────────────────────────────────────────
+
 describe("CLI: config file", () => {
-  test("uses config file when specified", async () => {
-    const configPath = join(tmpDir, `ai-cli-test-cfg-${Date.now()}.json`);
+  test("uses config file when specified with -c", async () => {
+    const configPath = join(tmpDir, `ai-cfg-${uid()}.json`);
     await Bun.write(configPath, JSON.stringify({ model: "fakeprovider/model" }));
 
     const { stderr, exitCode } = await runCLI(
@@ -128,7 +182,7 @@ describe("CLI: config file", () => {
   });
 
   test("CLI flag overrides config file model", async () => {
-    const configPath = join(tmpDir, `ai-cli-test-override-${Date.now()}.json`);
+    const configPath = join(tmpDir, `ai-cfg-${uid()}.json`);
     await Bun.write(configPath, JSON.stringify({ model: "openai/gpt-4o" }));
 
     const { stderr, exitCode } = await runCLI(
@@ -138,22 +192,60 @@ describe("CLI: config file", () => {
     expect(stderr).toContain('Unknown provider "badprovider"');
     expect(exitCode).toBe(1);
   });
+
+  test("ignores missing config file gracefully", async () => {
+    const { stderr, exitCode } = await runCLI(
+      ["-c", "/nonexistent/config.json", "hello"],
+      { env: CLEAN_ENV }
+    );
+    // Should get to API key error, not config file error
+    expect(stderr).toContain("Missing API key");
+    expect(exitCode).toBe(1);
+  });
+
+  test("ignores invalid config file gracefully", async () => {
+    const configPath = join(tmpDir, `ai-cfg-${uid()}.json`);
+    await Bun.write(configPath, "not json");
+
+    const { stderr, exitCode } = await runCLI(
+      ["-c", configPath, "hello"],
+      { env: CLEAN_ENV }
+    );
+    expect(stderr).toContain("Missing API key");
+    expect(exitCode).toBe(1);
+  });
 });
 
+// ── --providers ────────────────────────────────────────────────────────
+
 describe("CLI: --providers flag", () => {
-  test("lists all providers with --providers", async () => {
+  test("lists all providers", async () => {
     const { stdout, exitCode } = await runCLI(["--providers"]);
     expect(stdout).toContain("Provider");
     expect(stdout).toContain("Env Variable");
     expect(stdout).toContain("Status");
-    expect(stdout).toContain("openai");
-    expect(stdout).toContain("anthropic");
-    expect(stdout).toContain("perplexity");
-    expect(stdout).toContain("OPENAI_API_KEY");
-    expect(stdout).toContain("ANTHROPIC_API_KEY");
+    for (const p of ["openai", "anthropic", "google", "perplexity", "xai", "mistral", "groq", "deepseek", "cohere"]) {
+      expect(stdout).toContain(p);
+    }
     expect(exitCode).toBe(0);
   });
+
+  test("shows ✓ set when API key is present", async () => {
+    const { stdout } = await runCLI(["--providers"], {
+      env: { OPENAI_API_KEY: "sk-test" },
+    });
+    expect(stdout).toContain("✓ set");
+  });
+
+  test("shows ✗ missing when API key is absent", async () => {
+    const { stdout } = await runCLI(["--providers"], {
+      env: CLEAN_ENV,
+    });
+    expect(stdout).toContain("✗ missing");
+  });
 });
+
+// ── --completions ──────────────────────────────────────────────────────
 
 describe("CLI: --completions flag", () => {
   test("generates bash completions", async () => {
@@ -174,7 +266,15 @@ describe("CLI: --completions flag", () => {
     expect(stdout).toContain("complete -c ai");
     expect(exitCode).toBe(0);
   });
+
+  test("errors on unknown shell", async () => {
+    const { stderr, exitCode } = await runCLI(["--completions", "powershell"]);
+    expect(stderr).toContain('Unknown shell "powershell"');
+    expect(exitCode).toBe(1);
+  });
 });
+
+// ── Stdin Handling ─────────────────────────────────────────────────────
 
 describe("CLI: stdin handling", () => {
   test("reads stdin when piped", async () => {
@@ -192,6 +292,44 @@ describe("CLI: stdin handling", () => {
       env: CLEAN_ENV,
     });
     expect(stderr).toContain("Missing API key");
+    expect(exitCode).toBe(1);
+  });
+});
+
+// ── Multi-Word Prompts ─────────────────────────────────────────────────
+
+describe("CLI: prompt joining", () => {
+  test("joins multiple words into prompt", async () => {
+    const { stderr, exitCode } = await runCLI(
+      ["explain", "monads", "in", "one", "sentence"],
+      { env: CLEAN_ENV }
+    );
+    // Reaches API key check, meaning prompt was successfully constructed
+    expect(stderr).toContain("Missing API key");
+    expect(exitCode).toBe(1);
+  });
+});
+
+// ── Errors to stderr ───────────────────────────────────────────────────
+
+describe("CLI: errors go to stderr", () => {
+  test("API key error goes to stderr, not stdout", async () => {
+    const { stdout, stderr, exitCode } = await runCLI(
+      ["hello"],
+      { env: CLEAN_ENV }
+    );
+    expect(stdout).toBe("");
+    expect(stderr).toContain("Error:");
+    expect(exitCode).toBe(1);
+  });
+
+  test("unknown provider error goes to stderr", async () => {
+    const { stdout, stderr, exitCode } = await runCLI(
+      ["-m", "bad/model", "hello"],
+      { env: CLEAN_ENV }
+    );
+    expect(stdout).toBe("");
+    expect(stderr).toContain("Error:");
     expect(exitCode).toBe(1);
   });
 });

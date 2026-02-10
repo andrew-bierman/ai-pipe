@@ -15,7 +15,7 @@ export const registry = createProviderRegistry(
   { separator: "/" }
 );
 
-export const SUPPORTED_PROVIDERS = [
+export const SUPPORTED_PROVIDERS = Object.freeze([
   "openai",
   "anthropic",
   "google",
@@ -25,7 +25,7 @@ export const SUPPORTED_PROVIDERS = [
   "groq",
   "deepseek",
   "cohere",
-] as const;
+] as const);
 
 export const ProviderIdSchema = z.enum(SUPPORTED_PROVIDERS);
 export type ProviderId = z.infer<typeof ProviderIdSchema>;

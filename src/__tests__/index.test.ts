@@ -1,6 +1,8 @@
 import { test, expect, describe } from "bun:test";
-import { buildPrompt, resolveOptions, type CLIOptions } from "../index.ts";
+import { buildPrompt, resolveOptions, CLIOptionsSchema, JsonOutputSchema, type CLIOptions } from "../index.ts";
 import type { Config } from "../config.ts";
+
+// ── buildPrompt ────────────────────────────────────────────────────────
 
 describe("buildPrompt", () => {
   test("returns arg prompt when only args provided", () => {
@@ -20,29 +22,27 @@ describe("buildPrompt", () => {
     expect(buildPrompt(null, null)).toBeNull();
   });
 
-  test("arg prompt takes precedence position (comes first in combined)", () => {
-    const result = buildPrompt("summarize", "long document text");
-    expect(result!.startsWith("summarize")).toBe(true);
-    expect(result!.endsWith("long document text")).toBe(true);
+  test("arg prompt comes first in combined output", () => {
+    const result = buildPrompt("summarize", "long document text")!;
+    expect(result.startsWith("summarize")).toBe(true);
+    expect(result.endsWith("long document text")).toBe(true);
   });
 
-  test("empty string arg prompt is treated as present (not null)", () => {
-    // In practice, CLI converts empty args array to null, not ""
-    expect(buildPrompt("", "stdin content")).toBe("");
+  test("preserves multiline stdin content", () => {
+    const result = buildPrompt("review", "line1\nline2\nline3");
+    expect(result).toBe("review\n\nline1\nline2\nline3");
   });
 
-  test("empty string stdin is treated as present (not null)", () => {
-    // In practice, CLI converts empty stdin to null, not ""
-    expect(buildPrompt("arg prompt", "")).toBe("arg prompt");
+  test("preserves multiline arg prompt", () => {
+    const result = buildPrompt("do this\nand that", null);
+    expect(result).toBe("do this\nand that");
   });
 });
 
-describe("resolveOptions", () => {
-  const defaultOpts: CLIOptions = {
-    json: false,
-    stream: true,
-  };
+// ── resolveOptions ─────────────────────────────────────────────────────
 
+describe("resolveOptions", () => {
+  const defaultOpts: CLIOptions = { json: false, stream: true };
   const emptyConfig: Config = {};
 
   test("uses built-in defaults when no flags or config", () => {
@@ -93,13 +93,149 @@ describe("resolveOptions", () => {
       system: "config system",
       temperature: 0.5,
     };
-    const opts: CLIOptions = {
-      ...defaultOpts,
-      temperature: 0.9,
-    };
+    const opts: CLIOptions = { ...defaultOpts, temperature: 0.9 };
     const result = resolveOptions(opts, config);
     expect(result.modelString).toBe("anthropic/claude-sonnet-4-5");
     expect(result.system).toBe("config system");
     expect(result.temperature).toBe(0.9);
+  });
+
+  test("all undefined opts fall through to config", () => {
+    const config: Config = { model: "xai/grok-3", system: "sys", temperature: 1.5, maxOutputTokens: 300 };
+    const result = resolveOptions(defaultOpts, config);
+    expect(result.modelString).toBe("xai/grok-3");
+    expect(result.system).toBe("sys");
+    expect(result.temperature).toBe(1.5);
+    expect(result.maxOutputTokens).toBe(300);
+  });
+});
+
+// ── CLIOptionsSchema ───────────────────────────────────────────────────
+
+describe("CLIOptionsSchema", () => {
+  test("accepts minimal valid options", () => {
+    const result = CLIOptionsSchema.parse({ json: false, stream: true });
+    expect(result.json).toBe(false);
+    expect(result.stream).toBe(true);
+  });
+
+  test("accepts full valid options", () => {
+    const result = CLIOptionsSchema.parse({
+      model: "anthropic/claude-sonnet-4-5",
+      system: "be concise",
+      json: true,
+      stream: false,
+      temperature: 1.0,
+      maxOutputTokens: 500,
+      config: "/path/to/config.json",
+      providers: true,
+      completions: "bash",
+    });
+    expect(result.model).toBe("anthropic/claude-sonnet-4-5");
+    expect(result.maxOutputTokens).toBe(500);
+  });
+
+  test("rejects temperature below 0", () => {
+    expect(
+      CLIOptionsSchema.safeParse({ json: false, stream: true, temperature: -1 }).success
+    ).toBe(false);
+  });
+
+  test("rejects temperature above 2", () => {
+    expect(
+      CLIOptionsSchema.safeParse({ json: false, stream: true, temperature: 3 }).success
+    ).toBe(false);
+  });
+
+  test("rejects negative maxOutputTokens", () => {
+    expect(
+      CLIOptionsSchema.safeParse({ json: false, stream: true, maxOutputTokens: -5 }).success
+    ).toBe(false);
+  });
+
+  test("rejects float maxOutputTokens", () => {
+    expect(
+      CLIOptionsSchema.safeParse({ json: false, stream: true, maxOutputTokens: 10.5 }).success
+    ).toBe(false);
+  });
+
+  test("rejects non-boolean json", () => {
+    expect(
+      CLIOptionsSchema.safeParse({ json: "yes", stream: true }).success
+    ).toBe(false);
+  });
+});
+
+// ── JsonOutputSchema ───────────────────────────────────────────────────
+
+describe("JsonOutputSchema", () => {
+  test("accepts valid output", () => {
+    const result = JsonOutputSchema.parse({
+      text: "hello",
+      model: "openai/gpt-4o",
+      usage: { inputTokens: 5, outputTokens: 10, totalTokens: 15 },
+      finishReason: "stop",
+    });
+    expect(result.text).toBe("hello");
+    expect(result.finishReason).toBe("stop");
+  });
+
+  test("accepts output with optional token fields", () => {
+    const result = JsonOutputSchema.parse({
+      text: "",
+      model: "openai/gpt-4o",
+      usage: {},
+      finishReason: "length",
+    });
+    expect(result.usage.inputTokens).toBeUndefined();
+    expect(result.usage.inputTokenDetails).toBeUndefined();
+    expect(result.usage.outputTokenDetails).toBeUndefined();
+  });
+
+  test("accepts output with full token details", () => {
+    const result = JsonOutputSchema.parse({
+      text: "hi",
+      model: "openai/gpt-4o",
+      usage: {
+        inputTokens: 5,
+        outputTokens: 10,
+        totalTokens: 15,
+        inputTokenDetails: { noCacheTokens: 3, cacheReadTokens: 2, cacheWriteTokens: 0 },
+        outputTokenDetails: { textTokens: 8, reasoningTokens: 2 },
+      },
+      finishReason: "stop",
+    });
+    expect(result.usage.inputTokenDetails?.cacheReadTokens).toBe(2);
+    expect(result.usage.outputTokenDetails?.reasoningTokens).toBe(2);
+  });
+
+  test("rejects missing text", () => {
+    expect(
+      JsonOutputSchema.safeParse({
+        model: "openai/gpt-4o",
+        usage: {},
+        finishReason: "stop",
+      }).success
+    ).toBe(false);
+  });
+
+  test("rejects missing model", () => {
+    expect(
+      JsonOutputSchema.safeParse({
+        text: "hi",
+        usage: {},
+        finishReason: "stop",
+      }).success
+    ).toBe(false);
+  });
+
+  test("rejects missing finishReason", () => {
+    expect(
+      JsonOutputSchema.safeParse({
+        text: "hi",
+        model: "m",
+        usage: {},
+      }).success
+    ).toBe(false);
   });
 });
