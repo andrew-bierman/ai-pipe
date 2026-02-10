@@ -11,11 +11,12 @@ import { groq } from "@ai-sdk/groq";
 import { deepseek } from "@ai-sdk/deepseek";
 import { cohere } from "@ai-sdk/cohere";
 import { openrouter } from "@openrouter/ai-sdk-provider";
+import { ollama } from "ai-sdk-ollama";
 
 const openrouterProvider = openrouter as unknown as ProviderV3;
 
 export const registry = createProviderRegistry(
-  { openai, anthropic, google, perplexity, xai, mistral, groq, deepseek, cohere, openrouter: openrouterProvider },
+  { openai, anthropic, google, perplexity, xai, mistral, groq, deepseek, cohere, openrouter: openrouterProvider, ollama },
   { separator: "/" }
 );
 
@@ -30,6 +31,7 @@ export const SUPPORTED_PROVIDERS = Object.freeze([
   "deepseek",
   "cohere",
   "openrouter",
+  "ollama",
 ] as const);
 
 export const ProviderIdSchema = z.enum(SUPPORTED_PROVIDERS);
@@ -46,6 +48,7 @@ export const PROVIDER_ENV_VARS: Record<ProviderId, string> = {
   deepseek: "DEEPSEEK_API_KEY",
   cohere: "COHERE_API_KEY",
   openrouter: "OPENROUTER_API_KEY",
+  ollama: "OLLAMA_HOST",
 };
 
 const DEFAULT_PROVIDER: ProviderId = "openai";
@@ -84,7 +87,7 @@ export function resolveModel(modelString: string) {
   }
 
   const envVar = PROVIDER_ENV_VARS[result.data];
-  if (!process.env[envVar]) {
+  if (provider !== "ollama" && !process.env[envVar]) {
     console.error(
       `Error: Missing API key. Set ${envVar} or check your provider config.`
     );
