@@ -142,6 +142,12 @@ describe("parseModel", () => {
       "meta-llama/Llama-3.3-70b-Instruct",
       "huggingface/meta-llama/Llama-3.3-70b-Instruct",
     ],
+    [
+      "cerebras/llama3.3-70b",
+      "cerebras",
+      "llama3.3-70b",
+      "cerebras/llama3.3-70b",
+    ],
   ];
 
   for (const [input, provider, modelId, fullId] of cases) {
@@ -174,8 +180,8 @@ describe("parseModel", () => {
 // ── SUPPORTED_PROVIDERS ────────────────────────────────────────────────
 
 describe("SUPPORTED_PROVIDERS", () => {
-  test("has exactly 16 providers", () => {
-    expect(SUPPORTED_PROVIDERS).toHaveLength(16);
+  test("has exactly 17 providers", () => {
+    expect(SUPPORTED_PROVIDERS).toHaveLength(17);
   });
 
   test("includes all expected providers", () => {
@@ -196,6 +202,7 @@ describe("SUPPORTED_PROVIDERS", () => {
       "vertex",
       "ollama",
       "huggingface",
+      "cerebras",
     ];
     for (const p of expected) {
       expect(SUPPORTED_PROVIDERS).toContain(p);
@@ -236,6 +243,7 @@ describe("PROVIDER_ENV_VARS", () => {
     vertex: ["GOOGLE_VERTEX_PROJECT", "GOOGLE_VERTEX_LOCATION"],
     ollama: ["OLLAMA_HOST"],
     huggingface: ["HF_TOKEN"],
+    cerebras: ["CEREBRAS_API_KEY"],
   };
 
   for (const [provider, envVars] of Object.entries(expected)) {
@@ -367,6 +375,12 @@ describe("resolveModel", () => {
       model: "huggingface/meta-llama/Llama-3.3-70b-Instruct",
       envVars: ["HF_TOKEN"],
       expectedModelId: "meta-llama/Llama-3.3-70b-Instruct",
+    },
+    {
+      provider: "cerebras",
+      model: "cerebras/llama3.3-70b",
+      envVars: ["CEREBRAS_API_KEY"],
+      expectedModelId: "llama3.3-70b",
     },
   ];
 

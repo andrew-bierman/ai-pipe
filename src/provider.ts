@@ -1,6 +1,7 @@
 import { bedrock } from "@ai-sdk/amazon-bedrock";
 import { anthropic } from "@ai-sdk/anthropic";
 import { azure } from "@ai-sdk/azure";
+import { cerebras } from "@ai-sdk/cerebras";
 import { cohere } from "@ai-sdk/cohere";
 import { deepseek } from "@ai-sdk/deepseek";
 import { google } from "@ai-sdk/google";
@@ -39,6 +40,7 @@ export const registry = createProviderRegistry(
     vertex,
     ollama,
     huggingface,
+    cerebras,
   },
   { separator: "/" },
 );
@@ -60,6 +62,7 @@ export const SUPPORTED_PROVIDERS = Object.freeze([
   "vertex",
   "ollama",
   "huggingface",
+  "cerebras",
 ] as const);
 
 export const ProviderIdSchema = z.enum(SUPPORTED_PROVIDERS);
@@ -83,6 +86,7 @@ export const PROVIDER_ENV_VARS: Record<ProviderId, string[]> = {
   vertex: ["GOOGLE_VERTEX_PROJECT", "GOOGLE_VERTEX_LOCATION"],
   ollama: ["OLLAMA_HOST"],
   huggingface: ["HF_TOKEN"],
+  cerebras: ["CEREBRAS_API_KEY"],
 };
 
 export const ModelStringSchema = z
