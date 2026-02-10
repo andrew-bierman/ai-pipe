@@ -1,7 +1,15 @@
 pre-commit:
   parallel: false
   jobs:
-    - name: checks
+    - name: sort-package-json
       run: bun scripts/checks.ts
-      glob: "*.{ts,tsx,js,jsx,json}"
+      glob: "package.json"
+      stage_fixed: true
+    - name: biome
+      run: bun scripts/biome.ts
+      glob: "*.{ts,tsx,js,jsx}"
+      stage_fixed: true
+    - name: typecheck
+      run: bun scripts/typecheck.ts
+      glob: "*.{ts,tsx}"
       stage_fixed: true
