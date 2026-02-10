@@ -6,9 +6,12 @@ import {
   buildPrompt,
   type CLIOptions,
   CLIOptionsSchema,
+  HistorySchema,
+  isValidSessionName,
   JsonOutputSchema,
   readFiles,
   resolveOptions,
+  sanitizeSessionName,
 } from "../index.ts";
 
 // ── buildPrompt ────────────────────────────────────────────────────────
@@ -348,5 +351,105 @@ describe("JsonOutputSchema", () => {
         usage: {},
       }).success,
     ).toBe(false);
+  });
+});
+
+// ── Session Sanitization ───────────────────────────────────────────────
+
+describe("session sanitization", () => {
+  const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  test("allows valid alphanumeric session names", () => {
+    expect(isValidSessionName("session123")).toBe(true);
+    expect(isValidSessionName("abc")).toBe(true);
+    expect(isValidSessionName("123")).toBe(true);
+  });
+
+  test("allows session names with hyphens and underscores", () => {
+    expect(isValidSessionName("my-session")).toBe(true);
+    expect(isValidSessionName("my_session")).toBe(true);
+    expect(isValidSessionName("test-session_123")).toBe(true);
+  });
+
+  test("rejects session names with special characters", () => {
+    expect(isValidSessionName("session/path")).toBe(false);
+    expect(isValidSessionName("session.name")).toBe(false);
+    expect(isValidSessionName("session name")).toBe(false);
+    expect(isValidSessionName("session@123")).toBe(false);
+    expect(isValidSessionName("")).toBe(false);
+  });
+
+  test("sanitizeSessionName replaces invalid chars with underscore", () => {
+    expect(sanitizeSessionName("my session")).toBe("my_session");
+    expect(sanitizeSessionName("path/to/dir")).toBe("path_to_dir");
+    expect(sanitizeSessionName("file.name.js")).toBe("file_name_js");
+    expect(sanitizeSessionName("session@123")).toBe("session_123");
+  });
+
+  test("sanitizeSessionName preserves valid characters", () => {
+    expect(sanitizeSessionName("valid-session_123")).toBe("valid-session_123");
+    expect(sanitizeSessionName("ABCdef123")).toBe("ABCdef123");
+  });
+});
+
+// ── History Loading ─────────────────────────────────────────────────────
+
+describe("history loading", () => {
+  const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const {
+    loadHistory,
+    saveHistory,
+    sanitizeSessionName,
+  } = require("../index.ts");
+
+  test("returns empty array for non-existent history", async () => {
+    const session = `test-nonexistent-${uid()}`;
+    const history = await loadHistory(session);
+    expect(history).toEqual([]);
+  });
+
+  test("saves and loads history correctly", async () => {
+    const session = `test-load-${uid()}`;
+    const messages = [
+      { role: "system", content: "You are a helpful assistant." },
+      { role: "user", content: "Hello!" },
+      { role: "assistant", content: "Hi there!" },
+      { role: "user", content: "How are you?" },
+    ];
+
+    await saveHistory(session, messages);
+    const loaded = await loadHistory(session);
+
+    expect(loaded).toEqual(messages);
+  });
+
+  test("sanitizes session names when saving history", async () => {
+    const session = `test-sanitize-${uid()}`;
+    const unsafeSession = "session with spaces/and slashes";
+    const sanitized = sanitizeSessionName(unsafeSession);
+
+    const messages = [{ role: "user", content: "test" }];
+    await saveHistory(sanitized, messages);
+    const loaded = await loadHistory(sanitized);
+
+    expect(loaded).toEqual(messages);
+  });
+
+  test("handles invalid JSON gracefully", async () => {
+    const session = `test-invalid-${uid()}`;
+    const path = require("node:path");
+    const tmpdir = require("node:os").tmpdir();
+    const historyPath = path.join(
+      tmpdir,
+      ".ai-pipe",
+      "history",
+      `${session}.json`,
+    );
+
+    // Create a file with invalid JSON
+    await require("bun").write(historyPath, "not valid json {");
+
+    const history = await loadHistory(session);
+    expect(history).toEqual([]);
   });
 });

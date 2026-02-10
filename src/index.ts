@@ -1,5 +1,5 @@
-#!/usr/bin/env bun
-
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { generateText, type ModelMessage, streamText } from "ai";
 import { program } from "commander";
 import { z } from "zod";
@@ -13,6 +13,29 @@ import {
   printProviders,
   resolveModel,
 } from "./provider.ts";
+
+// Session name sanitization: only allow alphanumeric, hyphens, underscores
+const SESSION_NAME_REGEX = /^[A-Za-z0-9_-]+$/;
+const SESSION_SCHEMA = z.string().regex(SESSION_NAME_REGEX);
+
+export function sanitizeSessionName(session: string): string {
+  return session.replace(/[^A-Za-z0-9_-]/g, "_");
+}
+
+export function isValidSessionName(session: string): boolean {
+  return SESSION_NAME_REGEX.test(session);
+}
+
+// Zod schema for history messages
+export const HistoryMessageSchema = z.object({
+  role: z.enum(["user", "assistant", "system"]),
+  content: z.string(),
+});
+
+export type HistoryMessage = z.infer<typeof HistoryMessageSchema>;
+
+// History file schema: array of messages
+export const HistorySchema = z.array(HistoryMessageSchema);
 
 export interface CLIOptions {
   model?: string;
@@ -123,10 +146,10 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf-8").trimEnd();
 }
 
-const HISTORY_DIR = `${Bun.env.HOME ?? "~"}/.ai-pipe/history`;
+const HISTORY_DIR = join(homedir(), ".ai-pipe", "history");
 
 function getHistoryPath(session: string): string {
-  return `${HISTORY_DIR}/${session}.json`;
+  return join(HISTORY_DIR, `${session}.json`);
 }
 
 export async function loadHistory(session: string): Promise<ModelMessage[]> {
@@ -137,7 +160,13 @@ export async function loadHistory(session: string): Promise<ModelMessage[]> {
   }
   try {
     const content = await file.text();
-    return JSON.parse(content) as ModelMessage[];
+    const raw = JSON.parse(content);
+    const result = HistorySchema.safeParse(raw);
+    if (result.success) {
+      return result.data as ModelMessage[];
+    }
+    // If validation fails, return empty array
+    return [];
   } catch {
     return [];
   }
@@ -148,11 +177,10 @@ export async function saveHistory(
   messages: ModelMessage[],
 ): Promise<void> {
   const path = getHistoryPath(session);
-  // Ensure directory exists
-  const dir = Bun.file(HISTORY_DIR);
-  if (!(await dir.exists())) {
-    await Bun.write(HISTORY_DIR, ""); // Creates directory
-  }
+  // Ensure directory exists using mkdir with recursive
+  // Use fs.mkdir for directory creation with recursive option
+  const { mkdir } = await import("node:fs/promises");
+  await mkdir(HISTORY_DIR, { recursive: true });
   await Bun.write(path, JSON.stringify(messages, null, 2));
 }
 
@@ -219,20 +247,23 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
   const model = resolveModel(modelString);
 
   // Load conversation history if session is provided
-  const messages: ModelMessage[] = opts.session
-    ? await loadHistory(opts.session)
+  // Sanitize session name to prevent directory traversal
+  const sessionName = opts.session ? sanitizeSessionName(opts.session) : null;
+  const messages: ModelMessage[] = sessionName
+    ? await loadHistory(sessionName)
     : [];
 
   // Add current user message to messages if using session
-  if (opts.session) {
-    if (system) {
+  // Only add system message if history is empty (first message in conversation)
+  if (sessionName) {
+    if (system && messages.length === 0) {
       messages.unshift({ role: "system", content: system });
     }
     messages.push({ role: "user", content: prompt });
   }
 
   try {
-    if (opts.session) {
+    if (sessionName) {
       // Use conversation history mode
       if (opts.json || !opts.stream) {
         const result = await generateText({
@@ -244,7 +275,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
 
         // Save to history
         messages.push({ role: "assistant", content: result.text });
-        await saveHistory(opts.session, messages);
+        await saveHistory(sessionName, messages);
 
         if (opts.json) {
           const output: JsonOutput = {
@@ -274,7 +305,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
 
         // Save to history
         messages.push({ role: "assistant", content: fullResponse });
-        await saveHistory(opts.session, messages);
+        await saveHistory(sessionName, messages);
       }
     } else {
       // Use regular prompt mode
