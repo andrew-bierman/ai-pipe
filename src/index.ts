@@ -189,7 +189,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
 // Only run CLI when executed directly, not when imported
 if (import.meta.main) {
   program
-    .name("ai")
+    .name("ai-pipe")
     .description("A lean CLI for calling LLMs from the terminal.")
     .version(pkg.version)
     .argument("[prompt...]", "Prompt text. Multiple words are joined.")
