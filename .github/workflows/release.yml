@@ -90,6 +90,18 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
+      - name: Bump version if needed
+        if: needs.resolve-version.outputs.version != ''
+        run: |
+          CURRENT=$(node -p "require('./package.json').version")
+          TARGET="${{ needs.resolve-version.outputs.version }}"
+          if [ "$CURRENT" != "$TARGET" ]; then
+            echo "Bumping $CURRENT → $TARGET"
+            npm version "$TARGET" --no-git-tag-version
+          else
+            echo "Already at $TARGET"
+          fi
+
       - run: bun publish
         env:
           NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
