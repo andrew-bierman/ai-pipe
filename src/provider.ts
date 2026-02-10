@@ -98,7 +98,7 @@ export function resolveModel(modelString: string) {
   const envVar = PROVIDER_ENV_VARS[result.data];
   if (!process.env[envVar]) {
     console.error(
-      `Error: Missing API key. Set ${envVar} or check your provider config.`
+      `Error: Missing required environment variable. Set ${envVar} or check your provider config.`
     );
     process.exit(1);
   }

@@ -118,7 +118,7 @@ describe("CLI: API key validation", () => {
         ["-m", model, "hello"],
         { env: CLEAN_ENV }
       );
-      expect(stderr).toContain("Missing API key");
+      expect(stderr).toContain("Missing required environment variable");
       expect(stderr).toContain(envVar);
       expect(exitCode).toBe(1);
     });
@@ -161,7 +161,7 @@ describe("CLI: short flags", () => {
       ["-s", "you are a poet", "hello"],
       { env: CLEAN_ENV }
     );
-    expect(stderr).toContain("Missing API key");
+    expect(stderr).toContain("Missing required environment variable");
     expect(exitCode).toBe(1);
   });
 });
@@ -199,7 +199,7 @@ describe("CLI: config file", () => {
       { env: CLEAN_ENV }
     );
     // Should get to API key error, not config file error
-    expect(stderr).toContain("Missing API key");
+    expect(stderr).toContain("Missing required environment variable");
     expect(exitCode).toBe(1);
   });
 
@@ -211,7 +211,7 @@ describe("CLI: config file", () => {
       ["-c", configPath, "hello"],
       { env: CLEAN_ENV }
     );
-    expect(stderr).toContain("Missing API key");
+    expect(stderr).toContain("Missing required environment variable");
     expect(exitCode).toBe(1);
   });
 });
@@ -282,7 +282,7 @@ describe("CLI: stdin handling", () => {
       stdin: "hello from stdin",
       env: CLEAN_ENV,
     });
-    expect(stderr).toContain("Missing API key");
+    expect(stderr).toContain("Missing required environment variable");
     expect(exitCode).toBe(1);
   });
 
@@ -291,7 +291,7 @@ describe("CLI: stdin handling", () => {
       stdin: "const x = 1;",
       env: CLEAN_ENV,
     });
-    expect(stderr).toContain("Missing API key");
+    expect(stderr).toContain("Missing required environment variable");
     expect(exitCode).toBe(1);
   });
 });
@@ -305,7 +305,7 @@ describe("CLI: prompt joining", () => {
       { env: CLEAN_ENV }
     );
     // Reaches API key check, meaning prompt was successfully constructed
-    expect(stderr).toContain("Missing API key");
+    expect(stderr).toContain("Missing required environment variable");
     expect(exitCode).toBe(1);
   });
 });
