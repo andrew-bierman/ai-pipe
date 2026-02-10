@@ -1,8 +1,13 @@
-import { test, expect, describe } from "bun:test";
-import type { LanguageModelUsage, FinishReason } from "ai";
-import { streamText, generateText } from "ai";
-import { JsonOutputSchema, type JsonOutput } from "../index.ts";
-import { registry, SUPPORTED_PROVIDERS, PROVIDER_ENV_VARS, type ProviderId } from "../provider.ts";
+import { describe, expect, test } from "bun:test";
+import type { FinishReason, LanguageModelUsage } from "ai";
+import { generateText, streamText } from "ai";
+import { type JsonOutput, JsonOutputSchema } from "../index.ts";
+import {
+  PROVIDER_ENV_VARS,
+  type ProviderId,
+  registry,
+  SUPPORTED_PROVIDERS,
+} from "../provider.ts";
 
 // ── AI SDK type alignment ─────────────────────────────────────────────
 //
@@ -19,7 +24,11 @@ describe("AI SDK type compatibility", () => {
       inputTokens: 10,
       outputTokens: 20,
       totalTokens: 30,
-      inputTokenDetails: { noCacheTokens: 2, cacheReadTokens: 5, cacheWriteTokens: 3 },
+      inputTokenDetails: {
+        noCacheTokens: 2,
+        cacheReadTokens: 5,
+        cacheWriteTokens: 3,
+      },
       outputTokenDetails: { textTokens: 12, reasoningTokens: 8 },
     };
 
@@ -72,7 +81,11 @@ describe("AI SDK type compatibility", () => {
         inputTokens: 5,
         outputTokens: 3,
         totalTokens: 8,
-        inputTokenDetails: { noCacheTokens: 5, cacheReadTokens: 0, cacheWriteTokens: 0 },
+        inputTokenDetails: {
+          noCacheTokens: 5,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+        },
         outputTokenDetails: { textTokens: 3, reasoningTokens: 0 },
       } satisfies LanguageModelUsage,
       finishReason: "stop" as FinishReason,
@@ -119,10 +132,12 @@ describe("AI SDK registry compatibility", () => {
     // so we skip providers that throw LoadSettingError.
     for (const provider of SUPPORTED_PROVIDERS) {
       try {
-        registry.languageModel(`${provider}/test-model` as `${ProviderId}/${string}`);
-      } catch (e: any) {
+        registry.languageModel(
+          `${provider}/test-model` as `${ProviderId}/${string}`,
+        );
+      } catch (e: unknown) {
         // Allow LoadSettingError (missing env config), but fail on other errors
-        expect(e.name).toBe("AI_LoadSettingError");
+        expect((e as Error).name).toBe("AI_LoadSettingError");
       }
     }
   });

@@ -1,5 +1,5 @@
-import { test, expect, describe } from "bun:test";
-import { APP, AppSchema, ShellSchema, type Shell, type AppConfig } from "../constants.ts";
+import { describe, expect, test } from "bun:test";
+import { APP, AppSchema, ShellSchema } from "../constants.ts";
 
 describe("APP", () => {
   test("validates against AppSchema", () => {
