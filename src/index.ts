@@ -1,6 +1,6 @@
-#!/usr/bin/env bun
-
-import { generateText, streamText } from "ai";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { generateText, type ModelMessage, streamText } from "ai";
 import { program } from "commander";
 import { z } from "zod";
 import pkg from "../package.json";
@@ -14,6 +14,29 @@ import {
   printProviders,
   resolveModel,
 } from "./provider.ts";
+
+// Session name sanitization: only allow alphanumeric, hyphens, underscores
+const SESSION_NAME_REGEX = /^[A-Za-z0-9_-]+$/;
+const SESSION_SCHEMA = z.string().regex(SESSION_NAME_REGEX);
+
+export function sanitizeSessionName(session: string): string {
+  return session.replace(/[^A-Za-z0-9_-]/g, "_");
+}
+
+export function isValidSessionName(session: string): boolean {
+  return SESSION_NAME_REGEX.test(session);
+}
+
+// Zod schema for history messages
+export const HistoryMessageSchema = z.object({
+  role: z.enum(["user", "assistant", "system"]),
+  content: z.string(),
+});
+
+export type HistoryMessage = z.infer<typeof HistoryMessageSchema>;
+
+// History file schema: array of messages
+export const HistorySchema = z.array(HistoryMessageSchema);
 
 export interface CLIOptions {
   model?: string;
@@ -29,7 +52,7 @@ export interface CLIOptions {
   config?: string;
   providers?: boolean;
   completions?: string;
-  roles?: boolean;
+  session?: string;
 }
 
 export const CLIOptionsSchema = z.object({
@@ -50,7 +73,7 @@ export const CLIOptionsSchema = z.object({
   config: z.string().optional(),
   providers: z.boolean().optional(),
   completions: z.string().optional(),
-  roles: z.boolean().optional(),
+  session: z.string().optional(),
 });
 
 export const JsonOutputSchema = z.object({
@@ -182,6 +205,44 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf-8").trimEnd();
 }
 
+const HISTORY_DIR = join(homedir(), ".ai-pipe", "history");
+
+function getHistoryPath(session: string): string {
+  return join(HISTORY_DIR, `${session}.json`);
+}
+
+export async function loadHistory(session: string): Promise<ModelMessage[]> {
+  const path = getHistoryPath(session);
+  const file = Bun.file(path);
+  if (!(await file.exists())) {
+    return [];
+  }
+  try {
+    const content = await file.text();
+    const raw = JSON.parse(content);
+    const result = HistorySchema.safeParse(raw);
+    if (result.success) {
+      return result.data as ModelMessage[];
+    }
+    // If validation fails, return empty array
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveHistory(
+  session: string,
+  messages: ModelMessage[],
+): Promise<void> {
+  const path = getHistoryPath(session);
+  // Ensure directory exists using mkdir with recursive
+  // Use fs.mkdir for directory creation with recursive option
+  const { mkdir } = await import("node:fs/promises");
+  await mkdir(HISTORY_DIR, { recursive: true });
+  await Bun.write(path, JSON.stringify(messages, null, 2));
+}
+
 async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
   const parsed = CLIOptionsSchema.safeParse(rawOpts);
   if (!parsed.success) {
@@ -282,50 +343,98 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
 
   const model = resolveModel(modelString);
 
-  try {
-    if (opts.json || !opts.stream) {
-      const result = await generateText({
-        model,
-        system: systemPrompt,
-        prompt,
-        temperature,
-        maxOutputTokens,
-        images: images.length > 0 ? images : undefined,
-      });
+  // Load conversation history if session is provided
+  // Sanitize session name to prevent directory traversal
+  const sessionName = opts.session ? sanitizeSessionName(opts.session) : null;
+  const messages: ModelMessage[] = sessionName
+    ? await loadHistory(sessionName)
+    : [];
 
-      if (opts.json) {
-        const output: JsonOutput = {
-          text: result.text,
-          model: modelString,
-          usage: result.usage,
-          finishReason: result.finishReason,
-        };
-        process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
-      } else if (markdown) {
-        const rendered = renderMarkdown(result.text);
-        process.stdout.write(`${rendered}\n`);
+  // Add current user message to messages if using session
+  // Only add system message if history is empty (first message in conversation)
+  if (sessionName) {
+    if (system && messages.length === 0) {
+      messages.unshift({ role: "system", content: system });
+    }
+    messages.push({ role: "user", content: prompt });
+  }
+
+  try {
+    if (sessionName) {
+      // Use conversation history mode
+      if (opts.json || !opts.stream) {
+        const result = await generateText({
+          model,
+          messages,
+          temperature,
+          maxOutputTokens,
+        });
+
+        // Save to history
+        messages.push({ role: "assistant", content: result.text });
+        await saveHistory(sessionName, messages);
+
+        if (opts.json) {
+          const output: JsonOutput = {
+            text: result.text,
+            model: modelString,
+            usage: result.usage,
+            finishReason: result.finishReason,
+          };
+          process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+        } else {
+          process.stdout.write(`${result.text}\n`);
+        }
       } else {
-        process.stdout.write(`${result.text}\n`);
+        const result = streamText({
+          model,
+          messages,
+          temperature,
+          maxOutputTokens,
+        });
+
+        let fullResponse = "";
+        for await (const chunk of result.textStream) {
+          process.stdout.write(chunk);
+          fullResponse += chunk;
+        }
+        process.stdout.write("\n");
+
+        // Save to history
+        messages.push({ role: "assistant", content: fullResponse });
+        await saveHistory(sessionName, messages);
       }
     } else {
-      const result = streamText({
-        model,
-        system: systemPrompt,
-        prompt,
-        temperature,
-        maxOutputTokens,
-        images: images.length > 0 ? images : undefined,
-      });
+      // Use regular prompt mode
+      if (opts.json || !opts.stream) {
+        const result = await generateText({
+          model,
+          system,
+          prompt,
+          temperature,
+          maxOutputTokens,
+        });
 
-      if (markdown) {
-        const chunks: string[] = [];
-        for await (const chunk of result.textStream) {
-          chunks.push(chunk);
+        if (opts.json) {
+          const output: JsonOutput = {
+            text: result.text,
+            model: modelString,
+            usage: result.usage,
+            finishReason: result.finishReason,
+          };
+          process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+        } else {
+          process.stdout.write(`${result.text}\n`);
         }
-        const fullText = chunks.join("");
-        const rendered = renderMarkdown(fullText);
-        process.stdout.write(`${rendered}\n`);
       } else {
+        const result = streamText({
+          model,
+          system,
+          prompt,
+          temperature,
+          maxOutputTokens,
+        });
+
         for await (const chunk of result.textStream) {
           process.stdout.write(chunk);
         }
@@ -378,6 +487,7 @@ export function setupCLI() {
     )
     .option("--max-output-tokens <n>", "Maximum tokens to generate", parseInt)
     .option("-c, --config <path>", "Path to config directory")
+    .option("-C, --session <name>", "Session name for conversation history")
     .option("--providers", "List supported providers and their API key status")
     .option(
       "--roles",

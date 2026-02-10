@@ -7,10 +7,13 @@ import {
   buildPrompt,
   type CLIOptions,
   CLIOptionsSchema,
+  HistorySchema,
+  isValidSessionName,
   JsonOutputSchema,
   readFiles,
   readImages,
   resolveOptions,
+  sanitizeSessionName,
 } from "../index.ts";
 
 // ── buildPrompt ────────────────────────────────────────────────────────
@@ -433,132 +436,102 @@ describe("JsonOutputSchema", () => {
   });
 });
 
-// ── Role options ───────────────────────────────────────────────────────
+// ── Session Sanitization ───────────────────────────────────────────────
 
-describe("CLIOptionsSchema with role options", () => {
-  test("accepts --role option", () => {
-    const result = CLIOptionsSchema.parse({
-      json: false,
-      stream: true,
-      role: "reviewer",
-    });
-    expect(result.role).toBe("reviewer");
+describe("session sanitization", () => {
+  const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  test("allows valid alphanumeric session names", () => {
+    expect(isValidSessionName("session123")).toBe(true);
+    expect(isValidSessionName("abc")).toBe(true);
+    expect(isValidSessionName("123")).toBe(true);
   });
 
-  test("accepts --roles option", () => {
-    const result = CLIOptionsSchema.parse({
-      json: false,
-      stream: true,
-      roles: true,
-    });
-    expect(result.roles).toBe(true);
+  test("allows session names with hyphens and underscores", () => {
+    expect(isValidSessionName("my-session")).toBe(true);
+    expect(isValidSessionName("my_session")).toBe(true);
+    expect(isValidSessionName("test-session_123")).toBe(true);
   });
 
-  test("accepts both --role and --system options", () => {
-    const result = CLIOptionsSchema.parse({
-      json: false,
-      stream: true,
-      role: "reviewer",
-      system: "You are a reviewer",
-    });
-    expect(result.role).toBe("reviewer");
-    expect(result.system).toBe("You are a reviewer");
+  test("rejects session names with special characters", () => {
+    expect(isValidSessionName("session/path")).toBe(false);
+    expect(isValidSessionName("session.name")).toBe(false);
+    expect(isValidSessionName("session name")).toBe(false);
+    expect(isValidSessionName("session@123")).toBe(false);
+    expect(isValidSessionName("")).toBe(false);
+  });
+
+  test("sanitizeSessionName replaces invalid chars with underscore", () => {
+    expect(sanitizeSessionName("my session")).toBe("my_session");
+    expect(sanitizeSessionName("path/to/dir")).toBe("path_to_dir");
+    expect(sanitizeSessionName("file.name.js")).toBe("file_name_js");
+    expect(sanitizeSessionName("session@123")).toBe("session_123");
+  });
+
+  test("sanitizeSessionName preserves valid characters", () => {
+    expect(sanitizeSessionName("valid-session_123")).toBe("valid-session_123");
+    expect(sanitizeSessionName("ABCdef123")).toBe("ABCdef123");
   });
 });
 
-// ── Role loading and precedence ───────────────────────────────────────
+// ── History Loading ─────────────────────────────────────────────────────
 
-import { listRoles, loadRole } from "../config.ts";
-
-describe("loadRole", () => {
+describe("history loading", () => {
   const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const baseDir = join(tmpdir(), `roles-test-${uid()}`);
-  const rolesDir = join(baseDir, "roles");
+  const {
+    loadHistory,
+    saveHistory,
+    sanitizeSessionName,
+  } = require("../index.ts");
 
-  test("loads a .txt role file", async () => {
-    mkdirSync(rolesDir, { recursive: true });
-    const rolePath = join(rolesDir, "testrole.txt");
-    await Bun.write(rolePath, "You are a test role");
-    const result = await loadRole("testrole", baseDir);
-    rmSync(baseDir, { recursive: true });
-    expect(result).toBe("You are a test role");
+  test("returns empty array for non-existent history", async () => {
+    const session = `test-nonexistent-${uid()}`;
+    const history = await loadHistory(session);
+    expect(history).toEqual([]);
   });
 
-  test("returns null for nonexistent role", async () => {
-    const result = await loadRole("nonexistent", baseDir);
-    expect(result).toBeNull();
+  test("saves and loads history correctly", async () => {
+    const session = `test-load-${uid()}`;
+    const messages = [
+      { role: "system", content: "You are a helpful assistant." },
+      { role: "user", content: "Hello!" },
+      { role: "assistant", content: "Hi there!" },
+      { role: "user", content: "How are you?" },
+    ];
+
+    await saveHistory(session, messages);
+    const loaded = await loadHistory(session);
+
+    expect(loaded).toEqual(messages);
   });
 
-  test("sanitizes role name to prevent path traversal", async () => {
-    mkdirSync(rolesDir, { recursive: true });
-    // Create a file outside the roles directory
-    const outsidePath = join(tmpdir(), `outside-${uid()}.txt`);
-    await Bun.write(outsidePath, "secret content");
+  test("sanitizes session names when saving history", async () => {
+    const session = `test-sanitize-${uid()}`;
+    const unsafeSession = "session with spaces/and slashes";
+    const sanitized = sanitizeSessionName(unsafeSession);
 
-    try {
-      // Try to access a file outside the roles directory
-      const result = await loadRole("../outside", baseDir);
-      expect(result).toBeNull();
-    } finally {
-      rmSync(outsidePath);
-      rmSync(baseDir, { recursive: true });
-    }
+    const messages = [{ role: "user", content: "test" }];
+    await saveHistory(sanitized, messages);
+    const loaded = await loadHistory(sanitized);
+
+    expect(loaded).toEqual(messages);
   });
 
-  test("rejects role names with path separators", async () => {
-    mkdirSync(rolesDir, { recursive: true });
-    const result = await loadRole("subdir/role", baseDir);
-    rmSync(baseDir, { recursive: true });
-    expect(result).toBeNull();
-  });
-});
+  test("handles invalid JSON gracefully", async () => {
+    const session = `test-invalid-${uid()}`;
+    const path = require("node:path");
+    const tmpdir = require("node:os").tmpdir();
+    const historyPath = path.join(
+      tmpdir,
+      ".ai-pipe",
+      "history",
+      `${session}.json`,
+    );
 
-describe("listRoles", () => {
-  const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const baseDir = join(tmpdir(), `roles-list-test-${uid()}`);
-  const rolesDir = join(baseDir, "roles");
+    // Create a file with invalid JSON
+    await require("bun").write(historyPath, "not valid json {");
 
-  test("lists only .txt role files", async () => {
-    // Create test fixtures
-    mkdirSync(rolesDir, { recursive: true });
-    await Bun.write(join(rolesDir, "role1.txt"), "Role 1 content");
-    await Bun.write(join(rolesDir, "role2.txt"), "Role 2 content");
-    // Create a .md file (should be ignored)
-    await Bun.write(join(rolesDir, "role3.md"), "Role 3 content");
-    // Create a duplicate (both .txt and plain file)
-    await Bun.write(join(rolesDir, "role4.txt"), "Role 4 content");
-    await Bun.write(join(rolesDir, "role4"), "Duplicate plain file");
-
-    const roles = await listRoles(baseDir);
-    rmSync(baseDir, { recursive: true });
-    expect(roles).toContain("role1");
-    expect(roles).toContain("role2");
-    expect(roles).not.toContain("role3"); // .md file should be ignored
-  });
-
-  test("sorts roles alphabetically", async () => {
-    mkdirSync(rolesDir, { recursive: true });
-    await Bun.write(join(rolesDir, "brole.txt"), "Role B");
-    await Bun.write(join(rolesDir, "arole.txt"), "Role A");
-
-    const roles = await listRoles(baseDir);
-    rmSync(baseDir, { recursive: true });
-    expect(roles).toEqual(["arole", "brole"]);
-  });
-
-  test("deduplicates roles", async () => {
-    mkdirSync(rolesDir, { recursive: true });
-    await Bun.write(join(rolesDir, "dup.txt"), "Role content");
-    await Bun.write(join(rolesDir, "dup"), "Duplicate plain file");
-
-    const roles = await listRoles(baseDir);
-    rmSync(baseDir, { recursive: true });
-    const counts = roles.filter((r) => r === "dup").length;
-    expect(counts).toBe(1);
-  });
-
-  test("returns empty array for nonexistent directory", async () => {
-    const roles = await listRoles("/nonexistent/path");
-    expect(roles).toEqual([]);
+    const history = await loadHistory(session);
+    expect(history).toEqual([]);
   });
 });
