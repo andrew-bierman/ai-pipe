@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { program } from "commander";
 import { streamText, generateText, type LanguageModelUsage, type FinishReason } from "ai";
-import { resolveModel, printProviders } from "./provider.ts";
+import { resolveModel, printProviders, PROVIDER_ENV_VARS, type ProviderId } from "./provider.ts";
 import { loadConfig, type Config } from "./config.ts";
 import { generateCompletions } from "./completions.ts";
 
@@ -116,6 +116,16 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
   }
 
   const config = await loadConfig(opts.config);
+
+  // Inject config API keys into process.env (env vars take precedence)
+  if (config.apiKeys) {
+    for (const [provider, key] of Object.entries(config.apiKeys)) {
+      const envVar = PROVIDER_ENV_VARS[provider as ProviderId];
+      if (envVar && !process.env[envVar]) {
+        process.env[envVar] = key;
+      }
+    }
+  }
 
   const hasStdin = !process.stdin.isTTY;
   const argPrompt = promptArgs.length > 0 ? promptArgs.join(" ") : null;
