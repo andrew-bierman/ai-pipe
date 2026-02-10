@@ -1,4 +1,4 @@
-# ai-cli
+# ai-pipe
 
 A lean CLI for calling LLMs from the terminal. Text in, text out.
 
@@ -6,11 +6,11 @@ Built on the [Vercel AI SDK](https://sdk.vercel.ai/) with [Bun](https://bun.sh/)
 
 ## Features
 
-- **14 providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, OpenRouter, Azure AI, Together AI, Amazon Bedrock, Google Vertex AI
+- **15 providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, OpenRouter, Azure AI, Together AI, Amazon Bedrock, Google Vertex AI, Ollama
 - **Streaming by default** — tokens print as they arrive
 - **Pipe-friendly** — reads from stdin, writes to stdout, errors to stderr
 - **JSON output** — structured response with usage and finish reason
-- **Config files** — set defaults in `~/.ai-cli.json`
+- **Config files** — set defaults in `~/.ai-pipe.json`
 - **Shell completions** — bash, zsh, fish
 - **Standalone binary** — compile to a single executable with `bun build --compile`
 
@@ -35,38 +35,41 @@ export AZURE_AI_API_KEY="..."
 export TOGETHERAI_API_KEY="..."
 export AWS_ACCESS_KEY_ID="..."
 export AWS_SECRET_ACCESS_KEY="..."
+
+# Ollama (local)
+export OLLAMA_HOST="http://localhost:11434"
 ```
 
-Run `ai --providers` to see which keys are configured.
+Run `ai-pipe --providers` to see which keys are configured.
 
 ## Usage
 
 ```sh
 # Ask a question
-ai "explain monads in one sentence"
+ai-pipe "explain monads in one sentence"
 
 # Pipe content
-cat main.go | ai "review this code"
-echo "hello world" | ai "translate to French"
+cat main.go | ai-pipe "review this code"
+echo "hello world" | ai-pipe "translate to French"
 
 # Pick a provider and model
-ai -m anthropic/claude-sonnet-4-5 "write a haiku"
-ai -m google/gemini-2.5-flash "summarize this" < article.txt
+ai-pipe -m anthropic/claude-sonnet-4-5 "write a haiku"
+ai-pipe -m google/gemini-2.5-flash "summarize this" < article.txt
 
 # Set a system prompt
-ai -s "you are a senior Go developer" "review this PR" < diff.txt
+ai-pipe -s "you are a senior Go developer" "review this PR" < diff.txt
 
 # Get JSON output
-ai --json "what is 2+2"
+ai-pipe --json "what is 2+2"
 
 # Disable streaming
-ai --no-stream "list 3 colors"
+ai-pipe --no-stream "list 3 colors"
 
 # Adjust temperature
-ai -t 1.5 "write a creative story"
+ai-pipe -t 1.5 "write a creative story"
 
 # Limit output length
-ai --max-output-tokens 100 "explain quantum computing"
+ai-pipe --max-output-tokens 100 "explain quantum computing"
 ```
 
 If no `provider/` prefix is given, the model defaults to `openai`. If no `-m` flag is given, it defaults to `openai/gpt-4o`.
@@ -88,25 +91,32 @@ If no `provider/` prefix is given, the model defaults to `openai`. If no `-m` fl
 | azure | `AZURE_AI_API_KEY` | `azure/azure-model-id` |
 | togetherai | `TOGETHERAI_API_KEY` | `togetherai/meta-llama/Llama-3.3-70b-Instruct` |
 | bedrock | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `bedrock/anthropic.claude-sonnet-4-2025-02-19` |
-| vertex | `GOOGLE_VERTEX_AI_PROJECT_ID` | `vertex/google/cloud/llama-3.1` |
+| vertex | `GOOGLE_VERTEX_PROJECT` | `vertex/google/cloud/llama-3.1` |
+| ollama | `OLLAMA_HOST` | `ollama/llama3` |
 
 ## Config File
 
-Create `~/.ai-cli.json` to set defaults:
+Create `~/.ai-pipe.json` to set defaults:
 
 ```json
 {
   "model": "anthropic/claude-sonnet-4-5",
   "system": "Be concise.",
   "temperature": 0.7,
-  "maxOutputTokens": 1000
+  "maxOutputTokens": 1000,
+  "apiKeys": {
+    "anthropic": "sk-ant-...",
+    "openai": "sk-..."
+  }
 }
 ```
+
+API keys in the config file work as an alternative to environment variables. Environment variables always take precedence over config file keys.
 
 Use a custom config path with `-c`:
 
 ```sh
-ai -c ./my-config.json "hello"
+ai-pipe -c ./my-config.json "hello"
 ```
 
 CLI flags always override config file values.
@@ -115,13 +125,13 @@ CLI flags always override config file values.
 
 ```sh
 # bash — add to ~/.bashrc
-eval "$(ai --completions bash)"
+eval "$(ai-pipe --completions bash)"
 
 # zsh — add to ~/.zshrc
-eval "$(ai --completions zsh)"
+eval "$(ai-pipe --completions zsh)"
 
 # fish — save to completions dir
-ai --completions fish > ~/.config/fish/completions/ai.fish
+ai-pipe --completions fish > ~/.config/fish/completions/ai-pipe.fish
 ```
 
 ## JSON Output
@@ -144,13 +154,13 @@ Use `--json` to get structured output:
 Pipe into `jq` for further processing:
 
 ```sh
-ai --json "list 3 colors" | jq -r '.text'
+ai-pipe --json "list 3 colors" | jq -r '.text'
 ```
 
 ## Flags
 
 ```
-Usage: ai [options] [prompt...]
+Usage: ai-pipe [options] [prompt...]
 
 Options:
   -m, --model <model>          Model in provider/model-id format
@@ -188,7 +198,7 @@ Binaries are output to `dist/`.
 
 ```sh
 bun install
-bun test              # 158 tests across 6 files
+bun test              # 172 tests across 6 files
 bun run typecheck     # TypeScript type checking
 ```
 

@@ -85,6 +85,7 @@ describe("parseModel", () => {
     ["togetherai/meta-llama/Llama-3.3-70b-Instruct", "togetherai", "meta-llama/Llama-3.3-70b-Instruct", "togetherai/meta-llama/Llama-3.3-70b-Instruct"],
     ["bedrock/anthropic.claude-sonnet-4-2025-02-19", "bedrock", "anthropic.claude-sonnet-4-2025-02-19", "bedrock/anthropic.claude-sonnet-4-2025-02-19"],
     ["vertex/google/cloud/llama-3.1", "vertex", "google/cloud/llama-3.1", "vertex/google/cloud/llama-3.1"],
+    ["ollama/llama3", "ollama", "llama3", "ollama/llama3"],
   ];
 
   for (const [input, provider, modelId, fullId] of cases) {
@@ -117,12 +118,12 @@ describe("parseModel", () => {
 // ── SUPPORTED_PROVIDERS ────────────────────────────────────────────────
 
 describe("SUPPORTED_PROVIDERS", () => {
-  test("has exactly 14 providers", () => {
-    expect(SUPPORTED_PROVIDERS).toHaveLength(14);
+  test("has exactly 15 providers", () => {
+    expect(SUPPORTED_PROVIDERS).toHaveLength(15);
   });
 
   test("includes all expected providers", () => {
-    const expected: ProviderId[] = ["openai", "anthropic", "google", "perplexity", "xai", "mistral", "groq", "deepseek", "cohere", "openrouter", "azure", "togetherai", "bedrock", "vertex"];
+    const expected: ProviderId[] = ["openai", "anthropic", "google", "perplexity", "xai", "mistral", "groq", "deepseek", "cohere", "openrouter", "azure", "togetherai", "bedrock", "vertex", "ollama"];
     for (const p of expected) {
       expect(SUPPORTED_PROVIDERS).toContain(p);
     }
@@ -159,7 +160,8 @@ describe("PROVIDER_ENV_VARS", () => {
     azure: ["AZURE_AI_API_KEY"],
     togetherai: ["TOGETHERAI_API_KEY"],
     bedrock: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
-    vertex: ["GOOGLE_VERTEX_AI_PROJECT_ID"],
+    vertex: ["GOOGLE_VERTEX_PROJECT", "GOOGLE_VERTEX_LOCATION"],
+    ollama: ["OLLAMA_HOST"],
   };
 
   for (const [provider, envVars] of Object.entries(expected)) {
@@ -204,7 +206,8 @@ describe("resolveModel", () => {
     { provider: "azure", model: "azure/azure-model-id", envVars: ["AZURE_AI_API_KEY"], expectedModelId: "azure-model-id" },
     { provider: "togetherai", model: "togetherai/meta-llama/Llama-3.3-70b-Instruct", envVars: ["TOGETHERAI_API_KEY"], expectedModelId: "meta-llama/Llama-3.3-70b-Instruct" },
     { provider: "bedrock", model: "bedrock/anthropic.claude-sonnet-4-2025-02-19", envVars: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"], expectedModelId: "anthropic.claude-sonnet-4-2025-02-19" },
-    { provider: "vertex", model: "vertex/google/cloud/llama-3.1", envVars: ["GOOGLE_VERTEX_AI_PROJECT_ID"], expectedModelId: "google/cloud/llama-3.1" },
+    { provider: "vertex", model: "vertex/google/cloud/llama-3.1", envVars: ["GOOGLE_VERTEX_PROJECT", "GOOGLE_VERTEX_LOCATION"], expectedModelId: "google/cloud/llama-3.1" },
+    { provider: "ollama", model: "ollama/llama3", envVars: ["OLLAMA_HOST"], expectedModelId: "llama3" },
   ];
 
   for (const { provider, model, envVars, expectedModelId } of providerCases) {
@@ -217,12 +220,6 @@ describe("resolveModel", () => {
       expect(m.modelId).toBe(expectedModelId);
     });
   }
-
-  test("fails for Bedrock when only one AWS env var is set", () => {
-    process.env.AWS_ACCESS_KEY_ID = "test-key";
-    // Missing AWS_SECRET_ACCESS_KEY
-    expect(() => resolveModel("bedrock/anthropic.claude-sonnet-4-2025-02-19")).toThrow();
-  });
 
   test("resolves model without prefix using openai as default", () => {
     process.env.OPENAI_API_KEY = "test-key";

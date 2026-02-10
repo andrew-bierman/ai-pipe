@@ -109,3 +109,23 @@ bun --hot ./index.ts
 ```
 
 For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
+
+## Commit Messages
+
+Use [gitmoji](https://gitmoji.dev/) prefixes in all commit messages. Choose the emoji that best describes the change:
+
+- ✨ `:sparkles:` — New feature
+- 🐛 `:bug:` — Bug fix
+- ♻️ `:recycle:` — Refactor
+- 📝 `:memo:` — Documentation
+- ✅ `:white_check_mark:` — Add or update tests
+- 🔧 `:wrench:` — Configuration files
+- ⬆️ `:arrow_up:` — Upgrade dependencies
+- 🔥 `:fire:` — Remove code or files
+- 🚀 `:rocket:` — Deploy / performance
+- 💄 `:lipstick:` — UI / style
+- 🏗️ `:building_construction:` — Architectural changes
+- 📦 `:package:` — Package / build system
+- 🙈 `:see_no_evil:` — Ignore files
+
+Example: `✨ Add OpenRouter provider support`

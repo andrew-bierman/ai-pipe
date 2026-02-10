@@ -16,6 +16,14 @@ const CLEAN_ENV = {
   GROQ_API_KEY: "",
   DEEPSEEK_API_KEY: "",
   COHERE_API_KEY: "",
+  OPENROUTER_API_KEY: "",
+  AZURE_AI_API_KEY: "",
+  TOGETHERAI_API_KEY: "",
+  AWS_ACCESS_KEY_ID: "",
+  AWS_SECRET_ACCESS_KEY: "",
+  GOOGLE_VERTEX_PROJECT: "",
+  GOOGLE_VERTEX_LOCATION: "",
+  OLLAMA_HOST: "",
 };
 
 async function runCLI(
@@ -43,13 +51,13 @@ async function runCLI(
 describe("CLI: help and version", () => {
   test("prints help with --help", async () => {
     const { stdout, exitCode } = await runCLI(["--help"]);
-    expect(stdout).toContain("Usage: ai");
+    expect(stdout).toContain("Usage: ai-pipe");
     expect(exitCode).toBe(0);
   });
 
   test("prints help with -h", async () => {
     const { stdout, exitCode } = await runCLI(["-h"]);
-    expect(stdout).toContain("Usage: ai");
+    expect(stdout).toContain("Usage: ai-pipe");
     expect(exitCode).toBe(0);
   });
 
@@ -118,7 +126,7 @@ describe("CLI: API key validation", () => {
         ["-m", model, "hello"],
         { env: CLEAN_ENV }
       );
-      expect(stderr).toContain("Missing API key");
+      expect(stderr).toContain("Missing required environment variable");
       expect(stderr).toContain(envVar);
       expect(exitCode).toBe(1);
     });
@@ -161,7 +169,7 @@ describe("CLI: short flags", () => {
       ["-s", "you are a poet", "hello"],
       { env: CLEAN_ENV }
     );
-    expect(stderr).toContain("Missing API key");
+    expect(stderr).toContain("Missing required environment variable");
     expect(exitCode).toBe(1);
   });
 });
@@ -199,7 +207,7 @@ describe("CLI: config file", () => {
       { env: CLEAN_ENV }
     );
     // Should get to API key error, not config file error
-    expect(stderr).toContain("Missing API key");
+    expect(stderr).toContain("Missing required environment variable");
     expect(exitCode).toBe(1);
   });
 
@@ -211,8 +219,44 @@ describe("CLI: config file", () => {
       ["-c", configPath, "hello"],
       { env: CLEAN_ENV }
     );
-    expect(stderr).toContain("Missing API key");
+    expect(stderr).toContain("Missing required environment variable");
     expect(exitCode).toBe(1);
+  });
+
+  test("config apiKeys provides API key (bypasses missing key error)", async () => {
+    const configPath = join(tmpDir, `ai-cfg-${uid()}.json`);
+    await Bun.write(
+      configPath,
+      JSON.stringify({
+        model: "openai/gpt-4o",
+        apiKeys: { openai: "sk-fake-config-key" },
+      })
+    );
+
+    const { stderr } = await runCLI(
+      ["-c", configPath, "hello"],
+      { env: CLEAN_ENV }
+    );
+    // Should NOT get "Missing required environment variable" — the config key was injected
+    expect(stderr).not.toContain("Missing required environment variable");
+  });
+
+  test("env var takes precedence over config apiKeys", async () => {
+    const configPath = join(tmpDir, `ai-cfg-${uid()}.json`);
+    await Bun.write(
+      configPath,
+      JSON.stringify({
+        model: "anthropic/claude-sonnet-4-5",
+        apiKeys: { anthropic: "sk-config-key" },
+      })
+    );
+
+    const { stderr } = await runCLI(
+      ["-c", configPath, "hello"],
+      { env: { ...CLEAN_ENV, ANTHROPIC_API_KEY: "sk-env-key" } }
+    );
+    // Should NOT get "Missing required environment variable" — env var is set
+    expect(stderr).not.toContain("Missing required environment variable");
   });
 });
 
@@ -250,20 +294,20 @@ describe("CLI: --providers flag", () => {
 describe("CLI: --completions flag", () => {
   test("generates bash completions", async () => {
     const { stdout, exitCode } = await runCLI(["--completions", "bash"]);
-    expect(stdout).toContain("_ai_completions");
+    expect(stdout).toContain("_ai_pipe_completions");
     expect(stdout).toContain("complete -F");
     expect(exitCode).toBe(0);
   });
 
   test("generates zsh completions", async () => {
     const { stdout, exitCode } = await runCLI(["--completions", "zsh"]);
-    expect(stdout).toContain("compdef _ai ai");
+    expect(stdout).toContain("compdef _ai_pipe ai-pipe");
     expect(exitCode).toBe(0);
   });
 
   test("generates fish completions", async () => {
     const { stdout, exitCode } = await runCLI(["--completions", "fish"]);
-    expect(stdout).toContain("complete -c ai");
+    expect(stdout).toContain("complete -c ai-pipe");
     expect(exitCode).toBe(0);
   });
 
@@ -282,7 +326,7 @@ describe("CLI: stdin handling", () => {
       stdin: "hello from stdin",
       env: CLEAN_ENV,
     });
-    expect(stderr).toContain("Missing API key");
+    expect(stderr).toContain("Missing required environment variable");
     expect(exitCode).toBe(1);
   });
 
@@ -291,7 +335,7 @@ describe("CLI: stdin handling", () => {
       stdin: "const x = 1;",
       env: CLEAN_ENV,
     });
-    expect(stderr).toContain("Missing API key");
+    expect(stderr).toContain("Missing required environment variable");
     expect(exitCode).toBe(1);
   });
 });
@@ -305,7 +349,7 @@ describe("CLI: prompt joining", () => {
       { env: CLEAN_ENV }
     );
     // Reaches API key check, meaning prompt was successfully constructed
-    expect(stderr).toContain("Missing API key");
+    expect(stderr).toContain("Missing required environment variable");
     expect(exitCode).toBe(1);
   });
 });

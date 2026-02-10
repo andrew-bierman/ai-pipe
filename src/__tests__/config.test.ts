@@ -80,6 +80,52 @@ describe("ConfigSchema", () => {
     const result = ConfigSchema.parse({ model: "openai/gpt-4o", unknown: true });
     expect((result as Record<string, unknown>).unknown).toBeUndefined();
   });
+
+  test("accepts apiKeys with valid provider names", () => {
+    const result = ConfigSchema.parse({
+      apiKeys: { anthropic: "sk-ant-test", openai: "sk-test" },
+    });
+    expect(result.apiKeys).toEqual({ anthropic: "sk-ant-test", openai: "sk-test" });
+  });
+
+  test("accepts empty apiKeys object", () => {
+    const result = ConfigSchema.parse({ apiKeys: {} });
+    expect(result.apiKeys).toEqual({});
+  });
+
+  test("accepts apiKeys with all providers", () => {
+    const keys = {
+      openai: "sk-1",
+      anthropic: "sk-2",
+      google: "sk-3",
+      perplexity: "sk-4",
+      xai: "sk-5",
+      mistral: "sk-6",
+      groq: "sk-7",
+      deepseek: "sk-8",
+      cohere: "sk-9",
+      openrouter: "sk-10",
+    };
+    const result = ConfigSchema.parse({ apiKeys: keys });
+    expect(result.apiKeys).toEqual(keys);
+  });
+
+  test("rejects apiKeys with unknown provider", () => {
+    expect(() =>
+      ConfigSchema.parse({ apiKeys: { fakeprovider: "sk-test" } })
+    ).toThrow();
+  });
+
+  test("rejects apiKeys with non-string value", () => {
+    expect(() =>
+      ConfigSchema.parse({ apiKeys: { openai: 123 } })
+    ).toThrow();
+  });
+
+  test("config without apiKeys has undefined apiKeys", () => {
+    const result = ConfigSchema.parse({ model: "openai/gpt-4o" });
+    expect(result.apiKeys).toBeUndefined();
+  });
 });
 
 describe("loadConfig", () => {
@@ -153,6 +199,32 @@ describe("loadConfig", () => {
   test("returns empty object for array JSON", async () => {
     const path = join(tmpDir, `ai-cfg-${uid()}.json`);
     await Bun.write(path, "[1, 2, 3]");
+
+    const config = await loadConfig(path);
+    expect(config).toEqual({});
+  });
+
+  test("loads config with apiKeys", async () => {
+    const path = join(tmpDir, `ai-cfg-${uid()}.json`);
+    await Bun.write(
+      path,
+      JSON.stringify({
+        model: "anthropic/claude-sonnet-4-5",
+        apiKeys: { anthropic: "sk-ant-test", openai: "sk-test" },
+      })
+    );
+
+    const config = await loadConfig(path);
+    expect(config.model).toBe("anthropic/claude-sonnet-4-5");
+    expect(config.apiKeys).toEqual({ anthropic: "sk-ant-test", openai: "sk-test" });
+  });
+
+  test("returns empty object for config with invalid apiKeys provider", async () => {
+    const path = join(tmpDir, `ai-cfg-${uid()}.json`);
+    await Bun.write(
+      path,
+      JSON.stringify({ apiKeys: { fakeprovider: "sk-test" } })
+    );
 
     const config = await loadConfig(path);
     expect(config).toEqual({});
