@@ -16,6 +16,7 @@ describe("generateCompletions", () => {
       const result = generateCompletions("bash");
       expect(result).toContain("--model");
       expect(result).toContain("--system");
+      expect(result).toContain("--file");
       expect(result).toContain("--json");
       expect(result).toContain("--no-stream");
       expect(result).toContain("--temperature");
@@ -74,6 +75,7 @@ describe("generateCompletions", () => {
       const result = generateCompletions("fish");
       expect(result).toContain("-l model");
       expect(result).toContain("-l system");
+      expect(result).toContain("-l file");
       expect(result).toContain("-l json");
       expect(result).toContain("-l no-stream");
       expect(result).toContain("-l temperature");

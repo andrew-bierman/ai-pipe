@@ -32,7 +32,7 @@ _${funcName}_completions() {
   COMPREPLY=()
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
-  opts="--model --system --json --no-stream --temperature --max-output-tokens --config --providers --completions --version --help"
+  opts="--model --system --file --json --no-stream --temperature --max-output-tokens --config --providers --completions --version --help"
   providers="${providers}"
 
   case "\${prev}" in
@@ -43,6 +43,10 @@ _${funcName}_completions() {
       done
       COMPREPLY=( $(compgen -W "\${models}" -- "\${cur}") )
       compopt -o nospace
+      return 0
+      ;;
+    -f|--file)
+      COMPREPLY=( $(compgen -f -- "\${cur}") )
       return 0
       ;;
     -c|--config)
@@ -76,6 +80,7 @@ _${funcName}() {
   _arguments -s \\
     '(-m --model)'{-m,--model}'[Model in provider/model-id format]:model:->models' \\
     '(-s --system)'{-s,--system}'[System prompt]:prompt:' \\
+    '*'{-f,--file}'[Include file contents]:file:_files' \\
     '(-j --json)'{-j,--json}'[Output full JSON response object]' \\
     '--no-stream[Wait for full response, then print]' \\
     '(-t --temperature)'{-t,--temperature}'[Sampling temperature (${APP.temperature.min}-${APP.temperature.max})]:temp:' \\
@@ -102,6 +107,7 @@ function fish(): string {
 # Add to ~/.config/fish/completions/${name}.fish
 complete -c ${name} -s m -l model -d 'Model in provider/model-id format' -x -a '${SUPPORTED_PROVIDERS.map((p) => `${p}/`).join(" ")}'
 complete -c ${name} -s s -l system -d 'System prompt' -x
+complete -c ${name} -s f -l file -d 'Include file contents in prompt (repeatable)' -r -F
 complete -c ${name} -s j -l json -d 'Output full JSON response object'
 complete -c ${name} -l no-stream -d 'Wait for full response, then print'
 complete -c ${name} -s t -l temperature -d 'Sampling temperature (${APP.temperature.min}-${APP.temperature.max})' -x
