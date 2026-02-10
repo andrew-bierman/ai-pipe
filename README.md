@@ -6,7 +6,7 @@ Built on the [Vercel AI SDK](https://sdk.vercel.ai/) with [Bun](https://bun.sh/)
 
 ## Features
 
-- **11 providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, OpenRouter, Ollama
+- **15 providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, OpenRouter, Azure AI, Together AI, Amazon Bedrock, Google Vertex AI, Ollama
 - **Streaming by default** — tokens print as they arrive
 - **Pipe-friendly** — reads from stdin, writes to stdout, errors to stderr
 - **JSON output** — structured response with usage and finish reason
@@ -31,6 +31,10 @@ Set an API key for at least one provider:
 export OPENAI_API_KEY="sk-..."
 export ANTHROPIC_API_KEY="sk-ant-..."
 export OPENROUTER_API_KEY="sk-or-..."
+export AZURE_AI_API_KEY="..."
+export TOGETHERAI_API_KEY="..."
+export AWS_ACCESS_KEY_ID="..."
+export AWS_SECRET_ACCESS_KEY="..."
 
 # Ollama (local)
 export OLLAMA_HOST="http://localhost:11434"
@@ -84,6 +88,10 @@ If no `provider/` prefix is given, the model defaults to `openai`. If no `-m` fl
 | deepseek | `DEEPSEEK_API_KEY` | `deepseek/deepseek-chat` |
 | cohere | `COHERE_API_KEY` | `cohere/command-r-plus` |
 | openrouter | `OPENROUTER_API_KEY` | `openrouter/openrouter` |
+| azure | `AZURE_AI_API_KEY` | `azure/azure-model-id` |
+| togetherai | `TOGETHERAI_API_KEY` | `togetherai/meta-llama/Llama-3.3-70b-Instruct` |
+| bedrock | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `bedrock/anthropic.claude-sonnet-4-2025-02-19` |
+| vertex | `GOOGLE_VERTEX_PROJECT` | `vertex/google/cloud/llama-3.1` |
 | ollama | `OLLAMA_HOST` | `ollama/llama3` |
 
 ## Config File
