@@ -55,6 +55,7 @@ export interface CLIOptions {
   providers?: boolean;
   completions?: string;
   session?: string;
+  roles?: boolean;
 }
 
 export const CLIOptionsSchema = z.object({
@@ -77,6 +78,7 @@ export const CLIOptionsSchema = z.object({
   providers: z.boolean().optional(),
   completions: z.string().optional(),
   session: z.string().optional(),
+  roles: z.boolean().optional(),
 });
 
 export const JsonOutputSchema = z.object({
@@ -411,7 +413,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
         await saveHistory(sessionName, messages);
 
         // Display cost if requested (usage is available after stream completes)
-        displayCostIfEnabled(result.usage, modelString, opts.cost);
+        displayCostIfEnabled(await result.usage, modelString, opts.cost);
       }
     } else {
       // Use regular prompt mode
@@ -453,7 +455,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
         process.stdout.write("\n");
 
         // Display cost if requested (usage is available after stream completes)
-        displayCostIfEnabled(result.usage, modelString, opts.cost);
+        displayCostIfEnabled(await result.usage, modelString, opts.cost);
       }
     }
   } catch (err: unknown) {
@@ -462,23 +464,23 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
   }
 }
 
+/**
+ * Display cost information if the --cost flag is set
+ */
+function displayCostIfEnabled(
+  usage: { inputTokens?: number; outputTokens?: number } | undefined,
+  modelString: string,
+  showCost: boolean,
+): void {
+  if (!showCost || !usage) return;
+
+  const { provider, modelId } = parseModelString(modelString);
+  const costInfo = calculateCost(provider, modelId, usage);
+  const formattedCost = formatCost(costInfo);
+  console.error(`\n💰 Cost: ${formattedCost}`);
+}
+
 export function setupCLI() {
-  /**
-   * Display cost information if the --cost flag is set
-   */
-  function displayCostIfEnabled(
-    usage: { inputTokens?: number; outputTokens?: number } | undefined,
-    modelString: string,
-    showCost: boolean,
-  ): void {
-    if (!showCost || !usage) return;
-
-    const { provider, modelId } = parseModelString(modelString);
-    const costInfo = calculateCost(provider, modelId, usage);
-    const formattedCost = formatCost(costInfo);
-    console.error(`\n💰 Cost: ${formattedCost}`);
-  }
-
   program
     .name(APP.name)
     .description(APP.description)

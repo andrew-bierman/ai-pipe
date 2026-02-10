@@ -269,15 +269,15 @@ describe("PRICING", () => {
     for (const provider of Object.keys(PRICING)) {
       if (provider !== "openrouter") {
         // openrouter doesn't have default as it routes to other providers
-        expect(PRICING[provider].default).toBeDefined();
+        expect(PRICING[provider]!.default).toBeDefined();
       }
     }
   });
 
   test("all prices are non-negative", () => {
     for (const provider of Object.keys(PRICING)) {
-      for (const model of Object.keys(PRICING[provider])) {
-        const pricing = PRICING[provider][model] as ModelPricing;
+      for (const model of Object.keys(PRICING[provider]!)) {
+        const pricing = PRICING[provider]![model] as ModelPricing;
         expect(pricing.inputPrice).toBeGreaterThanOrEqual(0);
         expect(pricing.outputPrice).toBeGreaterThanOrEqual(0);
       }
