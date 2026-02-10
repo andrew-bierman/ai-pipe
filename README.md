@@ -1,22 +1,31 @@
 # ai-pipe
 
-A lean CLI for calling LLMs from the terminal. Text in, text out.
+<div align="center">
 
-Built on the [Vercel AI SDK](https://sdk.vercel.ai/) with [Bun](https://bun.sh/).
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-yellow.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
+[![Bun](https://img.shields.io/badge/Bun-1.3.5-black.svg)](https://bun.sh/)
 
-## Features
+</div>
 
-- **16 providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, OpenRouter, Azure AI, Together AI, Amazon Bedrock, Google Vertex AI, Ollama, Hugging Face
-- **Streaming by default** — tokens print as they arrive
-- **Pipe-friendly** — reads from stdin, writes to stdout, errors to stderr
-- **JSON output** — structured response with usage and finish reason
-- **Config directory** — set defaults in `~/.ai-pipe/`
-- **Shell completions** — bash, zsh, fish
-- **Standalone binary** — compile to a single executable with `bun build --compile`
+A powerful CLI for calling LLMs from the terminal. Text in, text out. Built on the [Vercel AI SDK](https://sdk.vercel.ai/) with [Bun](https://bun.sh/).
 
-## Install
+## ✨ Features
 
-```sh
+- 🤖 **16+ AI Providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, OpenRouter, Azure AI, Together AI, Amazon Bedrock, Google Vertex AI, Ollama, Hugging Face
+- 📡 **Streaming by Default** — tokens print as they arrive
+- 🔄 **Pipe-friendly** — reads from stdin, writes to stdout, errors to stderr
+- 📋 **JSON Output** — structured response with usage and finish reason
+- ⚙️ **Config Directory** — set defaults in `~/.ai-pipe/`
+- 🐚 **Shell Completions** — bash, zsh, fish
+- 📦 **Standalone Binary** — compile to a single executable with `bun build --compile`
+
+## 📦 Installation
+
+### Quick Install
+
+```bash
+# Clone and install
 git clone https://github.com/andrew-bierman/ai-pipe.git
 cd ai-pipe
 bun install
@@ -25,46 +34,83 @@ bun link
 
 This installs both `ai-pipe` and `ai` as CLI commands.
 
-## Setup
+### From npm (Coming Soon)
+
+```bash
+# npm
+npm install -g ai-pipe
+
+# yarn
+yarn global add ai-pipe
+
+# pnpm
+pnpm global add ai-pipe
+```
+
+## 🔑 Setup
 
 Set an API key for at least one provider:
 
-```sh
+```bash
+# OpenAI
 export OPENAI_API_KEY="sk-..."
+
+# Anthropic
 export ANTHROPIC_API_KEY="sk-ant-..."
+
+# OpenRouter
 export OPENROUTER_API_KEY="sk-or-..."
+
+# Azure AI
 export AZURE_AI_API_KEY="..."
+
+# Together AI
 export TOGETHERAI_API_KEY="..."
+
+# AWS (for Bedrock)
 export AWS_ACCESS_KEY_ID="..."
 export AWS_SECRET_ACCESS_KEY="..."
+
+# Google Vertex AI
 export GOOGLE_VERTEX_PROJECT="my-project"
 export GOOGLE_VERTEX_LOCATION="us-central1"
+
+# Hugging Face
 export HF_TOKEN="hf_..."
 
 # Ollama (local)
 export OLLAMA_HOST="http://localhost:11434"
 ```
 
-Run `ai-pipe --providers` to see which keys are configured.
+> 💡 **Tip:** Run `ai-pipe --providers` to see which keys are configured.
 
-## Usage
+## 🚀 Usage
 
-```sh
+### Basic Usage
+
+```bash
 # Ask a question
-ai-pipe "explain monads in one sentence"
+ai-pipe "What is TypeScript?"
+
+# Streaming response
+ai-pipe "Write a poem about coding"
 
 # Pipe content
 cat main.go | ai-pipe "review this code"
 echo "hello world" | ai-pipe "translate to French"
+```
 
-# Pick a provider and model
+### Advanced Options
+
+```bash
+# Specify provider and model
 ai-pipe -m anthropic/claude-sonnet-4-5 "write a haiku"
 ai-pipe -m google/gemini-2.5-flash "summarize this" < article.txt
 
-# Set a system prompt
+# Set system prompt
 ai-pipe -s "you are a senior Go developer" "review this PR" < diff.txt
 
-# Get JSON output
+# JSON output
 ai-pipe --json "what is 2+2"
 
 # Disable streaming
@@ -77,30 +123,32 @@ ai-pipe -t 1.5 "write a creative story"
 ai-pipe --max-output-tokens 100 "explain quantum computing"
 ```
 
-If no `provider/` prefix is given, the model defaults to `openai`. If no `-m` flag is given, it defaults to `openai/gpt-4o`.
+> 📌 **Note:** If no `provider/` prefix is given, the model defaults to `openai`. If no `-m` flag is given, it defaults to `openai/gpt-4o`.
 
-## Providers
+### Available Providers
 
 | Provider | Env Variable | Example Model |
 |---|---|---|
-| openai | `OPENAI_API_KEY` | `openai/gpt-4o` |
-| anthropic | `ANTHROPIC_API_KEY` | `anthropic/claude-sonnet-4-5` |
-| google | `GOOGLE_GENERATIVE_AI_API_KEY` | `google/gemini-2.5-flash` |
-| perplexity | `PERPLEXITY_API_KEY` | `perplexity/sonar` |
-| xai | `XAI_API_KEY` | `xai/grok-3` |
-| mistral | `MISTRAL_API_KEY` | `mistral/mistral-large-latest` |
-| groq | `GROQ_API_KEY` | `groq/llama-3.3-70b-versatile` |
-| deepseek | `DEEPSEEK_API_KEY` | `deepseek/deepseek-chat` |
-| cohere | `COHERE_API_KEY` | `cohere/command-r-plus` |
-| openrouter | `OPENROUTER_API_KEY` | `openrouter/openrouter` |
-| azure | `AZURE_AI_API_KEY` | `azure/azure-model-id` |
-| togetherai | `TOGETHERAI_API_KEY` | `togetherai/meta-llama/Llama-3.3-70b-Instruct` |
-| bedrock | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `bedrock/anthropic.claude-sonnet-4-2025-02-19` |
-| vertex | `GOOGLE_VERTEX_PROJECT`, `GOOGLE_VERTEX_LOCATION` | `vertex/google/cloud/llama-3.1` |
-| ollama | `OLLAMA_HOST` | `ollama/llama3` |
-| huggingface | `HF_TOKEN` | `huggingface/meta-llama/Llama-3.3-70b-Instruct` |
+| OpenAI | `OPENAI_API_KEY` | `openai/gpt-4o` |
+| Anthropic | `ANTHROPIC_API_KEY` | `anthropic/claude-sonnet-4-5` |
+| Google | `GOOGLE_GENERATIVE_AI_API_KEY` | `google/gemini-2.5-flash` |
+| Perplexity | `PERPLEXITY_API_KEY` | `perplexity/sonar` |
+| xAI | `XAI_API_KEY` | `xai/grok-3` |
+| Mistral | `MISTRAL_API_KEY` | `mistral/mistral-large-latest` |
+| Groq | `GROQ_API_KEY` | `groq/llama-3.3-70b-versatile` |
+| DeepSeek | `DEEPSEEK_API_KEY` | `deepseek/deepseek-chat` |
+| Cohere | `COHERE_API_KEY` | `cohere/command-r-plus` |
+| OpenRouter | `OPENROUTER_API_KEY` | `openrouter/openrouter` |
+| Azure | `AZURE_AI_API_KEY` | `azure/azure-model-id` |
+| TogetherAI | `TOGETHERAI_API_KEY` | `togetherai/meta-llama/Llama-3.3-70b-Instruct` |
+| Bedrock | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `bedrock/anthropic.claude-sonnet-4-2025-02-19` |
+| Vertex | `GOOGLE_VERTEX_PROJECT`, `GOOGLE_VERTEX_LOCATION` | `vertex/google/cloud/llama-3.1` |
+| Ollama | `OLLAMA_HOST` | `ollama/llama3` |
+| HuggingFace | `HF_TOKEN` | `huggingface/meta-llama/Llama-3.3-70b-Instruct` |
 
-## Config Directory
+## ⚙️ Configuration
+
+### Config Directory
 
 Create `~/.ai-pipe/` with two optional files:
 
@@ -128,15 +176,15 @@ API keys in `apiKeys.json` work as an alternative to environment variables. Envi
 
 Use a custom config directory with `-c`:
 
-```sh
+```bash
 ai-pipe -c ./my-config-dir "hello"
 ```
 
-CLI flags always override config values.
+> 🔧 **Note:** CLI flags always override config values.
 
-## Shell Completions
+### Shell Completions
 
-```sh
+```bash
 # bash — add to ~/.bashrc
 eval "$(ai-pipe --completions bash)"
 
@@ -147,7 +195,7 @@ eval "$(ai-pipe --completions zsh)"
 ai-pipe --completions fish > ~/.config/fish/completions/ai-pipe.fish
 ```
 
-## JSON Output
+## 📊 JSON Output
 
 Use `--json` to get structured output:
 
@@ -166,11 +214,11 @@ Use `--json` to get structured output:
 
 Pipe into `jq` for further processing:
 
-```sh
+```bash
 ai-pipe --json "list 3 colors" | jq -r '.text'
 ```
 
-## Flags
+## 🛠️ Command Options
 
 ```
 Usage: ai-pipe [options] [prompt...]
@@ -189,15 +237,15 @@ Options:
   -h, --help                   Print help
 ```
 
-## Build
+## 📦 Building & Distribution
 
 Compile to a standalone binary:
 
-```sh
+```bash
 # Current platform
 bun run build
 
-# Cross-platform
+# Cross-platform builds
 bun run build:mac        # macOS ARM
 bun run build:mac-x64    # macOS Intel
 bun run build:linux      # Linux x64
@@ -207,14 +255,50 @@ bun run build:all        # All targets
 
 Binaries are output to `dist/`.
 
-## Development
+## 🧪 Development
 
-```sh
+```bash
+# Install dependencies
 bun install
+
+# Run tests
 bun test              # 210 tests across 7 files
+
+# Type checking
 bun run typecheck     # TypeScript type checking
 ```
 
-## License
+## 📚 Documentation
 
-GPL-3.0 — see [LICENSE](LICENSE) for details.
+- [API Reference](docs/api.md)
+- [Provider Configuration](docs/providers.md)
+- [Examples](examples/)
+- [Contributing Guide](CONTRIBUTING.md)
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- [Vercel](https://vercel.com/) for the amazing AI SDK
+- [Bun](https://bun.sh/) for the fast JavaScript runtime
+- All our amazing contributors and users!
+
+---
+
+<div align="center">
+
+**Built with ❤️ using ai-pipe**
+
+</div>
