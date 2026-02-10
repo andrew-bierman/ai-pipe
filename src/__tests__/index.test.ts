@@ -120,7 +120,11 @@ describe("readFiles", () => {
 // ── resolveOptions ─────────────────────────────────────────────────────
 
 describe("resolveOptions", () => {
-  const defaultOpts: CLIOptions = { json: false, stream: true };
+  const defaultOpts: CLIOptions = {
+    json: false,
+    stream: true,
+    markdown: false,
+  };
   const emptyConfig: Config = {};
 
   test("uses built-in defaults when no flags or config", () => {
@@ -197,9 +201,14 @@ describe("resolveOptions", () => {
 
 describe("CLIOptionsSchema", () => {
   test("accepts minimal valid options", () => {
-    const result = CLIOptionsSchema.parse({ json: false, stream: true });
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      markdown: false,
+    });
     expect(result.json).toBe(false);
     expect(result.stream).toBe(true);
+    expect(result.markdown).toBe(false);
   });
 
   test("accepts full valid options", () => {
@@ -220,15 +229,23 @@ describe("CLIOptionsSchema", () => {
 
   test("rejects temperature below 0", () => {
     expect(
-      CLIOptionsSchema.safeParse({ json: false, stream: true, temperature: -1 })
-        .success,
+      CLIOptionsSchema.safeParse({
+        json: false,
+        stream: true,
+        markdown: false,
+        temperature: -1,
+      }).success,
     ).toBe(false);
   });
 
   test("rejects temperature above 2", () => {
     expect(
-      CLIOptionsSchema.safeParse({ json: false, stream: true, temperature: 3 })
-        .success,
+      CLIOptionsSchema.safeParse({
+        json: false,
+        stream: true,
+        markdown: false,
+        temperature: 3,
+      }).success,
     ).toBe(false);
   });
 
@@ -237,6 +254,7 @@ describe("CLIOptionsSchema", () => {
       CLIOptionsSchema.safeParse({
         json: false,
         stream: true,
+        markdown: false,
         maxOutputTokens: -5,
       }).success,
     ).toBe(false);
@@ -247,6 +265,7 @@ describe("CLIOptionsSchema", () => {
       CLIOptionsSchema.safeParse({
         json: false,
         stream: true,
+        markdown: false,
         maxOutputTokens: 10.5,
       }).success,
     ).toBe(false);
@@ -254,7 +273,8 @@ describe("CLIOptionsSchema", () => {
 
   test("rejects non-boolean json", () => {
     expect(
-      CLIOptionsSchema.safeParse({ json: "yes", stream: true }).success,
+      CLIOptionsSchema.safeParse({ json: "yes", stream: true, markdown: false })
+        .success,
     ).toBe(false);
   });
 
@@ -262,13 +282,18 @@ describe("CLIOptionsSchema", () => {
     const result = CLIOptionsSchema.parse({
       json: false,
       stream: true,
+      markdown: false,
       file: ["a.txt", "b.txt"],
     });
     expect(result.file).toEqual(["a.txt", "b.txt"]);
   });
 
   test("file is optional", () => {
-    const result = CLIOptionsSchema.parse({ json: false, stream: true });
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      markdown: false,
+    });
     expect(result.file).toBeUndefined();
   });
 });
