@@ -15,6 +15,14 @@ const CHECKS: Check[] = [
     name: "sort-package-json",
     cmd: ["bunx", "sort-package-json", "package.json"],
   },
+  {
+    name: "biome",
+    cmd: ["bunx", "biome", "check", "--write", "."],
+  },
+  {
+    name: "typecheck",
+    cmd: ["bun", "run", "typecheck"],
+  },
 ];
 
 async function main() {
