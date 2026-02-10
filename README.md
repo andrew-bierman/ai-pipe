@@ -91,9 +91,15 @@ Create `~/.ai-cli.json` to set defaults:
   "model": "anthropic/claude-sonnet-4-5",
   "system": "Be concise.",
   "temperature": 0.7,
-  "maxOutputTokens": 1000
+  "maxOutputTokens": 1000,
+  "apiKeys": {
+    "anthropic": "sk-ant-...",
+    "openai": "sk-..."
+  }
 }
 ```
+
+API keys in the config file work as an alternative to environment variables. Environment variables always take precedence over config file keys.
 
 Use a custom config path with `-c`:
 
