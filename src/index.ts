@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { generateText, streamText } from "ai";
+import { generateText, type ModelMessage, streamText } from "ai";
 import { program } from "commander";
 import { z } from "zod";
 import pkg from "../package.json";
@@ -25,6 +25,7 @@ export interface CLIOptions {
   config?: string;
   providers?: boolean;
   completions?: string;
+  session?: string;
 }
 
 export const CLIOptionsSchema = z.object({
@@ -42,6 +43,7 @@ export const CLIOptionsSchema = z.object({
   config: z.string().optional(),
   providers: z.boolean().optional(),
   completions: z.string().optional(),
+  session: z.string().optional(),
 });
 
 export const JsonOutputSchema = z.object({
@@ -121,6 +123,39 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf-8").trimEnd();
 }
 
+const HISTORY_DIR = `${Bun.env.HOME ?? "~"}/.ai-pipe/history`;
+
+function getHistoryPath(session: string): string {
+  return `${HISTORY_DIR}/${session}.json`;
+}
+
+export async function loadHistory(session: string): Promise<ModelMessage[]> {
+  const path = getHistoryPath(session);
+  const file = Bun.file(path);
+  if (!(await file.exists())) {
+    return [];
+  }
+  try {
+    const content = await file.text();
+    return JSON.parse(content) as ModelMessage[];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveHistory(
+  session: string,
+  messages: ModelMessage[],
+): Promise<void> {
+  const path = getHistoryPath(session);
+  // Ensure directory exists
+  const dir = Bun.file(HISTORY_DIR);
+  if (!(await dir.exists())) {
+    await Bun.write(HISTORY_DIR, ""); // Creates directory
+  }
+  await Bun.write(path, JSON.stringify(messages, null, 2));
+}
+
 async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
   const parsed = CLIOptionsSchema.safeParse(rawOpts);
   if (!parsed.success) {
@@ -183,40 +218,100 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
 
   const model = resolveModel(modelString);
 
-  try {
-    if (opts.json || !opts.stream) {
-      const result = await generateText({
-        model,
-        system,
-        prompt,
-        temperature,
-        maxOutputTokens,
-      });
+  // Load conversation history if session is provided
+  const messages: ModelMessage[] = opts.session
+    ? await loadHistory(opts.session)
+    : [];
 
-      if (opts.json) {
-        const output: JsonOutput = {
-          text: result.text,
-          model: modelString,
-          usage: result.usage,
-          finishReason: result.finishReason,
-        };
-        process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+  // Add current user message to messages if using session
+  if (opts.session) {
+    if (system) {
+      messages.unshift({ role: "system", content: system });
+    }
+    messages.push({ role: "user", content: prompt });
+  }
+
+  try {
+    if (opts.session) {
+      // Use conversation history mode
+      if (opts.json || !opts.stream) {
+        const result = await generateText({
+          model,
+          messages,
+          temperature,
+          maxOutputTokens,
+        });
+
+        // Save to history
+        messages.push({ role: "assistant", content: result.text });
+        await saveHistory(opts.session, messages);
+
+        if (opts.json) {
+          const output: JsonOutput = {
+            text: result.text,
+            model: modelString,
+            usage: result.usage,
+            finishReason: result.finishReason,
+          };
+          process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+        } else {
+          process.stdout.write(`${result.text}\n`);
+        }
       } else {
-        process.stdout.write(`${result.text}\n`);
+        const result = streamText({
+          model,
+          messages,
+          temperature,
+          maxOutputTokens,
+        });
+
+        let fullResponse = "";
+        for await (const chunk of result.textStream) {
+          process.stdout.write(chunk);
+          fullResponse += chunk;
+        }
+        process.stdout.write("\n");
+
+        // Save to history
+        messages.push({ role: "assistant", content: fullResponse });
+        await saveHistory(opts.session, messages);
       }
     } else {
-      const result = streamText({
-        model,
-        system,
-        prompt,
-        temperature,
-        maxOutputTokens,
-      });
+      // Use regular prompt mode
+      if (opts.json || !opts.stream) {
+        const result = await generateText({
+          model,
+          system,
+          prompt,
+          temperature,
+          maxOutputTokens,
+        });
 
-      for await (const chunk of result.textStream) {
-        process.stdout.write(chunk);
+        if (opts.json) {
+          const output: JsonOutput = {
+            text: result.text,
+            model: modelString,
+            usage: result.usage,
+            finishReason: result.finishReason,
+          };
+          process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+        } else {
+          process.stdout.write(`${result.text}\n`);
+        }
+      } else {
+        const result = streamText({
+          model,
+          system,
+          prompt,
+          temperature,
+          maxOutputTokens,
+        });
+
+        for await (const chunk of result.textStream) {
+          process.stdout.write(chunk);
+        }
+        process.stdout.write("\n");
       }
-      process.stdout.write("\n");
     }
   } catch (err: unknown) {
     console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
@@ -250,6 +345,7 @@ export function setupCLI() {
     )
     .option("--max-output-tokens <n>", "Maximum tokens to generate", parseInt)
     .option("-c, --config <path>", "Path to config directory")
+    .option("-C, --session <name>", "Session name for conversation history")
     .option("--providers", "List supported providers and their API key status")
     .option(
       "--completions <shell>",
