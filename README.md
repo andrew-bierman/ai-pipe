@@ -17,13 +17,31 @@ Built on the [Vercel AI SDK](https://sdk.vercel.ai/) with [Bun](https://bun.sh/)
 ## Install
 
 ```sh
+bun install -g ai-pipe
+```
+
+This installs both `ai-pipe` and `ai` as CLI commands.
+
+Or run without installing:
+
+```sh
+bunx ai-pipe "explain monads in one sentence"
+```
+
+Also available via npm:
+
+```sh
+npm install -g ai-pipe
+```
+
+### From source
+
+```sh
 git clone https://github.com/andrew-bierman/ai-pipe.git
 cd ai-pipe
 bun install
 bun link
 ```
-
-This installs both `ai-pipe` and `ai` as CLI commands.
 
 ## Setup
 
@@ -211,9 +229,20 @@ Binaries are output to `dist/`.
 
 ```sh
 bun install
-bun test              # 210 tests across 7 files
+bun test              # 211 tests across 7 files
 bun run typecheck     # TypeScript type checking
 ```
+
+## Roadmap
+
+- **Conversation history** — continue previous conversations with `-C`, named sessions with `--session`
+- **Image input** — attach images for vision models with `--image`
+- **File attachments** — include file contents in prompts with `-f`
+- **Roles** — saved system prompts in `~/.ai-pipe/roles/` (e.g. `ai-pipe --role reviewer`)
+- **Markdown rendering** — syntax-highlighted, formatted output in the terminal
+- **Cost tracking** — show estimated token costs per request
+- **Response caching** — skip duplicate API calls for identical prompts
+- **Tool use** — function calling and MCP support
 
 ## License
 
