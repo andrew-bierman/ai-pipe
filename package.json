@@ -34,6 +34,7 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@ai-sdk/amazon-bedrock": "^4.0.54",
     "@ai-sdk/anthropic": "^3.0.39",
     "@ai-sdk/azure": "^3.0.27",
     "@ai-sdk/cohere": "^3.0.19",

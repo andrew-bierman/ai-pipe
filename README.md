@@ -6,7 +6,7 @@ Built on the [Vercel AI SDK](https://sdk.vercel.ai/) with [Bun](https://bun.sh/)
 
 ## Features
 
-- **12 providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, OpenRouter, Azure AI, Together AI
+- **13 providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, OpenRouter, Azure AI, Together AI, Amazon Bedrock
 - **Streaming by default** — tokens print as they arrive
 - **Pipe-friendly** — reads from stdin, writes to stdout, errors to stderr
 - **JSON output** — structured response with usage and finish reason
@@ -33,6 +33,8 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 export OPENROUTER_API_KEY="sk-or-..."
 export AZURE_AI_API_KEY="..."
 export TOGETHERAI_API_KEY="..."
+export AWS_ACCESS_KEY_ID="..."
+export AWS_SECRET_ACCESS_KEY="..."
 ```
 
 Run `ai --providers` to see which keys are configured.
@@ -85,6 +87,7 @@ If no `provider/` prefix is given, the model defaults to `openai`. If no `-m` fl
 | openrouter | `OPENROUTER_API_KEY` | `openrouter/openrouter` |
 | azure | `AZURE_AI_API_KEY` | `azure/azure-model-id` |
 | togetherai | `TOGETHERAI_API_KEY` | `togetherai/meta-llama/Llama-3.3-70b-Instruct` |
+| bedrock | `AWS_ACCESS_KEY_ID` | `bedrock/anthropic.claude-sonnet-4-2025-02-19` |
 
 ## Config File
 

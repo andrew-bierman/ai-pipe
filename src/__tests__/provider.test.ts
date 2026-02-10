@@ -83,6 +83,7 @@ describe("parseModel", () => {
     ["openrouter/openrouter", "openrouter", "openrouter", "openrouter/openrouter"],
     ["azure/azure-model-id", "azure", "azure-model-id", "azure/azure-model-id"],
     ["togetherai/meta-llama/Llama-3.3-70b-Instruct", "togetherai", "meta-llama/Llama-3.3-70b-Instruct", "togetherai/meta-llama/Llama-3.3-70b-Instruct"],
+    ["bedrock/anthropic.claude-sonnet-4-2025-02-19", "bedrock", "anthropic.claude-sonnet-4-2025-02-19", "bedrock/anthropic.claude-sonnet-4-2025-02-19"],
   ];
 
   for (const [input, provider, modelId, fullId] of cases) {
@@ -115,12 +116,12 @@ describe("parseModel", () => {
 // ── SUPPORTED_PROVIDERS ────────────────────────────────────────────────
 
 describe("SUPPORTED_PROVIDERS", () => {
-  test("has exactly 12 providers", () => {
-    expect(SUPPORTED_PROVIDERS).toHaveLength(12);
+  test("has exactly 13 providers", () => {
+    expect(SUPPORTED_PROVIDERS).toHaveLength(13);
   });
 
   test("includes all expected providers", () => {
-    const expected: ProviderId[] = ["openai", "anthropic", "google", "perplexity", "xai", "mistral", "groq", "deepseek", "cohere", "openrouter", "azure", "togetherai"];
+    const expected: ProviderId[] = ["openai", "anthropic", "google", "perplexity", "xai", "mistral", "groq", "deepseek", "cohere", "openrouter", "azure", "togetherai", "bedrock"];
     for (const p of expected) {
       expect(SUPPORTED_PROVIDERS).toContain(p);
     }
@@ -156,6 +157,7 @@ describe("PROVIDER_ENV_VARS", () => {
     openrouter: "OPENROUTER_API_KEY",
     azure: "AZURE_AI_API_KEY",
     togetherai: "TOGETHERAI_API_KEY",
+    bedrock: "AWS_ACCESS_KEY_ID",
   };
 
   for (const [provider, envVar] of Object.entries(expected)) {
@@ -199,6 +201,7 @@ describe("resolveModel", () => {
     { provider: "openrouter", model: "openrouter/openrouter", envVar: "OPENROUTER_API_KEY", expectedModelId: "openrouter" },
     { provider: "azure", model: "azure/azure-model-id", envVar: "AZURE_AI_API_KEY", expectedModelId: "azure-model-id" },
     { provider: "togetherai", model: "togetherai/meta-llama/Llama-3.3-70b-Instruct", envVar: "TOGETHERAI_API_KEY", expectedModelId: "meta-llama/Llama-3.3-70b-Instruct" },
+    { provider: "bedrock", model: "bedrock/anthropic.claude-sonnet-4-2025-02-19", envVar: "AWS_ACCESS_KEY_ID", expectedModelId: "anthropic.claude-sonnet-4-2025-02-19" },
   ];
 
   for (const { provider, model, envVar, expectedModelId } of providerCases) {
