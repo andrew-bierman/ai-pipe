@@ -8,8 +8,8 @@ describe("generateCompletions", () => {
   describe("bash", () => {
     test("generates valid bash completions", () => {
       const result = generateCompletions("bash");
-      expect(result).toContain("_ai_completions");
-      expect(result).toContain("complete -F _ai_completions ai");
+      expect(result).toContain("_ai_pipe_completions");
+      expect(result).toContain("complete -F _ai_pipe_completions ai-pipe");
     });
 
     test("includes all flags", () => {
@@ -36,7 +36,7 @@ describe("generateCompletions", () => {
 
     test("includes install instructions", () => {
       const result = generateCompletions("bash");
-      expect(result).toContain('eval "$(ai --completions bash)"');
+      expect(result).toContain('eval "$(ai-pipe --completions bash)"');
     });
   });
 
@@ -45,7 +45,7 @@ describe("generateCompletions", () => {
   describe("zsh", () => {
     test("generates valid zsh completions", () => {
       const result = generateCompletions("zsh");
-      expect(result).toContain("compdef _ai ai");
+      expect(result).toContain("compdef _ai_pipe ai-pipe");
       expect(result).toContain("_arguments");
     });
 
@@ -58,7 +58,7 @@ describe("generateCompletions", () => {
 
     test("includes install instructions", () => {
       const result = generateCompletions("zsh");
-      expect(result).toContain('eval "$(ai --completions zsh)"');
+      expect(result).toContain('eval "$(ai-pipe --completions zsh)"');
     });
   });
 
@@ -67,7 +67,7 @@ describe("generateCompletions", () => {
   describe("fish", () => {
     test("generates valid fish completions", () => {
       const result = generateCompletions("fish");
-      expect(result).toContain("complete -c ai");
+      expect(result).toContain("complete -c ai-pipe");
     });
 
     test("includes all flags", () => {
@@ -94,7 +94,7 @@ describe("generateCompletions", () => {
 
     test("includes install instructions", () => {
       const result = generateCompletions("fish");
-      expect(result).toContain("~/.config/fish/completions/ai.fish");
+      expect(result).toContain("~/.config/fish/completions/ai-pipe.fish");
     });
   });
 });

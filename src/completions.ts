@@ -19,9 +19,9 @@ export function generateCompletions(shell: string): string {
 }
 
 function bash(): string {
-  return `# ai-cli bash completions
-# Add to ~/.bashrc: eval "$(ai --completions bash)"
-_ai_completions() {
+  return `# ai-pipe bash completions
+# Add to ~/.bashrc: eval "$(ai-pipe --completions bash)"
+_ai_pipe_completions() {
   local cur prev opts providers
   COMPREPLY=()
   cur="\${COMP_WORDS[COMP_CWORD]}"
@@ -57,13 +57,13 @@ _ai_completions() {
     return 0
   fi
 }
-complete -F _ai_completions ai`;
+complete -F _ai_pipe_completions ai-pipe`;
 }
 
 function zsh(): string {
-  return `# ai-cli zsh completions
-# Add to ~/.zshrc: eval "$(ai --completions zsh)"
-_ai() {
+  return `# ai-pipe zsh completions
+# Add to ~/.zshrc: eval "$(ai-pipe --completions zsh)"
+_ai_pipe() {
   local -a providers
   providers=(${SUPPORTED_PROVIDERS.map((p) => `'${p}/'`).join(" ")})
 
@@ -88,21 +88,21 @@ _ai() {
       ;;
   esac
 }
-compdef _ai ai`;
+compdef _ai_pipe ai-pipe`;
 }
 
 function fish(): string {
-  return `# ai-cli fish completions
-# Add to ~/.config/fish/completions/ai.fish
-complete -c ai -s m -l model -d 'Model in provider/model-id format' -x -a '${SUPPORTED_PROVIDERS.map((p) => `${p}/`).join(" ")}'
-complete -c ai -s s -l system -d 'System prompt' -x
-complete -c ai -s j -l json -d 'Output full JSON response object'
-complete -c ai -l no-stream -d 'Wait for full response, then print'
-complete -c ai -s t -l temperature -d 'Sampling temperature (0-2)' -x
-complete -c ai -l max-output-tokens -d 'Maximum tokens to generate' -x
-complete -c ai -s c -l config -d 'Path to config file' -r -F
-complete -c ai -l providers -d 'List supported providers'
-complete -c ai -l completions -d 'Generate shell completions' -x -a 'bash zsh fish'
-complete -c ai -s V -l version -d 'Print version'
-complete -c ai -s h -l help -d 'Print help'`;
+  return `# ai-pipe fish completions
+# Add to ~/.config/fish/completions/ai-pipe.fish
+complete -c ai-pipe -s m -l model -d 'Model in provider/model-id format' -x -a '${SUPPORTED_PROVIDERS.map((p) => `${p}/`).join(" ")}'
+complete -c ai-pipe -s s -l system -d 'System prompt' -x
+complete -c ai-pipe -s j -l json -d 'Output full JSON response object'
+complete -c ai-pipe -l no-stream -d 'Wait for full response, then print'
+complete -c ai-pipe -s t -l temperature -d 'Sampling temperature (0-2)' -x
+complete -c ai-pipe -l max-output-tokens -d 'Maximum tokens to generate' -x
+complete -c ai-pipe -s c -l config -d 'Path to config file' -r -F
+complete -c ai-pipe -l providers -d 'List supported providers'
+complete -c ai-pipe -l completions -d 'Generate shell completions' -x -a 'bash zsh fish'
+complete -c ai-pipe -s V -l version -d 'Print version'
+complete -c ai-pipe -s h -l help -d 'Print help'`;
 }

@@ -1,10 +1,11 @@
 {
-  "name": "ai-cli",
+  "name": "ai-pipe",
   "version": "1.0.0",
   "description": "A lean CLI for calling LLMs from the terminal. Text in, text out.",
   "module": "src/index.ts",
   "type": "module",
   "bin": {
+    "ai-pipe": "src/index.ts",
     "ai": "src/index.ts"
   },
   "files": [
@@ -15,11 +16,11 @@
   "scripts": {
     "start": "bun src/index.ts",
     "test": "bun test",
-    "build": "bun build src/index.ts --compile --outfile dist/ai",
-    "build:linux": "bun build src/index.ts --compile --target=bun-linux-x64 --outfile dist/ai-linux-x64",
-    "build:linux-arm": "bun build src/index.ts --compile --target=bun-linux-arm64 --outfile dist/ai-linux-arm64",
-    "build:mac": "bun build src/index.ts --compile --target=bun-darwin-arm64 --outfile dist/ai-darwin-arm64",
-    "build:mac-x64": "bun build src/index.ts --compile --target=bun-darwin-x64 --outfile dist/ai-darwin-x64",
+    "build": "bun build src/index.ts --compile --outfile dist/ai-pipe",
+    "build:linux": "bun build src/index.ts --compile --target=bun-linux-x64 --outfile dist/ai-pipe-linux-x64",
+    "build:linux-arm": "bun build src/index.ts --compile --target=bun-linux-arm64 --outfile dist/ai-pipe-linux-arm64",
+    "build:mac": "bun build src/index.ts --compile --target=bun-darwin-arm64 --outfile dist/ai-pipe-darwin-arm64",
+    "build:mac-x64": "bun build src/index.ts --compile --target=bun-darwin-x64 --outfile dist/ai-pipe-darwin-x64",
     "build:all": "bun run build:mac && bun run build:mac-x64 && bun run build:linux && bun run build:linux-arm",
     "typecheck": "tsc --noEmit"
   },

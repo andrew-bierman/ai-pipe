@@ -15,11 +15,12 @@ import { azure } from "@ai-sdk/azure";
 import { togetherai } from "@ai-sdk/togetherai";
 import { bedrock } from "@ai-sdk/amazon-bedrock";
 import { vertex } from "@ai-sdk/google-vertex";
+import { ollama } from "ai-sdk-ollama";
 
 const openrouterProvider = openrouter as unknown as ProviderV3;
 
 export const registry = createProviderRegistry(
-  { openai, anthropic, google, perplexity, xai, mistral, groq, deepseek, cohere, openrouter: openrouterProvider, azure, togetherai, bedrock, vertex },
+  { openai, anthropic, google, perplexity, xai, mistral, groq, deepseek, cohere, openrouter: openrouterProvider, azure, togetherai, bedrock, vertex, ollama },
   { separator: "/" }
 );
 
@@ -38,6 +39,7 @@ export const SUPPORTED_PROVIDERS = Object.freeze([
   "togetherai",
   "bedrock",
   "vertex",
+  "ollama",
 ] as const);
 
 export const ProviderIdSchema = z.enum(SUPPORTED_PROVIDERS);
@@ -58,7 +60,8 @@ export const PROVIDER_ENV_VARS: Record<ProviderId, string[]> = {
   azure: ["AZURE_AI_API_KEY"],
   togetherai: ["TOGETHERAI_API_KEY"],
   bedrock: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
-  vertex: ["GOOGLE_VERTEX_AI_PROJECT_ID"],
+  vertex: ["GOOGLE_VERTEX_PROJECT", "GOOGLE_VERTEX_LOCATION"],
+  ollama: ["OLLAMA_HOST"],
 };
 
 const DEFAULT_PROVIDER: ProviderId = "openai";
@@ -98,7 +101,7 @@ export function resolveModel(modelString: string) {
 
   const envVars = PROVIDER_ENV_VARS[result.data];
   const missingVars = envVars.filter(v => !process.env[v]);
-  
+
   if (missingVars.length > 0) {
     console.error(
       `Error: Missing required environment variable(s): ${missingVars.join(", ")}. Set them or check your provider config.`
