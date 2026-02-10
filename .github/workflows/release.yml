@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   test:
@@ -105,6 +106,36 @@ jobs:
       - run: bun publish
         env:
           NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-github:
+    name: Publish to GitHub Packages
+    needs: [test, resolve-version, publish]
+    if: always() && needs.publish.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      - name: Bump version if needed
+        if: needs.resolve-version.outputs.version != ''
+        run: |
+          CURRENT=$(bun -e "console.log(require('./package.json').version)")
+          TARGET="${{ needs.resolve-version.outputs.version }}"
+          if [ "$CURRENT" != "$TARGET" ]; then
+            bun pm version "$TARGET" --no-git-tag-version
+          fi
+
+      - name: Publish to GitHub Packages
+        run: |
+          bun pm pkg set name="@andrew-bierman/ai-pipe"
+          bun publish --registry https://npm.pkg.github.com
+        env:
+          NPM_CONFIG_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   github-release:
     name: GitHub Release
