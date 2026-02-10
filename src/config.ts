@@ -18,7 +18,7 @@ export const ConfigSchema = z.object({
 
 export type Config = z.infer<typeof ConfigSchema>;
 
-const DEFAULT_CONFIG_PATH = join(homedir(), ".ai-cli.json");
+const DEFAULT_CONFIG_PATH = join(homedir(), ".ai-pipe.json");
 
 export async function loadConfig(configPath?: string): Promise<Config> {
   const path = configPath ?? DEFAULT_CONFIG_PATH;
