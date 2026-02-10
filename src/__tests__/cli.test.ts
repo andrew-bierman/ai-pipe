@@ -140,6 +140,42 @@ describe("CLI: config file", () => {
   });
 });
 
+describe("CLI: --providers flag", () => {
+  test("lists all providers with --providers", async () => {
+    const { stdout, exitCode } = await runCLI(["--providers"]);
+    expect(stdout).toContain("Provider");
+    expect(stdout).toContain("Env Variable");
+    expect(stdout).toContain("Status");
+    expect(stdout).toContain("openai");
+    expect(stdout).toContain("anthropic");
+    expect(stdout).toContain("perplexity");
+    expect(stdout).toContain("OPENAI_API_KEY");
+    expect(stdout).toContain("ANTHROPIC_API_KEY");
+    expect(exitCode).toBe(0);
+  });
+});
+
+describe("CLI: --completions flag", () => {
+  test("generates bash completions", async () => {
+    const { stdout, exitCode } = await runCLI(["--completions", "bash"]);
+    expect(stdout).toContain("_ai_completions");
+    expect(stdout).toContain("complete -F");
+    expect(exitCode).toBe(0);
+  });
+
+  test("generates zsh completions", async () => {
+    const { stdout, exitCode } = await runCLI(["--completions", "zsh"]);
+    expect(stdout).toContain("compdef _ai ai");
+    expect(exitCode).toBe(0);
+  });
+
+  test("generates fish completions", async () => {
+    const { stdout, exitCode } = await runCLI(["--completions", "fish"]);
+    expect(stdout).toContain("complete -c ai");
+    expect(exitCode).toBe(0);
+  });
+});
+
 describe("CLI: stdin handling", () => {
   test("reads stdin when piped", async () => {
     const { stderr, exitCode } = await runCLI([], {

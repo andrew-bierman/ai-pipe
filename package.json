@@ -1,15 +1,48 @@
 {
   "name": "ai-cli",
   "version": "1.0.0",
+  "description": "A lean CLI for calling LLMs from the terminal. Text in, text out.",
   "module": "src/index.ts",
   "type": "module",
   "bin": {
     "ai": "src/index.ts"
   },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "start": "bun src/index.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "build": "bun build src/index.ts --compile --outfile dist/ai",
+    "build:linux": "bun build src/index.ts --compile --target=bun-linux-x64 --outfile dist/ai-linux-x64",
+    "build:linux-arm": "bun build src/index.ts --compile --target=bun-linux-arm64 --outfile dist/ai-linux-arm64",
+    "build:mac": "bun build src/index.ts --compile --target=bun-darwin-arm64 --outfile dist/ai-darwin-arm64",
+    "build:mac-x64": "bun build src/index.ts --compile --target=bun-darwin-x64 --outfile dist/ai-darwin-x64",
+    "build:all": "bun run build:mac && bun run build:mac-x64 && bun run build:linux && bun run build:linux-arm",
+    "typecheck": "tsc --noEmit"
   },
+  "keywords": [
+    "ai",
+    "cli",
+    "llm",
+    "openai",
+    "anthropic",
+    "google",
+    "perplexity",
+    "grok",
+    "mistral",
+    "groq",
+    "deepseek",
+    "cohere",
+    "vercel-ai-sdk"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrew-bierman/ai-cli.git"
+  },
+  "license": "MIT",
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.39",
     "@ai-sdk/cohere": "^3.0.19",

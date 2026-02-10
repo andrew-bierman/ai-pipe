@@ -83,3 +83,24 @@ export function resolveModel(modelString: string) {
 
   return registry.languageModel(fullId as `${ProviderId}/${string}`);
 }
+
+export function printProviders(): void {
+  const maxName = Math.max(...SUPPORTED_PROVIDERS.map((p) => p.length));
+  const maxVar = Math.max(
+    ...Object.values(PROVIDER_ENV_VARS).map((v) => v.length)
+  );
+
+  console.log(
+    `${"Provider".padEnd(maxName)}  ${"Env Variable".padEnd(maxVar)}  Status`
+  );
+  console.log(`${"─".repeat(maxName)}  ${"─".repeat(maxVar)}  ${"─".repeat(6)}`);
+
+  for (const provider of SUPPORTED_PROVIDERS) {
+    const envVar = PROVIDER_ENV_VARS[provider];
+    const isSet = !!process.env[envVar];
+    const status = isSet ? "✓ set" : "✗ missing";
+    console.log(
+      `${provider.padEnd(maxName)}  ${envVar.padEnd(maxVar)}  ${status}`
+    );
+  }
+}

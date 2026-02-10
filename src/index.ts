@@ -2,10 +2,11 @@
 
 import { program } from "commander";
 import { streamText, generateText, type LanguageModelUsage, type FinishReason } from "ai";
-import { resolveModel } from "./provider.ts";
+import { resolveModel, printProviders } from "./provider.ts";
 import { loadConfig, type Config } from "./config.ts";
+import { generateCompletions } from "./completions.ts";
 
-const pkg = await Bun.file(new URL("../package.json", import.meta.url)).json();
+import pkg from "../package.json";
 
 export interface CLIOptions {
   model?: string;
@@ -15,6 +16,8 @@ export interface CLIOptions {
   temperature?: number;
   maxOutputTokens?: number;
   config?: string;
+  providers?: boolean;
+  completions?: string;
 }
 
 interface JsonOutput {
@@ -60,6 +63,17 @@ async function readStdin(): Promise<string> {
 }
 
 async function run(promptArgs: string[], opts: CLIOptions) {
+  // Handle info flags first
+  if (opts.providers) {
+    printProviders();
+    return;
+  }
+
+  if (opts.completions) {
+    process.stdout.write(generateCompletions(opts.completions) + "\n");
+    return;
+  }
+
   const config = await loadConfig(opts.config);
 
   const hasStdin = !process.stdin.isTTY;
@@ -135,6 +149,8 @@ if (import.meta.main) {
     .option("-t, --temperature <n>", "Sampling temperature (0-2)", parseFloat)
     .option("--max-output-tokens <n>", "Maximum tokens to generate", parseInt)
     .option("-c, --config <path>", "Path to config file")
+    .option("--providers", "List supported providers and their API key status")
+    .option("--completions <shell>", "Generate shell completions (bash, zsh, fish)")
     .action(run);
 
   program.parse();
