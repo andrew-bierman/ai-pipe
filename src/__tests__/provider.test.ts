@@ -81,6 +81,7 @@ describe("parseModel", () => {
     ["deepseek/deepseek-chat", "deepseek", "deepseek-chat", "deepseek/deepseek-chat"],
     ["cohere/command-r-plus", "cohere", "command-r-plus", "cohere/command-r-plus"],
     ["openrouter/openrouter", "openrouter", "openrouter", "openrouter/openrouter"],
+    ["azure/azure-model-id", "azure", "azure-model-id", "azure/azure-model-id"],
   ];
 
   for (const [input, provider, modelId, fullId] of cases) {
@@ -113,12 +114,12 @@ describe("parseModel", () => {
 // ── SUPPORTED_PROVIDERS ────────────────────────────────────────────────
 
 describe("SUPPORTED_PROVIDERS", () => {
-  test("has exactly 10 providers", () => {
-    expect(SUPPORTED_PROVIDERS).toHaveLength(10);
+  test("has exactly 11 providers", () => {
+    expect(SUPPORTED_PROVIDERS).toHaveLength(11);
   });
 
   test("includes all expected providers", () => {
-    const expected: ProviderId[] = ["openai", "anthropic", "google", "perplexity", "xai", "mistral", "groq", "deepseek", "cohere", "openrouter"];
+    const expected: ProviderId[] = ["openai", "anthropic", "google", "perplexity", "xai", "mistral", "groq", "deepseek", "cohere", "openrouter", "azure"];
     for (const p of expected) {
       expect(SUPPORTED_PROVIDERS).toContain(p);
     }
@@ -152,6 +153,7 @@ describe("PROVIDER_ENV_VARS", () => {
     deepseek: "DEEPSEEK_API_KEY",
     cohere: "COHERE_API_KEY",
     openrouter: "OPENROUTER_API_KEY",
+    azure: "AZURE_AI_API_KEY",
   };
 
   for (const [provider, envVar] of Object.entries(expected)) {
@@ -193,6 +195,7 @@ describe("resolveModel", () => {
     { provider: "deepseek", model: "deepseek/deepseek-chat", envVar: "DEEPSEEK_API_KEY", expectedModelId: "deepseek-chat" },
     { provider: "cohere", model: "cohere/command-r-plus", envVar: "COHERE_API_KEY", expectedModelId: "command-r-plus" },
     { provider: "openrouter", model: "openrouter/openrouter", envVar: "OPENROUTER_API_KEY", expectedModelId: "openrouter" },
+    { provider: "azure", model: "azure/azure-model-id", envVar: "AZURE_AI_API_KEY", expectedModelId: "azure-model-id" },
   ];
 
   for (const { provider, model, envVar, expectedModelId } of providerCases) {
