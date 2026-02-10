@@ -174,8 +174,8 @@ describe("parseModel", () => {
 // ── SUPPORTED_PROVIDERS ────────────────────────────────────────────────
 
 describe("SUPPORTED_PROVIDERS", () => {
-  test("has exactly 16 providers", () => {
-    expect(SUPPORTED_PROVIDERS).toHaveLength(16);
+  test("has exactly 17 providers", () => {
+    expect(SUPPORTED_PROVIDERS).toHaveLength(17);
   });
 
   test("includes all expected providers", () => {
@@ -189,6 +189,7 @@ describe("SUPPORTED_PROVIDERS", () => {
       "groq",
       "deepseek",
       "cohere",
+      "fireworks",
       "openrouter",
       "azure",
       "togetherai",
@@ -229,6 +230,7 @@ describe("PROVIDER_ENV_VARS", () => {
     groq: ["GROQ_API_KEY"],
     deepseek: ["DEEPSEEK_API_KEY"],
     cohere: ["COHERE_API_KEY"],
+    fireworks: ["FIREWORKS_API_KEY"],
     openrouter: ["OPENROUTER_API_KEY"],
     azure: ["AZURE_AI_API_KEY"],
     togetherai: ["TOGETHERAI_API_KEY"],
@@ -325,6 +327,12 @@ describe("resolveModel", () => {
       model: "cohere/command-r-plus",
       envVars: ["COHERE_API_KEY"],
       expectedModelId: "command-r-plus",
+    },
+    {
+      provider: "fireworks",
+      model: "fireworks/accounts/fireworks/models/deepseek-v3",
+      envVars: ["FIREWORKS_API_KEY"],
+      expectedModelId: "accounts/fireworks/models/deepseek-v3",
     },
     {
       provider: "openrouter",

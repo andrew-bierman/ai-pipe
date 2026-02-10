@@ -12,7 +12,7 @@ A powerful CLI for calling LLMs from the terminal. Text in, text out. Built on t
 
 ## ✨ Features
 
-- 🤖 **16+ AI Providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, OpenRouter, Azure AI, Together AI, Amazon Bedrock, Google Vertex AI, Ollama, Hugging Face
+- 🤖 **17+ AI Providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, Fireworks, OpenRouter, Azure AI, Together AI, Amazon Bedrock, Google Vertex AI, Ollama, Hugging Face
 - 📡 **Streaming by Default** — tokens print as they arrive
 - 🔄 **Pipe-friendly** — reads from stdin, writes to stdout, errors to stderr
 - 📎 **File Attachments** — include file contents in prompts with `-f`
@@ -84,6 +84,9 @@ export HF_TOKEN="hf_..."
 
 # Ollama (local)
 export OLLAMA_HOST="http://localhost:11434"
+
+# Fireworks AI
+export FIREWORKS_API_KEY="fw_..."
 ```
 
 > 💡 **Tip:** Run `ai-pipe --providers` to see which keys are configured.
@@ -146,6 +149,7 @@ ai-pipe --max-output-tokens 100 "explain quantum computing"
 | Groq | `GROQ_API_KEY` | `groq/llama-3.3-70b-versatile` |
 | DeepSeek | `DEEPSEEK_API_KEY` | `deepseek/deepseek-chat` |
 | Cohere | `COHERE_API_KEY` | `cohere/command-r-plus` |
+| Fireworks | `FIREWORKS_API_KEY` | `fireworks/accounts/fireworks/models/deepseek-v3` |
 | OpenRouter | `OPENROUTER_API_KEY` | `openrouter/openrouter` |
 | Azure | `AZURE_AI_API_KEY` | `azure/azure-model-id` |
 | TogetherAI | `TOGETHERAI_API_KEY` | `togetherai/meta-llama/Llama-3.3-70b-Instruct` |
@@ -292,7 +296,7 @@ The release workflow handles `bun publish`, binary builds, and GitHub release.
 - [x] **Config directory** — set defaults in `~/.ai-pipe/`
 - [x] **Shell completions** — bash, zsh, fish
 - [x] **Standalone binary** — compile to a single executable with `bun build --compile`
-- [x] **16 providers** — OpenAI, Anthropic, Google, and 13 more
+- [x] **17 providers** — OpenAI, Anthropic, Google, and 14 more
 - [x] **npm publishing** — `npm install -g ai-pipe` / `bun install -g ai-pipe`
 - [x] **File attachments** — include file contents in prompts with `-f`
 - [ ] **Conversation history** — continue previous conversations with `-C`, named sessions with `--session`
