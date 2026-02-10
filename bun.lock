@@ -10,6 +10,7 @@
         "@ai-sdk/deepseek": "^2.0.18",
         "@ai-sdk/google": "^3.0.23",
         "@ai-sdk/groq": "^3.0.22",
+        "@ai-sdk/huggingface": "^1.0.30",
         "@ai-sdk/mistral": "^3.0.19",
         "@ai-sdk/openai": "^3.0.26",
         "@ai-sdk/perplexity": "^3.0.18",
@@ -40,6 +41,8 @@
     "@ai-sdk/google": ["@ai-sdk/google@3.0.23", "", { "dependencies": { "@ai-sdk/provider": "3.0.8", "@ai-sdk/provider-utils": "4.0.14" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-/fV5KKw73+Vqcw/SwlNsdzJytTY3mlPrrba69gIbU4GmY4KtFkNZ0EGxNCMb3uFkq9Ba2GQ5vYHnUkhCftY8Eg=="],
 
     "@ai-sdk/groq": ["@ai-sdk/groq@3.0.22", "", { "dependencies": { "@ai-sdk/provider": "3.0.8", "@ai-sdk/provider-utils": "4.0.14" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-QBkqBmlts2qz2vX54gXeP9IdztMFxZw7xPNwjOjHYhEL7RynzB2aFafPIbAYTVNosrU0YEETxhw9LISjS2TtXw=="],
+
+    "@ai-sdk/huggingface": ["@ai-sdk/huggingface@1.0.30", "", { "dependencies": { "@ai-sdk/openai-compatible": "2.0.28", "@ai-sdk/provider": "3.0.8", "@ai-sdk/provider-utils": "4.0.14" }, "peerDependencies": { "zod": "^3.25.76 || ^4" } }, "sha512-npd3qgOd9Cgf0SojLD0BMFnKqfwzvxbjpfKDZCg5fbOc5Y6ravtcK0qBUyxyNNLGAY9j87m8dT1reKjW6Ii3uQ=="],
 
     "@ai-sdk/mistral": ["@ai-sdk/mistral@3.0.19", "", { "dependencies": { "@ai-sdk/provider": "3.0.8", "@ai-sdk/provider-utils": "4.0.14" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-yd0OJ3fm2YKdwxh1pd9m720sENVVcylAD+Bki8C80QqVpUxGNL1/C4N4JJGb56eCCWr6VU/3gHFe9PKui9n/Hg=="],
 
