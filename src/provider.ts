@@ -16,11 +16,12 @@ import { togetherai } from "@ai-sdk/togetherai";
 import { bedrock } from "@ai-sdk/amazon-bedrock";
 import { vertex } from "@ai-sdk/google-vertex";
 import { ollama } from "ai-sdk-ollama";
+import { huggingface } from "@ai-sdk/huggingface";
 
 const openrouterProvider = openrouter as unknown as ProviderV3;
 
 export const registry = createProviderRegistry(
-  { openai, anthropic, google, perplexity, xai, mistral, groq, deepseek, cohere, openrouter: openrouterProvider, azure, togetherai, bedrock, vertex, ollama },
+  { openai, anthropic, google, perplexity, xai, mistral, groq, deepseek, cohere, openrouter: openrouterProvider, azure, togetherai, bedrock, vertex, ollama, huggingface },
   { separator: "/" }
 );
 
@@ -40,6 +41,7 @@ export const SUPPORTED_PROVIDERS = Object.freeze([
   "bedrock",
   "vertex",
   "ollama",
+  "huggingface",
 ] as const);
 
 export const ProviderIdSchema = z.enum(SUPPORTED_PROVIDERS);
@@ -62,6 +64,7 @@ export const PROVIDER_ENV_VARS: Record<ProviderId, string[]> = {
   bedrock: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
   vertex: ["GOOGLE_VERTEX_PROJECT", "GOOGLE_VERTEX_LOCATION"],
   ollama: ["OLLAMA_HOST"],
+  huggingface: ["HF_TOKEN"],
 };
 
 const DEFAULT_PROVIDER: ProviderId = "openai";

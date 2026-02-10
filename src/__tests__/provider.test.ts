@@ -86,6 +86,7 @@ describe("parseModel", () => {
     ["bedrock/anthropic.claude-sonnet-4-2025-02-19", "bedrock", "anthropic.claude-sonnet-4-2025-02-19", "bedrock/anthropic.claude-sonnet-4-2025-02-19"],
     ["vertex/google/cloud/llama-3.1", "vertex", "google/cloud/llama-3.1", "vertex/google/cloud/llama-3.1"],
     ["ollama/llama3", "ollama", "llama3", "ollama/llama3"],
+    ["huggingface/meta-llama/Llama-3.3-70b-Instruct", "huggingface", "meta-llama/Llama-3.3-70b-Instruct", "huggingface/meta-llama/Llama-3.3-70b-Instruct"],
   ];
 
   for (const [input, provider, modelId, fullId] of cases) {
@@ -118,12 +119,12 @@ describe("parseModel", () => {
 // ── SUPPORTED_PROVIDERS ────────────────────────────────────────────────
 
 describe("SUPPORTED_PROVIDERS", () => {
-  test("has exactly 15 providers", () => {
-    expect(SUPPORTED_PROVIDERS).toHaveLength(15);
+  test("has exactly 16 providers", () => {
+    expect(SUPPORTED_PROVIDERS).toHaveLength(16);
   });
 
   test("includes all expected providers", () => {
-    const expected: ProviderId[] = ["openai", "anthropic", "google", "perplexity", "xai", "mistral", "groq", "deepseek", "cohere", "openrouter", "azure", "togetherai", "bedrock", "vertex", "ollama"];
+    const expected: ProviderId[] = ["openai", "anthropic", "google", "perplexity", "xai", "mistral", "groq", "deepseek", "cohere", "openrouter", "azure", "togetherai", "bedrock", "vertex", "ollama", "huggingface"];
     for (const p of expected) {
       expect(SUPPORTED_PROVIDERS).toContain(p);
     }
@@ -162,6 +163,7 @@ describe("PROVIDER_ENV_VARS", () => {
     bedrock: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
     vertex: ["GOOGLE_VERTEX_PROJECT", "GOOGLE_VERTEX_LOCATION"],
     ollama: ["OLLAMA_HOST"],
+    huggingface: ["HF_TOKEN"],
   };
 
   for (const [provider, envVars] of Object.entries(expected)) {
@@ -208,6 +210,7 @@ describe("resolveModel", () => {
     { provider: "bedrock", model: "bedrock/anthropic.claude-sonnet-4-2025-02-19", envVars: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"], expectedModelId: "anthropic.claude-sonnet-4-2025-02-19" },
     { provider: "vertex", model: "vertex/google/cloud/llama-3.1", envVars: ["GOOGLE_VERTEX_PROJECT", "GOOGLE_VERTEX_LOCATION"], expectedModelId: "google/cloud/llama-3.1" },
     { provider: "ollama", model: "ollama/llama3", envVars: ["OLLAMA_HOST"], expectedModelId: "llama3" },
+    { provider: "huggingface", model: "huggingface/meta-llama/Llama-3.3-70b-Instruct", envVars: ["HF_TOKEN"], expectedModelId: "meta-llama/Llama-3.3-70b-Instruct" },
   ];
 
   for (const { provider, model, envVars, expectedModelId } of providerCases) {

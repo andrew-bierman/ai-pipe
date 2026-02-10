@@ -6,7 +6,7 @@ Built on the [Vercel AI SDK](https://sdk.vercel.ai/) with [Bun](https://bun.sh/)
 
 ## Features
 
-- **15 providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, OpenRouter, Azure AI, Together AI, Amazon Bedrock, Google Vertex AI, Ollama
+- **16 providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, OpenRouter, Azure AI, Together AI, Amazon Bedrock, Google Vertex AI, Ollama, Hugging Face
 - **Streaming by default** — tokens print as they arrive
 - **Pipe-friendly** — reads from stdin, writes to stdout, errors to stderr
 - **JSON output** — structured response with usage and finish reason
@@ -35,6 +35,7 @@ export AZURE_AI_API_KEY="..."
 export TOGETHERAI_API_KEY="..."
 export AWS_ACCESS_KEY_ID="..."
 export AWS_SECRET_ACCESS_KEY="..."
+export HF_TOKEN="hf_..."
 
 # Ollama (local)
 export OLLAMA_HOST="http://localhost:11434"
@@ -93,6 +94,7 @@ If no `provider/` prefix is given, the model defaults to `openai`. If no `-m` fl
 | bedrock | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `bedrock/anthropic.claude-sonnet-4-2025-02-19` |
 | vertex | `GOOGLE_VERTEX_PROJECT` | `vertex/google/cloud/llama-3.1` |
 | ollama | `OLLAMA_HOST` | `ollama/llama3` |
+| huggingface | `HF_TOKEN` | `huggingface/meta-llama/Llama-3.3-70b-Instruct` |
 
 ## Config File
 

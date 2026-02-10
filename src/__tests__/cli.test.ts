@@ -24,6 +24,7 @@ const CLEAN_ENV = {
   GOOGLE_VERTEX_PROJECT: "",
   GOOGLE_VERTEX_LOCATION: "",
   OLLAMA_HOST: "",
+  HF_TOKEN: "",
 };
 
 async function runCLI(
