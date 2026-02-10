@@ -1,10 +1,11 @@
 {
-  "name": "ai-cli",
+  "name": "ai-pipe",
   "version": "1.0.0",
   "description": "A lean CLI for calling LLMs from the terminal. Text in, text out.",
   "module": "src/index.ts",
   "type": "module",
   "bin": {
+    "ai-pipe": "src/index.ts",
     "ai": "src/index.ts"
   },
   "files": [
@@ -15,11 +16,11 @@
   "scripts": {
     "start": "bun src/index.ts",
     "test": "bun test",
-    "build": "bun build src/index.ts --compile --outfile dist/ai",
-    "build:linux": "bun build src/index.ts --compile --target=bun-linux-x64 --outfile dist/ai-linux-x64",
-    "build:linux-arm": "bun build src/index.ts --compile --target=bun-linux-arm64 --outfile dist/ai-linux-arm64",
-    "build:mac": "bun build src/index.ts --compile --target=bun-darwin-arm64 --outfile dist/ai-darwin-arm64",
-    "build:mac-x64": "bun build src/index.ts --compile --target=bun-darwin-x64 --outfile dist/ai-darwin-x64",
+    "build": "bun build src/index.ts --compile --outfile dist/ai-pipe",
+    "build:linux": "bun build src/index.ts --compile --target=bun-linux-x64 --outfile dist/ai-pipe-linux-x64",
+    "build:linux-arm": "bun build src/index.ts --compile --target=bun-linux-arm64 --outfile dist/ai-pipe-linux-arm64",
+    "build:mac": "bun build src/index.ts --compile --target=bun-darwin-arm64 --outfile dist/ai-pipe-darwin-arm64",
+    "build:mac-x64": "bun build src/index.ts --compile --target=bun-darwin-x64 --outfile dist/ai-pipe-darwin-x64",
     "build:all": "bun run build:mac && bun run build:mac-x64 && bun run build:linux && bun run build:linux-arm",
     "typecheck": "tsc --noEmit"
   },
@@ -34,18 +35,23 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@ai-sdk/amazon-bedrock": "^4.0.54",
     "@ai-sdk/anthropic": "^3.0.39",
+    "@ai-sdk/azure": "^3.0.27",
     "@ai-sdk/cohere": "^3.0.19",
     "@ai-sdk/deepseek": "^2.0.18",
     "@ai-sdk/google": "^3.0.23",
+    "@ai-sdk/google-vertex": "^4.0.49",
     "@ai-sdk/groq": "^3.0.22",
     "@ai-sdk/huggingface": "^1.0.30",
     "@ai-sdk/mistral": "^3.0.19",
     "@ai-sdk/openai": "^3.0.26",
     "@ai-sdk/perplexity": "^3.0.18",
+    "@ai-sdk/togetherai": "^2.0.31",
     "@ai-sdk/xai": "^3.0.49",
     "@openrouter/ai-sdk-provider": "^2.2.1",
     "ai": "^6.0.78",
+    "ai-sdk-ollama": "^3.5.0",
     "commander": "^14.0.3",
     "radash": "^12.1.1",
     "zod": "^4.3.6"
