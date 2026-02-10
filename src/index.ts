@@ -2,6 +2,7 @@
 
 import { generateText, streamText } from "ai";
 import { program } from "commander";
+import { marked } from "marked";
 import { z } from "zod";
 import pkg from "../package.json";
 import { generateCompletions } from "./completions.ts";
@@ -20,6 +21,7 @@ export interface CLIOptions {
   file?: string[];
   json: boolean;
   stream: boolean;
+  markdown: boolean;
   temperature?: number;
   maxOutputTokens?: number;
   config?: string;
@@ -33,6 +35,7 @@ export const CLIOptionsSchema = z.object({
   file: z.array(z.string()).optional(),
   json: z.boolean(),
   stream: z.boolean(),
+  markdown: z.boolean(),
   temperature: z
     .number()
     .min(APP.temperature.min)
@@ -103,6 +106,7 @@ export function resolveOptions(
   system: string | undefined;
   temperature: number | undefined;
   maxOutputTokens: number | undefined;
+  markdown: boolean;
 } {
   return {
     modelString: opts.model ?? config.model ?? APP.defaultModel,
@@ -110,6 +114,7 @@ export function resolveOptions(
     temperature: opts.temperature ?? config.temperature ?? undefined,
     maxOutputTokens:
       opts.maxOutputTokens ?? config.maxOutputTokens ?? undefined,
+    markdown: opts.markdown,
   };
 }
 
@@ -176,10 +181,8 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
     return;
   }
 
-  const { modelString, system, temperature, maxOutputTokens } = resolveOptions(
-    opts,
-    config,
-  );
+  const { modelString, system, temperature, maxOutputTokens, markdown } =
+    resolveOptions(opts, config);
 
   const model = resolveModel(modelString);
 
@@ -201,6 +204,9 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
           finishReason: result.finishReason,
         };
         process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+      } else if (markdown) {
+        const rendered = await marked(result.text);
+        process.stdout.write(rendered);
       } else {
         process.stdout.write(`${result.text}\n`);
       }
@@ -213,8 +219,15 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
         maxOutputTokens,
       });
 
-      for await (const chunk of result.textStream) {
-        process.stdout.write(chunk);
+      if (markdown) {
+        for await (const chunk of result.textStream) {
+          const rendered = await marked(chunk);
+          process.stdout.write(rendered);
+        }
+      } else {
+        for await (const chunk of result.textStream) {
+          process.stdout.write(chunk);
+        }
       }
       process.stdout.write("\n");
     }
@@ -243,6 +256,7 @@ export function setupCLI() {
     )
     .option("-j, --json", "Output full JSON response object", false)
     .option("--no-stream", "Wait for full response, then print")
+    .option("--markdown", "Render markdown output", true)
     .option(
       "-t, --temperature <n>",
       `Sampling temperature (${APP.temperature.min}-${APP.temperature.max})`,
