@@ -12,11 +12,12 @@ import { deepseek } from "@ai-sdk/deepseek";
 import { cohere } from "@ai-sdk/cohere";
 import { openrouter } from "@openrouter/ai-sdk-provider";
 import { azure } from "@ai-sdk/azure";
+import { togetherai } from "@ai-sdk/togetherai";
 
 const openrouterProvider = openrouter as unknown as ProviderV3;
 
 export const registry = createProviderRegistry(
-  { openai, anthropic, google, perplexity, xai, mistral, groq, deepseek, cohere, openrouter: openrouterProvider, azure },
+  { openai, anthropic, google, perplexity, xai, mistral, groq, deepseek, cohere, openrouter: openrouterProvider, azure, togetherai },
   { separator: "/" }
 );
 
@@ -32,6 +33,7 @@ export const SUPPORTED_PROVIDERS = Object.freeze([
   "cohere",
   "openrouter",
   "azure",
+  "togetherai",
 ] as const);
 
 export const ProviderIdSchema = z.enum(SUPPORTED_PROVIDERS);
@@ -49,6 +51,7 @@ export const PROVIDER_ENV_VARS: Record<ProviderId, string> = {
   cohere: "COHERE_API_KEY",
   openrouter: "OPENROUTER_API_KEY",
   azure: "AZURE_AI_API_KEY",
+  togetherai: "TOGETHERAI_API_KEY",
 };
 
 const DEFAULT_PROVIDER: ProviderId = "openai";
