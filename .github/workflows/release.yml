@@ -152,26 +152,25 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Update package.json version via PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Bump package.json version
         run: |
           CURRENT=$(bun -e "console.log(require('./package.json').version)")
           TARGET="${{ needs.resolve-version.outputs.version }}"
           if [ "$CURRENT" != "$TARGET" ]; then
-            BRANCH="chore/bump-v$TARGET"
-            git checkout -b "$BRANCH"
             bun pm version "$TARGET" --no-git-tag-version
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add package.json
-            git commit -m "📦 Bump version to $TARGET"
-            git push origin "$BRANCH"
-            gh pr create --title "📦 Bump version to $TARGET" --body "Auto-generated after successful publish of v$TARGET." --base main --head "$BRANCH"
-            gh pr merge "$BRANCH" --squash --auto
+            echo "BUMPED=true" >> "$GITHUB_ENV"
           else
             echo "package.json already at $TARGET"
           fi
+
+      - name: Create PR
+        if: env.BUMPED == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "📦 Bump version to ${{ needs.resolve-version.outputs.version }}"
+          branch: chore/bump-v${{ needs.resolve-version.outputs.version }}
+          title: "📦 Bump version to ${{ needs.resolve-version.outputs.version }}"
+          body: "Auto-generated after successful publish of v${{ needs.resolve-version.outputs.version }}."
 
   github-release:
     name: GitHub Release
