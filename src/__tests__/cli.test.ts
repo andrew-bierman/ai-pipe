@@ -43,13 +43,13 @@ async function runCLI(
 describe("CLI: help and version", () => {
   test("prints help with --help", async () => {
     const { stdout, exitCode } = await runCLI(["--help"]);
-    expect(stdout).toContain("Usage: ai");
+    expect(stdout).toContain("Usage: ai-pipe");
     expect(exitCode).toBe(0);
   });
 
   test("prints help with -h", async () => {
     const { stdout, exitCode } = await runCLI(["-h"]);
-    expect(stdout).toContain("Usage: ai");
+    expect(stdout).toContain("Usage: ai-pipe");
     expect(exitCode).toBe(0);
   });
 
@@ -286,20 +286,20 @@ describe("CLI: --providers flag", () => {
 describe("CLI: --completions flag", () => {
   test("generates bash completions", async () => {
     const { stdout, exitCode } = await runCLI(["--completions", "bash"]);
-    expect(stdout).toContain("_ai_completions");
+    expect(stdout).toContain("_ai_pipe_completions");
     expect(stdout).toContain("complete -F");
     expect(exitCode).toBe(0);
   });
 
   test("generates zsh completions", async () => {
     const { stdout, exitCode } = await runCLI(["--completions", "zsh"]);
-    expect(stdout).toContain("compdef _ai ai");
+    expect(stdout).toContain("compdef _ai_pipe ai-pipe");
     expect(exitCode).toBe(0);
   });
 
   test("generates fish completions", async () => {
     const { stdout, exitCode } = await runCLI(["--completions", "fish"]);
-    expect(stdout).toContain("complete -c ai");
+    expect(stdout).toContain("complete -c ai-pipe");
     expect(exitCode).toBe(0);
   });
 
