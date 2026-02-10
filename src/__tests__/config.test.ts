@@ -1,73 +1,294 @@
-import { beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { describe, expect, test } from "bun:test";
+import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { ConfigSchema, listRoles, loadConfig, loadRole } from "../config.ts";
 
 const tmpDir = tmpdir();
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
+function makeTmpDir(): string {
+  const dir = join(tmpDir, `ai-cfg-${uid()}`);
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+describe("ConfigSchema", () => {
+  test("accepts empty object", () => {
+    expect(ConfigSchema.parse({})).toEqual({});
+  });
+
+  test("accepts full valid config", () => {
+    const result = ConfigSchema.parse({
+      model: "anthropic/claude-sonnet-4-5",
+      system: "Be concise.",
+      temperature: 0.7,
+      maxOutputTokens: 500,
+    });
+    expect(result.model).toBe("anthropic/claude-sonnet-4-5");
+    expect(result.system).toBe("Be concise.");
+    expect(result.temperature).toBe(0.7);
+    expect(result.maxOutputTokens).toBe(500);
+  });
+
+  test("accepts temperature at lower bound (0)", () => {
+    expect(ConfigSchema.parse({ temperature: 0 }).temperature).toBe(0);
+  });
+
+  test("accepts temperature at upper bound (2)", () => {
+    expect(ConfigSchema.parse({ temperature: 2 }).temperature).toBe(2);
+  });
+
+  test("accepts temperature at midpoint (1)", () => {
+    expect(ConfigSchema.parse({ temperature: 1 }).temperature).toBe(1);
+  });
+
+  test("rejects temperature below 0", () => {
+    expect(() => ConfigSchema.parse({ temperature: -0.1 })).toThrow();
+  });
+
+  test("rejects temperature above 2", () => {
+    expect(() => ConfigSchema.parse({ temperature: 2.1 })).toThrow();
+  });
+
+  test("rejects non-number temperature", () => {
+    expect(() => ConfigSchema.parse({ temperature: "hot" })).toThrow();
+  });
+
+  test("accepts maxOutputTokens = 1", () => {
+    expect(ConfigSchema.parse({ maxOutputTokens: 1 }).maxOutputTokens).toBe(1);
+  });
+
+  test("rejects maxOutputTokens = 0", () => {
+    expect(() => ConfigSchema.parse({ maxOutputTokens: 0 })).toThrow();
+  });
+
+  test("rejects negative maxOutputTokens", () => {
+    expect(() => ConfigSchema.parse({ maxOutputTokens: -100 })).toThrow();
+  });
+
+  test("rejects float maxOutputTokens", () => {
+    expect(() => ConfigSchema.parse({ maxOutputTokens: 99.5 })).toThrow();
+  });
+
+  test("rejects non-number maxOutputTokens", () => {
+    expect(() => ConfigSchema.parse({ maxOutputTokens: "many" })).toThrow();
+  });
+
+  test("rejects non-string model", () => {
+    expect(() => ConfigSchema.parse({ model: 123 })).toThrow();
+  });
+
+  test("rejects non-string system", () => {
+    expect(() => ConfigSchema.parse({ system: true })).toThrow();
+  });
+
+  test("strips unknown properties", () => {
+    const result = ConfigSchema.parse({
+      model: "openai/gpt-4o",
+      unknown: true,
+    });
+    expect((result as Record<string, unknown>).unknown).toBeUndefined();
+  });
+
+  test("does not accept apiKeys (moved to separate file)", () => {
+    const result = ConfigSchema.parse({
+      model: "openai/gpt-4o",
+      apiKeys: { openai: "sk-test" },
+    });
+    expect((result as Record<string, unknown>).apiKeys).toBeUndefined();
+  });
+});
+
 describe("loadConfig", () => {
-  test("loads config from directory", async () => {
-    const dir = join(tmpDir, `ai-config-${uid()}`);
-    mkdirSync(dir, { recursive: true });
+  test("returns empty object when directory does not exist", async () => {
+    const config = await loadConfig("/nonexistent/path/config-dir");
+    expect(config).toEqual({});
+  });
+
+  test("returns empty object for empty directory", async () => {
+    const dir = makeTmpDir();
+    const config = await loadConfig(dir);
+    expect(config).toEqual({});
+  });
+
+  test("loads config.json only", async () => {
+    const dir = makeTmpDir();
     await Bun.write(
       join(dir, "config.json"),
-      JSON.stringify({ model: "openai/gpt-4o" }),
+      JSON.stringify({
+        model: "anthropic/claude-sonnet-4-5",
+        system: "Be concise.",
+        temperature: 0.7,
+        maxOutputTokens: 500,
+      }),
     );
+
+    const config = await loadConfig(dir);
+    expect(config.model).toBe("anthropic/claude-sonnet-4-5");
+    expect(config.system).toBe("Be concise.");
+    expect(config.temperature).toBe(0.7);
+    expect(config.maxOutputTokens).toBe(500);
+    expect(config.apiKeys).toBeUndefined();
+  });
+
+  test("loads apiKeys.json only", async () => {
+    const dir = makeTmpDir();
+    await Bun.write(
+      join(dir, "apiKeys.json"),
+      JSON.stringify({ anthropic: "sk-ant-test", openai: "sk-test" }),
+    );
+
+    const config = await loadConfig(dir);
+    expect(config.model).toBeUndefined();
+    expect(config.apiKeys).toEqual({
+      anthropic: "sk-ant-test",
+      openai: "sk-test",
+    });
+  });
+
+  test("loads both config.json and apiKeys.json", async () => {
+    const dir = makeTmpDir();
+    await Promise.all([
+      Bun.write(
+        join(dir, "config.json"),
+        JSON.stringify({ model: "anthropic/claude-sonnet-4-5" }),
+      ),
+      Bun.write(
+        join(dir, "apiKeys.json"),
+        JSON.stringify({ anthropic: "sk-ant-test" }),
+      ),
+    ]);
+
+    const config = await loadConfig(dir);
+    expect(config.model).toBe("anthropic/claude-sonnet-4-5");
+    expect(config.apiKeys).toEqual({ anthropic: "sk-ant-test" });
+  });
+
+  test("loads partial config.json (only model)", async () => {
+    const dir = makeTmpDir();
+    await Bun.write(
+      join(dir, "config.json"),
+      JSON.stringify({ model: "google/gemini-2.5-flash" }),
+    );
+
+    const config = await loadConfig(dir);
+    expect(config.model).toBe("google/gemini-2.5-flash");
+    expect(config.system).toBeUndefined();
+    expect(config.temperature).toBeUndefined();
+    expect(config.maxOutputTokens).toBeUndefined();
+  });
+
+  test("loads empty JSON object config.json", async () => {
+    const dir = makeTmpDir();
+    await Bun.write(join(dir, "config.json"), "{}");
+
+    const config = await loadConfig(dir);
+    expect(config).toEqual({});
+  });
+
+  test("ignores invalid JSON in config.json", async () => {
+    const dir = makeTmpDir();
+    await Bun.write(join(dir, "config.json"), "not valid json {{{");
+
+    const config = await loadConfig(dir);
+    expect(config).toEqual({});
+  });
+
+  test("ignores invalid JSON in apiKeys.json", async () => {
+    const dir = makeTmpDir();
+    await Bun.write(join(dir, "apiKeys.json"), "not valid json");
+
+    const config = await loadConfig(dir);
+    expect(config).toEqual({});
+  });
+
+  test("ignores zod-invalid config.json (temperature out of range)", async () => {
+    const dir = makeTmpDir();
+    await Bun.write(
+      join(dir, "config.json"),
+      JSON.stringify({ temperature: 5 }),
+    );
+
+    const config = await loadConfig(dir);
+    expect(config).toEqual({});
+  });
+
+  test("ignores zod-invalid config.json (bad type)", async () => {
+    const dir = makeTmpDir();
+    await Bun.write(join(dir, "config.json"), JSON.stringify({ model: 42 }));
+
+    const config = await loadConfig(dir);
+    expect(config).toEqual({});
+  });
+
+  test("ignores array JSON in config.json", async () => {
+    const dir = makeTmpDir();
+    await Bun.write(join(dir, "config.json"), "[1, 2, 3]");
+
+    const config = await loadConfig(dir);
+    expect(config).toEqual({});
+  });
+
+  test("ignores apiKeys.json with unknown provider", async () => {
+    const dir = makeTmpDir();
+    await Bun.write(
+      join(dir, "apiKeys.json"),
+      JSON.stringify({ fakeprovider: "sk-test" }),
+    );
+
+    const config = await loadConfig(dir);
+    expect(config).toEqual({});
+  });
+
+  test("valid apiKeys.json with all providers", async () => {
+    const dir = makeTmpDir();
+    const keys = {
+      openai: "sk-1",
+      anthropic: "sk-2",
+      google: "sk-3",
+      perplexity: "sk-4",
+      xai: "sk-5",
+      mistral: "sk-6",
+      groq: "sk-7",
+      deepseek: "sk-8",
+      cohere: "sk-9",
+      openrouter: "sk-10",
+    };
+    await Bun.write(join(dir, "apiKeys.json"), JSON.stringify(keys));
+
+    const config = await loadConfig(dir);
+    expect(config.apiKeys).toEqual(keys);
+  });
+
+  test("invalid config.json does not affect valid apiKeys.json", async () => {
+    const dir = makeTmpDir();
+    await Promise.all([
+      Bun.write(join(dir, "config.json"), "bad json"),
+      Bun.write(
+        join(dir, "apiKeys.json"),
+        JSON.stringify({ openai: "sk-test" }),
+      ),
+    ]);
+
+    const config = await loadConfig(dir);
+    expect(config.model).toBeUndefined();
+    expect(config.apiKeys).toEqual({ openai: "sk-test" });
+  });
+
+  test("invalid apiKeys.json does not affect valid config.json", async () => {
+    const dir = makeTmpDir();
+    await Promise.all([
+      Bun.write(
+        join(dir, "config.json"),
+        JSON.stringify({ model: "openai/gpt-4o" }),
+      ),
+      Bun.write(join(dir, "apiKeys.json"), "bad json"),
+    ]);
 
     const config = await loadConfig(dir);
     expect(config.model).toBe("openai/gpt-4o");
-
-    rmSync(dir, { recursive: true });
-  });
-
-  test("loads apiKeys from directory", async () => {
-    const dir = join(tmpDir, `ai-keys-${uid()}`);
-    mkdirSync(dir, { recursive: true });
-    await Bun.write(join(dir, "config.json"), JSON.stringify({}));
-    await Bun.write(
-      join(dir, "apiKeys.json"),
-      JSON.stringify({ openai: "sk-1234" }),
-    );
-
-    const config = await loadConfig(dir);
-    expect(config.apiKeys?.openai).toBe("sk-1234");
-
-    rmSync(dir, { recursive: true });
-  });
-
-  test("handles missing config directory", async () => {
-    const dir = join(tmpDir, `ai-missing-${uid()}`);
-    if (existsSync(dir)) {
-      rmSync(dir, { recursive: true });
-    }
-
-    const config = await loadConfig(dir);
-    expect(config).toEqual({});
-  });
-
-  test("handles bad JSON in config file", async () => {
-    const dir = join(tmpDir, `ai-bad-json-${uid()}`);
-    mkdirSync(dir, { recursive: true });
-    await Bun.write(join(dir, "config.json"), "bad json");
-
-    const config = await loadConfig(dir);
-    expect(config).toEqual({});
-
-    rmSync(dir, { recursive: true });
-  });
-
-  test("handles bad JSON in apiKeys file", async () => {
-    const dir = join(tmpDir, `ai-bad-keys-${uid()}`);
-    mkdirSync(dir, { recursive: true });
-    await Bun.write(join(dir, "config.json"), JSON.stringify({}));
-    await Bun.write(join(dir, "apiKeys.json"), "bad json");
-
-    const config = await loadConfig(dir);
     expect(config.apiKeys).toBeUndefined();
-
-    rmSync(dir, { recursive: true });
   });
 
   test("uses default directory when none specified", async () => {
@@ -76,43 +297,65 @@ describe("loadConfig", () => {
   });
 });
 
-// ── Roles ─────────────────────────────────────────────────────────
+// ── Roles ───────────────────────────────────────────────────────────────
 
 describe("loadRole", () => {
-  test("loads role with .txt extension", async () => {
+  test("loads role with .md extension", async () => {
     const rolesTmpDir = join(tmpDir, `ai-roles-${uid()}`);
     const roleName = `test-role-${uid()}`;
+    const roleContent = "You are a helpful assistant.";
     mkdirSync(join(rolesTmpDir, "roles"), { recursive: true });
-    await Bun.write(
-      join(rolesTmpDir, "roles", `${roleName}.txt`),
-      "You are a helpful assistant.",
-    );
+    await Bun.write(join(rolesTmpDir, "roles", `${roleName}.md`), roleContent);
 
     const result = await loadRole(roleName, rolesTmpDir);
-    expect(result).toBe("You are a helpful assistant.");
+    expect(result).toBe(roleContent);
+
+    rmSync(rolesTmpDir, { recursive: true });
+  });
+
+  test("strips .md extension from role name", async () => {
+    const rolesTmpDir = join(tmpDir, `ai-roles-ext-${uid()}`);
+    const roleName = `reviewer`;
+    mkdirSync(join(rolesTmpDir, "roles"), { recursive: true });
+    await Bun.write(
+      join(rolesTmpDir, "roles", `${roleName}.md`),
+      "Review code carefully.",
+    );
+
+    // Pass roleName with .md extension - should still work
+    const result = await loadRole(`${roleName}.md`, rolesTmpDir);
+    expect(result).toBe("Review code carefully.");
 
     rmSync(rolesTmpDir, { recursive: true });
   });
 
   test("returns null for non-existent role", async () => {
-    const result = await loadRole("non-existent-role-xyz");
+    const rolesTmpDir = makeTmpDir();
+    const result = await loadRole("non-existent-role-xyz", rolesTmpDir);
     expect(result).toBeNull();
+
+    rmSync(rolesTmpDir, { recursive: true });
   });
 
   test("prevents path traversal with ../", async () => {
-    const result = await loadRole("../etc/passwd");
+    const rolesTmpDir = makeTmpDir();
+    const result = await loadRole("../etc/passwd", rolesTmpDir);
     expect(result).toBeNull();
+
+    rmSync(rolesTmpDir, { recursive: true });
   });
 
   test("prevents path traversal with absolute path", async () => {
-    const result = await loadRole("/etc/passwd");
+    const rolesTmpDir = makeTmpDir();
+    const result = await loadRole("/etc/passwd", rolesTmpDir);
     expect(result).toBeNull();
+
+    rmSync(rolesTmpDir, { recursive: true });
   });
 });
 
 describe("listRoles", () => {
   test("returns empty array when roles directory does not exist", async () => {
-    // Use a fresh temp dir that doesn't have roles subdir
     const rolesTmpDir = join(tmpDir, `ai-empty-roles-${uid()}`);
     mkdirSync(rolesTmpDir, { recursive: true });
 
@@ -123,24 +366,31 @@ describe("listRoles", () => {
     rmSync(rolesTmpDir, { recursive: true });
   });
 
-  test("lists only .txt files", async () => {
+  test("lists only .md files and ignores other extensions", async () => {
     const rolesTmpDir = join(tmpDir, `ai-list-roles-${uid()}`);
     const roleName1 = `role1-${uid()}`;
     const roleName2 = `role2-${uid()}`;
+    const roleNameTxt = `ignored-${uid()}`;
     mkdirSync(join(rolesTmpDir, "roles"), { recursive: true });
 
     await Bun.write(
-      join(rolesTmpDir, "roles", `${roleName1}.txt`),
+      join(rolesTmpDir, "roles", `${roleName1}.md`),
       "Role 1 content",
     );
     await Bun.write(
-      join(rolesTmpDir, "roles", `${roleName2}.txt`),
+      join(rolesTmpDir, "roles", `${roleName2}.md`),
       "Role 2 content",
+    );
+    // Add a .txt file that should be ignored
+    await Bun.write(
+      join(rolesTmpDir, "roles", `${roleNameTxt}.txt`),
+      "This should be ignored",
     );
 
     const result = await listRoles(rolesTmpDir);
     expect(result).toContain(roleName1);
     expect(result).toContain(roleName2);
+    expect(result).not.toContain(roleNameTxt);
 
     rmSync(rolesTmpDir, { recursive: true });
   });
@@ -151,8 +401,8 @@ describe("listRoles", () => {
     const roleNameZ = `zzz-role-${uid()}`;
     mkdirSync(join(rolesTmpDir, "roles"), { recursive: true });
 
-    await Bun.write(join(rolesTmpDir, "roles", `${roleNameZ}.txt`), "Z role");
-    await Bun.write(join(rolesTmpDir, "roles", `${roleNameA}.txt`), "A role");
+    await Bun.write(join(rolesTmpDir, "roles", `${roleNameZ}.md`), "Z role");
+    await Bun.write(join(rolesTmpDir, "roles", `${roleNameA}.md`), "A role");
 
     const result = await listRoles(rolesTmpDir);
     const aIndex = result.indexOf(roleNameA);

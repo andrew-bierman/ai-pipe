@@ -53,6 +53,7 @@ export interface CLIOptions {
   providers?: boolean;
   completions?: string;
   session?: string;
+  roles?: boolean;
 }
 
 export const CLIOptionsSchema = z.object({
@@ -74,6 +75,7 @@ export const CLIOptionsSchema = z.object({
   providers: z.boolean().optional(),
   completions: z.string().optional(),
   session: z.string().optional(),
+  roles: z.boolean().optional(),
 });
 
 export const JsonOutputSchema = z.object({

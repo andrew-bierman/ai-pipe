@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { z } from "zod";
 import { APP } from "./constants.ts";
@@ -28,7 +29,7 @@ export type Config = z.infer<typeof ConfigSchema> & {
   apiKeys?: Record<string, string>;
 };
 
-const ROLES_DIR = "roles";
+const DEFAULT_CONFIG_DIR = join(homedir(), APP.configDirName);
 
 async function loadJsonFile<T>(
   path: string,
@@ -44,59 +45,8 @@ async function loadJsonFile<T>(
   }
 }
 
-export async function loadRole(
-  roleName: string,
-  configDir?: string,
-): Promise<string | null> {
-  const dir = configDir ?? APP.configDirName;
-  // Sanitize roleName to prevent path traversal attacks
-  const sanitizedName = basename(roleName);
-  const rolesPath = join(dir, ROLES_DIR, sanitizedName);
-
-  // Try with .txt extension first
-  const txtFile = Bun.file(`${rolesPath}.txt`);
-  if (await txtFile.exists()) {
-    return txtFile.text();
-  }
-
-  // Try with .md extension (markdown)
-  const mdFile = Bun.file(`${rolesPath}.md`);
-  if (await mdFile.exists()) {
-    const markdownContent = await mdFile.text();
-    // Convert markdown to HTML using Bun's built-in markdown parser
-    return Bun.markdown.html(markdownContent);
-  }
-
-  // Try as a plain file without extension
-  const plainFile = Bun.file(rolesPath);
-  if (await plainFile.exists()) {
-    return plainFile.text();
-  }
-
-  return null;
-}
-
-export async function listRoles(configDir?: string): Promise<string[]> {
-  const dir = configDir ?? APP.configDirName;
-  const rolesPath = join(dir, ROLES_DIR);
-
-  try {
-    // Only scan for .txt role files as per the design
-    const glob = new Bun.Glob("*.txt");
-    const roleFiles = await Array.fromAsync(glob.scan(rolesPath));
-    const roles: string[] = roleFiles.map((path) => basename(path, ".txt"));
-
-    // Deduplicate in case both "name" and "name.txt" exist
-    const uniqueRoles = [...new Set(roles)];
-
-    return uniqueRoles.sort();
-  } catch {
-    return [];
-  }
-}
-
 export async function loadConfig(configDir?: string): Promise<Config> {
-  const dir = configDir ?? APP.configDirName;
+  const dir = configDir ?? DEFAULT_CONFIG_DIR;
 
   const [settings, keys] = await Promise.all([
     loadJsonFile(join(dir, APP.configFile), ConfigSchema),
@@ -107,4 +57,42 @@ export async function loadConfig(configDir?: string): Promise<Config> {
     ...(settings ?? {}),
     ...(keys ? { apiKeys: keys } : {}),
   };
+}
+
+const ROLES_DIR = "roles";
+
+export async function loadRole(
+  roleName: string,
+  configDir?: string,
+): Promise<string | null> {
+  const dir = configDir ?? DEFAULT_CONFIG_DIR;
+  // Sanitize roleName to prevent path traversal attacks
+  const sanitizedName = basename(roleName);
+  // Strip .md extension if present to avoid double extension
+  const nameWithoutExt = sanitizedName.replace(/\.md$/i, "");
+  const rolesPath = join(dir, ROLES_DIR, nameWithoutExt);
+
+  // Only load .md role files
+  const mdFile = Bun.file(`${rolesPath}.md`);
+  if (await mdFile.exists()) {
+    return mdFile.text();
+  }
+
+  return null;
+}
+
+export async function listRoles(configDir?: string): Promise<string[]> {
+  const dir = configDir ?? DEFAULT_CONFIG_DIR;
+  const rolesPath = join(dir, ROLES_DIR);
+
+  try {
+    // Only scan for .md role files
+    const glob = new Bun.Glob("*.md");
+    const roleFiles = await Array.fromAsync(glob.scan(rolesPath));
+    const roles: string[] = roleFiles.map((path) => basename(path, ".md"));
+
+    return [...new Set(roles)].sort();
+  } catch {
+    return [];
+  }
 }

@@ -239,6 +239,7 @@ describe("PROVIDER_ENV_VARS", () => {
     vertex: ["GOOGLE_VERTEX_PROJECT", "GOOGLE_VERTEX_LOCATION"],
     ollama: ["OLLAMA_HOST"],
     huggingface: ["HF_TOKEN"],
+    deepinfra: ["DEEPINFRA_API_KEY"],
   };
 
   for (const [provider, envVars] of Object.entries(expected)) {
