@@ -5,6 +5,11 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (leave empty to use package.json version)"
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -28,9 +33,53 @@ jobs:
       - name: Test
         run: bun test
 
+  resolve-version:
+    name: Resolve Version
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: resolve
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $VERSION (tag: v$VERSION)"
+
+  ensure-tag:
+    name: Ensure Tag Exists
+    if: github.event_name == 'workflow_dispatch'
+    needs: [test, resolve-version]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create tag if missing
+        run: |
+          TAG="${{ needs.resolve-version.outputs.tag }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists"
+          else
+            echo "Creating tag $TAG"
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+
   publish:
     name: Publish to npm
-    needs: test
+    needs: [test, resolve-version]
+    if: always() && needs.test.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,8 +96,8 @@ jobs:
 
   github-release:
     name: GitHub Release
-    if: startsWith(github.ref, 'refs/tags/')
-    needs: [test, publish]
+    needs: [test, publish, ensure-tag, resolve-version]
+    if: always() && needs.test.result == 'success' && needs.publish.result == 'success' && (needs.ensure-tag.result == 'success' || needs.ensure-tag.result == 'skipped')
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -80,8 +129,8 @@ jobs:
 
   create-release:
     name: Create GitHub Release
-    if: startsWith(github.ref, 'refs/tags/')
-    needs: github-release
+    needs: [github-release, resolve-version]
+    if: always() && needs.github-release.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -94,5 +143,6 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.resolve-version.outputs.tag || github.ref_name }}
           generate_release_notes: true
           files: dist/*
