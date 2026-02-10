@@ -1,5 +1,3 @@
-import { z } from "zod";
-
 // Pricing per 1M tokens (as of Feb 2025)
 // Format: { inputPrice: number; outputPrice: number }
 export type ModelPricing = {
