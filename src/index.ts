@@ -7,6 +7,7 @@ import pkg from "../package.json";
 import { generateCompletions } from "./completions.ts";
 import { type Config, loadConfig } from "./config.ts";
 import { APP } from "./constants.ts";
+import { renderMarkdown } from "./markdown.ts";
 import {
   PROVIDER_ENV_VARS,
   ProviderIdSchema,
@@ -204,8 +205,8 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
         };
         process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
       } else if (markdown) {
-        const rendered = Bun.markdown.html(result.text);
-        process.stdout.write(rendered + "\n");
+        const rendered = renderMarkdown(result.text);
+        process.stdout.write(`${rendered}\n`);
       } else {
         process.stdout.write(`${result.text}\n`);
       }
@@ -224,8 +225,8 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
           chunks.push(chunk);
         }
         const fullText = chunks.join("");
-        const rendered = Bun.markdown.html(fullText);
-        process.stdout.write(rendered + "\n");
+        const rendered = renderMarkdown(fullText);
+        process.stdout.write(`${rendered}\n`);
       } else {
         for await (const chunk of result.textStream) {
           process.stdout.write(chunk);
