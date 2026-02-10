@@ -1,0 +1,12 @@
+# lefthook.yml
+# https://github.com/evilmartians/lefthook
+
+pre-commit:
+  parallel: true
+  run:
+    - npx biome check --write --unsafe
+    - npx tsc --noEmit
+
+commit-msg:
+  run:
+    - npx commitlint --edit ${1}
