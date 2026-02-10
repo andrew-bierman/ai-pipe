@@ -14,25 +14,33 @@ export const ConfigSchema = z.object({
   system: z.string().optional(),
   temperature: z.number().min(APP.temperature.min).max(APP.temperature.max).optional(),
   maxOutputTokens: z.number().int().positive().optional(),
-  apiKeys: ApiKeysSchema.optional(),
 });
 
-export type Config = z.infer<typeof ConfigSchema>;
+export type Config = z.infer<typeof ConfigSchema> & { apiKeys?: Record<string, string> };
 
-const DEFAULT_CONFIG_PATH = join(homedir(), APP.configFileName);
+const DEFAULT_CONFIG_DIR = join(homedir(), APP.configDirName);
 
-export async function loadConfig(configPath?: string): Promise<Config> {
-  const path = configPath ?? DEFAULT_CONFIG_PATH;
+async function loadJsonFile<T>(path: string, schema: z.ZodType<T>): Promise<T | null> {
   const file = Bun.file(path);
-
-  if (!(await file.exists())) {
-    return {};
-  }
-
+  if (!(await file.exists())) return null;
   try {
     const raw = await file.json();
-    return ConfigSchema.parse(raw);
+    return schema.parse(raw);
   } catch {
-    return {};
+    return null;
   }
+}
+
+export async function loadConfig(configDir?: string): Promise<Config> {
+  const dir = configDir ?? DEFAULT_CONFIG_DIR;
+
+  const [settings, keys] = await Promise.all([
+    loadJsonFile(join(dir, APP.configFile), ConfigSchema),
+    loadJsonFile(join(dir, APP.apiKeysFile), ApiKeysSchema),
+  ]);
+
+  return {
+    ...(settings ?? {}),
+    ...(keys ? { apiKeys: keys } : {}),
+  };
 }

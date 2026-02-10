@@ -12,7 +12,9 @@ export const AppSchema = z.object({
     min: z.number(),
     max: z.number(),
   }),
-  configFileName: z.string(),
+  configDirName: z.string(),
+  configFile: z.string(),
+  apiKeysFile: z.string(),
   supportedShells: z.array(ShellSchema),
 });
 
@@ -24,6 +26,8 @@ export const APP: AppConfig = AppSchema.parse({
   defaultModel: "openai/gpt-4o",
   defaultProvider: "openai",
   temperature: { min: 0, max: 2 },
-  configFileName: ".ai-pipe.json",
+  configDirName: ".ai-pipe",
+  configFile: "config.json",
+  apiKeysFile: "apiKeys.json",
   supportedShells: ["bash", "zsh", "fish"],
 });

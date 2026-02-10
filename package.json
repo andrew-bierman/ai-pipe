@@ -26,12 +26,23 @@
   },
   "keywords": [
     "ai",
+    "cli",
+    "llm",
+    "openai",
+    "anthropic",
+    "pipe",
+    "terminal",
     "openrouter",
     "vercel-ai-sdk"
   ],
+  "author": "Andrew Bierman",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrew-bierman/ai-cli.git"
+    "url": "git+https://github.com/andrew-bierman/ai-pipe.git"
+  },
+  "homepage": "https://github.com/andrew-bierman/ai-pipe#readme",
+  "bugs": {
+    "url": "https://github.com/andrew-bierman/ai-pipe/issues"
   },
   "license": "MIT",
   "dependencies": {

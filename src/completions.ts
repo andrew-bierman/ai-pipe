@@ -46,7 +46,7 @@ _${funcName}_completions() {
       return 0
       ;;
     -c|--config)
-      COMPREPLY=( $(compgen -f -- "\${cur}") )
+      COMPREPLY=( $(compgen -d -- "\${cur}") )
       return 0
       ;;
     --completions)
@@ -80,7 +80,7 @@ _${funcName}() {
     '--no-stream[Wait for full response, then print]' \\
     '(-t --temperature)'{-t,--temperature}'[Sampling temperature (${APP.temperature.min}-${APP.temperature.max})]:temp:' \\
     '--max-output-tokens[Maximum tokens to generate]:tokens:' \\
-    '(-c --config)'{-c,--config}'[Path to config file]:file:_files' \\
+    '(-c --config)'{-c,--config}'[Path to config directory]:dir:_directories' \\
     '--providers[List supported providers]' \\
     '--completions[Generate shell completions]:shell:(${shells})' \\
     '(-V --version)'{-V,--version}'[Print version]' \\
@@ -106,7 +106,7 @@ complete -c ${name} -s j -l json -d 'Output full JSON response object'
 complete -c ${name} -l no-stream -d 'Wait for full response, then print'
 complete -c ${name} -s t -l temperature -d 'Sampling temperature (${APP.temperature.min}-${APP.temperature.max})' -x
 complete -c ${name} -l max-output-tokens -d 'Maximum tokens to generate' -x
-complete -c ${name} -s c -l config -d 'Path to config file' -r -F
+complete -c ${name} -s c -l config -d 'Path to config directory' -x -a '(__fish_complete_directories)'
 complete -c ${name} -l providers -d 'List supported providers'
 complete -c ${name} -l completions -d 'Generate shell completions' -x -a '${shells}'
 complete -c ${name} -s V -l version -d 'Print version'

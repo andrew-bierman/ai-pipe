@@ -24,8 +24,10 @@ describe("APP", () => {
     expect(APP.temperature.max).toBe(2);
   });
 
-  test("has config file name", () => {
-    expect(APP.configFileName).toBe(".ai-pipe.json");
+  test("has config directory and file names", () => {
+    expect(APP.configDirName).toBe(".ai-pipe");
+    expect(APP.configFile).toBe("config.json");
+    expect(APP.apiKeysFile).toBe("apiKeys.json");
   });
 
   test("has supported shells", () => {
