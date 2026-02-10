@@ -151,9 +151,10 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
   // List available roles
   if (opts.roles) {
     const roles = await listRoles();
+    const rolesDir = `~/${APP.configDirName}/roles/`;
     if (roles.length === 0) {
-      console.log("No roles found. Create role files in ~/.ai-pipe/roles/");
-      console.log("Example: ~/.ai-pipe/roles/reviewer.txt");
+      console.log(`No roles found. Create role files in ${rolesDir}`);
+      console.log(`Example: ${rolesDir}reviewer.txt`);
     } else {
       console.log("Available roles:");
       for (const role of roles) {
@@ -205,7 +206,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
       systemPrompt = roleContent;
     } else {
       console.error(
-        `Error: Role "${opts.role}" not found in ~/.ai-pipe/roles/`,
+        `Error: Role "${opts.role}" not found in ~/${APP.configDirName}/roles/`,
       );
       console.error("Use --roles to list available roles.");
       process.exit(1);
