@@ -33,8 +33,9 @@ describe("buildPrompt", () => {
 
   test("arg prompt comes first in combined output", () => {
     const result = buildPrompt("summarize", null, "long document text");
-    expect(result.startsWith("summarize")).toBe(true);
-    expect(result.endsWith("long document text")).toBe(true);
+    expect(result).not.toBeNull();
+    expect(result?.startsWith("summarize")).toBe(true);
+    expect(result?.endsWith("long document text")).toBe(true);
   });
 
   test("preserves multiline stdin content", () => {
