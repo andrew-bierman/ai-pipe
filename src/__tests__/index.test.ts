@@ -184,6 +184,7 @@ describe("resolveOptions", () => {
     json: false,
     stream: true,
     markdown: false,
+    cost: false,
   };
   const emptyConfig: Config = {};
 

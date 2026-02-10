@@ -7,6 +7,7 @@ import pkg from "../package.json";
 import { generateCompletions } from "./completions.ts";
 import { type Config, listRoles, loadConfig, loadRole } from "./config.ts";
 import { APP } from "./constants.ts";
+import { calculateCost, formatCost, parseModelString } from "./cost.ts";
 import { renderMarkdown } from "./markdown.ts";
 import {
   PROVIDER_ENV_VARS,
@@ -47,6 +48,7 @@ export interface CLIOptions {
   json: boolean;
   stream: boolean;
   markdown: boolean;
+  cost: boolean;
   temperature?: number;
   maxOutputTokens?: number;
   config?: string;
@@ -65,6 +67,7 @@ export const CLIOptionsSchema = z.object({
   json: z.boolean(),
   stream: z.boolean(),
   markdown: z.boolean().optional().default(false),
+  cost: z.boolean().optional().default(false),
   temperature: z
     .number()
     .min(APP.temperature.min)
@@ -387,6 +390,9 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
         } else {
           process.stdout.write(`${result.text}\n`);
         }
+
+        // Display cost if requested
+        displayCostIfEnabled(result.usage, modelString, opts.cost);
       } else {
         const result = streamText({
           model,
@@ -405,6 +411,9 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
         // Save to history
         messages.push({ role: "assistant", content: fullResponse });
         await saveHistory(sessionName, messages);
+
+        // Display cost if requested (usage is available after stream completes)
+        displayCostIfEnabled(await result.usage, modelString, opts.cost);
       }
     } else {
       // Use regular prompt mode
@@ -428,6 +437,9 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
         } else {
           process.stdout.write(`${result.text}\n`);
         }
+
+        // Display cost if requested
+        displayCostIfEnabled(result.usage, modelString, opts.cost);
       } else {
         const result = streamText({
           model,
@@ -441,12 +453,31 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
           process.stdout.write(chunk);
         }
         process.stdout.write("\n");
+
+        // Display cost if requested (usage is available after stream completes)
+        displayCostIfEnabled(await result.usage, modelString, opts.cost);
       }
     }
   } catch (err: unknown) {
     console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
   }
+}
+
+/**
+ * Display cost information if the --cost flag is set
+ */
+function displayCostIfEnabled(
+  usage: { inputTokens?: number; outputTokens?: number } | undefined,
+  modelString: string,
+  showCost: boolean,
+): void {
+  if (!showCost || !usage) return;
+
+  const { provider, modelId } = parseModelString(modelString);
+  const costInfo = calculateCost(provider, modelId, usage);
+  const formattedCost = formatCost(costInfo);
+  console.error(`\n💰 Cost: ${formattedCost}`);
 }
 
 export function setupCLI() {
@@ -482,6 +513,7 @@ export function setupCLI() {
     .option("-j, --json", "Output full JSON response object", false)
     .option("--no-stream", "Wait for full response, then print")
     .option("--markdown", "Render markdown output", false)
+    .option("--cost", "Show estimated cost of the request", false)
     .option(
       "-t, --temperature <n>",
       `Sampling temperature (${APP.temperature.min}-${APP.temperature.max})`,
