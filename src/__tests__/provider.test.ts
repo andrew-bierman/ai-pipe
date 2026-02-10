@@ -180,30 +180,31 @@ describe("parseModel", () => {
 // ── SUPPORTED_PROVIDERS ────────────────────────────────────────────────
 
 describe("SUPPORTED_PROVIDERS", () => {
-  test("has exactly 17 providers", () => {
-    expect(SUPPORTED_PROVIDERS).toHaveLength(17);
+  const expected: ProviderId[] = [
+    "openai",
+    "anthropic",
+    "google",
+    "perplexity",
+    "xai",
+    "mistral",
+    "groq",
+    "deepseek",
+    "cohere",
+    "openrouter",
+    "azure",
+    "togetherai",
+    "bedrock",
+    "vertex",
+    "ollama",
+    "huggingface",
+    "cerebras",
+  ];
+
+  test("has exactly the expected number of providers", () => {
+    expect(SUPPORTED_PROVIDERS).toHaveLength(expected.length);
   });
 
   test("includes all expected providers", () => {
-    const expected: ProviderId[] = [
-      "openai",
-      "anthropic",
-      "google",
-      "perplexity",
-      "xai",
-      "mistral",
-      "groq",
-      "deepseek",
-      "cohere",
-      "openrouter",
-      "azure",
-      "togetherai",
-      "bedrock",
-      "vertex",
-      "ollama",
-      "huggingface",
-      "cerebras",
-    ];
     for (const p of expected) {
       expect(SUPPORTED_PROVIDERS).toContain(p);
     }
