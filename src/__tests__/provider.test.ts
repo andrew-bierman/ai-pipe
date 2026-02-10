@@ -174,8 +174,8 @@ describe("parseModel", () => {
 // ── SUPPORTED_PROVIDERS ────────────────────────────────────────────────
 
 describe("SUPPORTED_PROVIDERS", () => {
-  test("has exactly 16 providers", () => {
-    expect(SUPPORTED_PROVIDERS).toHaveLength(16);
+  test("has exactly 18 providers", () => {
+    expect(SUPPORTED_PROVIDERS).toHaveLength(18);
   });
 
   test("includes all expected providers", () => {
@@ -196,6 +196,8 @@ describe("SUPPORTED_PROVIDERS", () => {
       "vertex",
       "ollama",
       "huggingface",
+      "deepinfra",
+      "fireworks",
     ];
     for (const p of expected) {
       expect(SUPPORTED_PROVIDERS).toContain(p);
@@ -236,6 +238,8 @@ describe("PROVIDER_ENV_VARS", () => {
     vertex: ["GOOGLE_VERTEX_PROJECT", "GOOGLE_VERTEX_LOCATION"],
     ollama: ["OLLAMA_HOST"],
     huggingface: ["HF_TOKEN"],
+    deepinfra: ["DEEPINFRA_API_KEY"],
+    fireworks: ["FIREWORKS_API_KEY"],
   };
 
   for (const [provider, envVars] of Object.entries(expected)) {

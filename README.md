@@ -12,7 +12,7 @@ A powerful CLI for calling LLMs from the terminal. Text in, text out. Built on t
 
 ## ✨ Features
 
-- 🤖 **17+ AI Providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, OpenRouter, Azure AI, Together AI, Amazon Bedrock, Google Vertex AI, Ollama, Hugging Face, DeepInfra
+- 🤖 **18+ AI Providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, OpenRouter, Azure AI, Together AI, Amazon Bedrock, Google Vertex AI, Ollama, Hugging Face, DeepInfra, Fireworks
 - 📡 **Streaming by Default** — tokens print as they arrive
 - 🔄 **Pipe-friendly** — reads from stdin, writes to stdout, errors to stderr
 - 📎 **File Attachments** — include file contents in prompts with `-f`
@@ -296,7 +296,7 @@ The release workflow handles `bun publish`, binary builds, and GitHub release.
 - [x] **Config directory** — set defaults in `~/.ai-pipe/`
 - [x] **Shell completions** — bash, zsh, fish
 - [x] **Standalone binary** — compile to a single executable with `bun build --compile`
-- [x] **16 providers** — OpenAI, Anthropic, Google, and 14 more
+- [x] **18 providers** — OpenAI, Anthropic, Google, and 16 more
 - [x] **npm publishing** — `npm install -g ai-pipe` / `bun install -g ai-pipe`
 - [x] **File attachments** — include file contents in prompts with `-f`
 - [ ] **Conversation history** — continue previous conversations with `-C`, named sessions with `--session`
