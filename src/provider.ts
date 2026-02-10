@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createProviderRegistry } from "ai";
+import { createProviderRegistry, ProviderV3 } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { google } from "@ai-sdk/google";
@@ -9,9 +9,12 @@ import { mistral } from "@ai-sdk/mistral";
 import { groq } from "@ai-sdk/groq";
 import { deepseek } from "@ai-sdk/deepseek";
 import { cohere } from "@ai-sdk/cohere";
+import { openrouter } from "@openrouter/ai-sdk-provider";
+
+const openrouterProvider = openrouter as unknown as ProviderV3;
 
 export const registry = createProviderRegistry(
-  { openai, anthropic, google, perplexity, xai, mistral, groq, deepseek, cohere },
+  { openai, anthropic, google, perplexity, xai, mistral, groq, deepseek, cohere, openrouter: openrouterProvider },
   { separator: "/" }
 );
 
@@ -25,6 +28,7 @@ export const SUPPORTED_PROVIDERS = Object.freeze([
   "groq",
   "deepseek",
   "cohere",
+  "openrouter",
 ] as const);
 
 export const ProviderIdSchema = z.enum(SUPPORTED_PROVIDERS);
@@ -40,6 +44,7 @@ export const PROVIDER_ENV_VARS: Record<ProviderId, string> = {
   groq: "GROQ_API_KEY",
   deepseek: "DEEPSEEK_API_KEY",
   cohere: "COHERE_API_KEY",
+  openrouter: "OPENROUTER_API_KEY",
 };
 
 const DEFAULT_PROVIDER: ProviderId = "openai";

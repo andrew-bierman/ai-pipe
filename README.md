@@ -6,7 +6,7 @@ Built on the [Vercel AI SDK](https://sdk.vercel.ai/) with [Bun](https://bun.sh/)
 
 ## Features
 
-- **9 providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere
+- **10 providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, OpenRouter
 - **Streaming by default** — tokens print as they arrive
 - **Pipe-friendly** — reads from stdin, writes to stdout, errors to stderr
 - **JSON output** — structured response with usage and finish reason
@@ -30,7 +30,7 @@ Set an API key for at least one provider:
 ```sh
 export OPENAI_API_KEY="sk-..."
 export ANTHROPIC_API_KEY="sk-ant-..."
-export GOOGLE_GENERATIVE_AI_API_KEY="..."
+export OPENROUTER_API_KEY="sk-or-..."
 ```
 
 Run `ai --providers` to see which keys are configured.
@@ -80,6 +80,7 @@ If no `provider/` prefix is given, the model defaults to `openai`. If no `-m` fl
 | groq | `GROQ_API_KEY` | `groq/llama-3.3-70b-versatile` |
 | deepseek | `DEEPSEEK_API_KEY` | `deepseek/deepseek-chat` |
 | cohere | `COHERE_API_KEY` | `cohere/command-r-plus` |
+| openrouter | `OPENROUTER_API_KEY` | `openrouter/openrouter` |
 
 ## Config File
 

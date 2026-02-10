@@ -112,12 +112,12 @@ describe("parseModel", () => {
 // ── SUPPORTED_PROVIDERS ────────────────────────────────────────────────
 
 describe("SUPPORTED_PROVIDERS", () => {
-  test("has exactly 9 providers", () => {
-    expect(SUPPORTED_PROVIDERS).toHaveLength(9);
+  test("has exactly 10 providers", () => {
+    expect(SUPPORTED_PROVIDERS).toHaveLength(10);
   });
 
   test("includes all expected providers", () => {
-    const expected: ProviderId[] = ["openai", "anthropic", "google", "perplexity", "xai", "mistral", "groq", "deepseek", "cohere"];
+    const expected: ProviderId[] = ["openai", "anthropic", "google", "perplexity", "xai", "mistral", "groq", "deepseek", "cohere", "openrouter"];
     for (const p of expected) {
       expect(SUPPORTED_PROVIDERS).toContain(p);
     }
@@ -150,6 +150,7 @@ describe("PROVIDER_ENV_VARS", () => {
     groq: "GROQ_API_KEY",
     deepseek: "DEEPSEEK_API_KEY",
     cohere: "COHERE_API_KEY",
+    openrouter: "OPENROUTER_API_KEY",
   };
 
   for (const [provider, envVar] of Object.entries(expected)) {
