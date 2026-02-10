@@ -72,6 +72,20 @@ export const JsonOutputSchema = z.object({
 
 export type JsonOutput = z.infer<typeof JsonOutputSchema>;
 
+/**
+ * Load a file's content as a Data URL (base64 encoded).
+ * Used for images and other binary attachments.
+ */
+async function loadAsDataUrl(path: string, mimeType: string): Promise<string> {
+  const file = Bun.file(path);
+  if (!(await file.exists())) {
+    throw new Error(`File not found: ${path}`);
+  }
+  const arrayBuffer = await file.arrayBuffer();
+  const base64 = Buffer.from(arrayBuffer).toString("base64");
+  return `data:${mimeType};base64,${base64}`;
+}
+
 export async function readFiles(paths: string[]): Promise<string> {
   const parts: string[] = [];
   for (const path of paths) {
@@ -85,19 +99,13 @@ export async function readFiles(paths: string[]): Promise<string> {
   return parts.join("\n\n");
 }
 
-export async function readImages(
-  paths: string[],
-): Promise<{ url: string }[]> {
+export async function readImages(paths: string[]): Promise<{ url: string }[]> {
   const images: { url: string }[] = [];
   for (const path of paths) {
     const file = Bun.file(path);
-    if (!(await file.exists())) {
-      throw new Error(`Image file not found: ${path}`);
-    }
-    const arrayBuffer = await file.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString("base64");
     const mimeType = file.type || "image/png";
-    images.push({ url: `data:${mimeType};base64,${base64}` });
+    const dataUrl = await loadAsDataUrl(path, mimeType);
+    images.push({ url: dataUrl });
   }
   return images;
 }
@@ -197,7 +205,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
     process.exit(1);
   }
 
-  const prompt = buildPrompt(argPrompt, fileContent, stdinContent);
+  const prompt = buildPrompt(argPrompt, fileContent, stdinContent) ?? "";
   if (!prompt && images.length === 0) {
     program.help();
     return;

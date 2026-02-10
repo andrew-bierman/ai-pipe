@@ -8,6 +8,7 @@ import {
   CLIOptionsSchema,
   JsonOutputSchema,
   readFiles,
+  readImages,
   resolveOptions,
 } from "../index.ts";
 
@@ -114,6 +115,61 @@ describe("readFiles", () => {
     expect(result).toContain("file two");
     // Files separated by double newline
     expect(result).toContain("```\n\n# ");
+  });
+});
+
+// ── readImages ────────────────────────────────────────────────────────
+
+describe("readImages", () => {
+  const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  test("reads a single image and returns data URL", async () => {
+    const path = join(tmpdir(), `test-${uid()}.png`);
+    await Bun.write(path, "fake png content");
+    const result = await readImages([path]);
+    expect(result).toHaveLength(1);
+    expect(result[0].url).toMatch(/^data:image\/png;base64,/);
+    expect(result[0].url).toContain("ZmFrZSBwbmcgY29udGVudA=="); // "fake png content" in base64
+  });
+
+  test("reads multiple images and returns data URLs", async () => {
+    const path1 = join(tmpdir(), `test-${uid()}-a.png`);
+    const path2 = join(tmpdir(), `test-${uid()}-b.jpg`);
+    await Bun.write(path1, "image one");
+    await Bun.write(path2, "image two");
+    const result = await readImages([path1, path2]);
+    expect(result).toHaveLength(2);
+    expect(result[0].url).toMatch(/^data:image\/png;base64,/);
+    expect(result[1].url).toMatch(/^data:image\/jpeg;base64,/);
+  });
+
+  test("throws on nonexistent image file", async () => {
+    const missing = join(tmpdir(), `nonexistent-${uid()}.png`);
+    await expect(readImages([missing])).rejects.toThrow(
+      `File not found: ${missing}`,
+    );
+  });
+
+  test("throws on nonexistent file among valid images", async () => {
+    const validPath = join(tmpdir(), `test-${uid()}-valid.png`);
+    const missingPath = join(tmpdir(), `missing-${uid()}.png`);
+    await Bun.write(validPath, "valid image");
+    await expect(readImages([validPath, missingPath])).rejects.toThrow(
+      `File not found: ${missingPath}`,
+    );
+  });
+
+  test("detects PNG mime type from file content", async () => {
+    // PNG magic bytes
+    const pngPath = join(tmpdir(), `test-${uid()}.png`);
+    await Bun.write(pngPath, "\x89PNG\r\n\x1a\n");
+    const result = await readImages([pngPath]);
+    expect(result[0].url).toMatch(/^data:image\/png;base64,/);
+  });
+
+  test("handles empty image array", async () => {
+    const result = await readImages([]);
+    expect(result).toEqual([]);
   });
 });
 
