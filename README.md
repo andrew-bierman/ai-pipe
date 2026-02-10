@@ -87,6 +87,9 @@ export OLLAMA_HOST="http://localhost:11434"
 
 # DeepInfra
 export DEEPINFRA_API_KEY="..."
+
+# Fireworks AI
+export FIREWORKS_API_KEY="fw_..."
 ```
 
 > 💡 **Tip:** Run `ai-pipe --providers` to see which keys are configured.
@@ -149,6 +152,7 @@ ai-pipe --max-output-tokens 100 "explain quantum computing"
 | Groq | `GROQ_API_KEY` | `groq/llama-3.3-70b-versatile` |
 | DeepSeek | `DEEPSEEK_API_KEY` | `deepseek/deepseek-chat` |
 | Cohere | `COHERE_API_KEY` | `cohere/command-r-plus` |
+| Fireworks | `FIREWORKS_API_KEY` | `fireworks/accounts/fireworks/models/deepseek-v3` |
 | OpenRouter | `OPENROUTER_API_KEY` | `openrouter/openrouter` |
 | Azure | `AZURE_AI_API_KEY` | `azure/azure-model-id` |
 | TogetherAI | `TOGETHERAI_API_KEY` | `togetherai/meta-llama/Llama-3.3-70b-Instruct` |
@@ -305,6 +309,7 @@ The release workflow handles `bun publish`, binary builds, and GitHub release.
 - [ ] **Markdown rendering** — syntax-highlighted, formatted output in the terminal
 - [ ] **Cost tracking** — show estimated token costs per request
 - [ ] **Response caching** — skip duplicate API calls for identical prompts
+- [ ] **Update notifications** — check for new versions and prompt to upgrade
 - [ ] **Tool use** — function calling and MCP support
 
 ## 📚 Documentation

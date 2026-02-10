@@ -4,6 +4,7 @@ import { azure } from "@ai-sdk/azure";
 import { cohere } from "@ai-sdk/cohere";
 import { deepinfra } from "@ai-sdk/deepinfra";
 import { deepseek } from "@ai-sdk/deepseek";
+import { fireworks } from "@ai-sdk/fireworks";
 import { google } from "@ai-sdk/google";
 import { vertex } from "@ai-sdk/google-vertex";
 import { groq } from "@ai-sdk/groq";
@@ -33,6 +34,7 @@ export const registry = createProviderRegistry(
     groq,
     deepseek,
     cohere,
+    fireworks,
     openrouter: openrouterProvider,
     azure,
     togetherai,
@@ -55,6 +57,7 @@ export const SUPPORTED_PROVIDERS = Object.freeze([
   "groq",
   "deepseek",
   "cohere",
+  "fireworks",
   "openrouter",
   "azure",
   "togetherai",
@@ -79,6 +82,7 @@ export const PROVIDER_ENV_VARS: Record<ProviderId, string[]> = {
   groq: ["GROQ_API_KEY"],
   deepseek: ["DEEPSEEK_API_KEY"],
   cohere: ["COHERE_API_KEY"],
+  fireworks: ["FIREWORKS_API_KEY"],
   openrouter: ["OPENROUTER_API_KEY"],
   azure: ["AZURE_AI_API_KEY"],
   togetherai: ["TOGETHERAI_API_KEY"],
