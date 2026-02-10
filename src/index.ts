@@ -35,7 +35,7 @@ export const CLIOptionsSchema = z.object({
   file: z.array(z.string()).optional(),
   json: z.boolean(),
   stream: z.boolean(),
-  markdown: z.boolean(),
+  markdown: z.boolean().optional().default(false),
   temperature: z
     .number()
     .min(APP.temperature.min)
@@ -206,7 +206,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
         process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
       } else if (markdown) {
         const rendered = await marked(result.text);
-        process.stdout.write(rendered);
+        process.stdout.write(rendered + "\n");
       } else {
         process.stdout.write(`${result.text}\n`);
       }
@@ -220,16 +220,19 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
       });
 
       if (markdown) {
+        const chunks: string[] = [];
         for await (const chunk of result.textStream) {
-          const rendered = await marked(chunk);
-          process.stdout.write(rendered);
+          chunks.push(chunk);
         }
+        const fullText = chunks.join("");
+        const rendered = await marked(fullText);
+        process.stdout.write(rendered + "\n");
       } else {
         for await (const chunk of result.textStream) {
           process.stdout.write(chunk);
         }
+        process.stdout.write("\n");
       }
-      process.stdout.write("\n");
     }
   } catch (err: unknown) {
     console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
@@ -256,7 +259,7 @@ export function setupCLI() {
     )
     .option("-j, --json", "Output full JSON response object", false)
     .option("--no-stream", "Wait for full response, then print")
-    .option("--markdown", "Render markdown output", true)
+    .option("--markdown", "Render markdown output", false)
     .option(
       "-t, --temperature <n>",
       `Sampling temperature (${APP.temperature.min}-${APP.temperature.max})`,
