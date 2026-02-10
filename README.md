@@ -1,15 +1,188 @@
 # ai-cli
 
-To install dependencies:
+A lean CLI for calling LLMs from the terminal. Text in, text out.
 
-```bash
+Built on the [Vercel AI SDK](https://sdk.vercel.ai/) with [Bun](https://bun.sh/).
+
+## Features
+
+- **9 providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere
+- **Streaming by default** — tokens print as they arrive
+- **Pipe-friendly** — reads from stdin, writes to stdout, errors to stderr
+- **JSON output** — structured response with usage and finish reason
+- **Config files** — set defaults in `~/.ai-cli.json`
+- **Shell completions** — bash, zsh, fish
+- **Standalone binary** — compile to a single executable with `bun build --compile`
+
+## Install
+
+```sh
+git clone https://github.com/andrew-bierman/ai-cli.git
+cd ai-cli
 bun install
+bun link
 ```
 
-To run:
+## Setup
 
-```bash
-bun run index.ts
+Set an API key for at least one provider:
+
+```sh
+export OPENAI_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="sk-ant-..."
+export GOOGLE_GENERATIVE_AI_API_KEY="..."
 ```
 
-This project was created using `bun init` in bun v1.3.5. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+Run `ai --providers` to see which keys are configured.
+
+## Usage
+
+```sh
+# Ask a question
+ai "explain monads in one sentence"
+
+# Pipe content
+cat main.go | ai "review this code"
+echo "hello world" | ai "translate to French"
+
+# Pick a provider and model
+ai -m anthropic/claude-sonnet-4-5 "write a haiku"
+ai -m google/gemini-2.5-flash "summarize this" < article.txt
+
+# Set a system prompt
+ai -s "you are a senior Go developer" "review this PR" < diff.txt
+
+# Get JSON output
+ai --json "what is 2+2"
+
+# Disable streaming
+ai --no-stream "list 3 colors"
+
+# Adjust temperature
+ai -t 1.5 "write a creative story"
+
+# Limit output length
+ai --max-output-tokens 100 "explain quantum computing"
+```
+
+If no `provider/` prefix is given, the model defaults to `openai`. If no `-m` flag is given, it defaults to `openai/gpt-4o`.
+
+## Providers
+
+| Provider | Env Variable | Example Model |
+|---|---|---|
+| openai | `OPENAI_API_KEY` | `openai/gpt-4o` |
+| anthropic | `ANTHROPIC_API_KEY` | `anthropic/claude-sonnet-4-5` |
+| google | `GOOGLE_GENERATIVE_AI_API_KEY` | `google/gemini-2.5-flash` |
+| perplexity | `PERPLEXITY_API_KEY` | `perplexity/sonar` |
+| xai | `XAI_API_KEY` | `xai/grok-3` |
+| mistral | `MISTRAL_API_KEY` | `mistral/mistral-large-latest` |
+| groq | `GROQ_API_KEY` | `groq/llama-3.3-70b-versatile` |
+| deepseek | `DEEPSEEK_API_KEY` | `deepseek/deepseek-chat` |
+| cohere | `COHERE_API_KEY` | `cohere/command-r-plus` |
+
+## Config File
+
+Create `~/.ai-cli.json` to set defaults:
+
+```json
+{
+  "model": "anthropic/claude-sonnet-4-5",
+  "system": "Be concise.",
+  "temperature": 0.7,
+  "maxOutputTokens": 1000
+}
+```
+
+Use a custom config path with `-c`:
+
+```sh
+ai -c ./my-config.json "hello"
+```
+
+CLI flags always override config file values.
+
+## Shell Completions
+
+```sh
+# bash — add to ~/.bashrc
+eval "$(ai --completions bash)"
+
+# zsh — add to ~/.zshrc
+eval "$(ai --completions zsh)"
+
+# fish — save to completions dir
+ai --completions fish > ~/.config/fish/completions/ai.fish
+```
+
+## JSON Output
+
+Use `--json` to get structured output:
+
+```json
+{
+  "text": "2 + 2 = 4",
+  "model": "openai/gpt-4o",
+  "usage": {
+    "inputTokens": 12,
+    "outputTokens": 8,
+    "totalTokens": 20
+  },
+  "finishReason": "stop"
+}
+```
+
+Pipe into `jq` for further processing:
+
+```sh
+ai --json "list 3 colors" | jq -r '.text'
+```
+
+## Flags
+
+```
+Usage: ai [options] [prompt...]
+
+Options:
+  -m, --model <model>          Model in provider/model-id format
+  -s, --system <prompt>        System prompt
+  -j, --json                   Output full JSON response object
+  --no-stream                  Wait for full response, then print
+  -t, --temperature <n>        Sampling temperature (0-2)
+  --max-output-tokens <n>      Maximum tokens to generate
+  -c, --config <path>          Path to config file
+  --providers                  List supported providers and their API key status
+  --completions <shell>        Generate shell completions (bash, zsh, fish)
+  -V, --version                Print version
+  -h, --help                   Print help
+```
+
+## Build
+
+Compile to a standalone binary:
+
+```sh
+# Current platform
+bun run build
+
+# Cross-platform
+bun run build:mac        # macOS ARM
+bun run build:mac-x64    # macOS Intel
+bun run build:linux      # Linux x64
+bun run build:linux-arm  # Linux ARM
+bun run build:all        # All targets
+```
+
+Binaries are output to `dist/`.
+
+## Development
+
+```sh
+bun install
+bun test              # 158 tests across 6 files
+bun run typecheck     # TypeScript type checking
+```
+
+## License
+
+MIT
