@@ -199,8 +199,8 @@ describe("resolveModel", () => {
   ];
 
   for (const { provider, model, envVar, expectedModelId } of providerCases) {
-    test(`resolves ${provider} model when API key is set`, () => {
-      process.env[envVar] = "test-key";
+    test(`resolves ${provider} model when ${envVar.includes("HOST") ? "host URL is set" : "API key is set"}`, () => {
+      process.env[envVar] = envVar.includes("HOST") ? "http://localhost:11434" : "test-key";
       const m = resolveModel(model);
       expect(m).toBeDefined();
       expect(m.modelId).toBe(expectedModelId);
@@ -212,12 +212,5 @@ describe("resolveModel", () => {
     const m = resolveModel("gpt-4o-mini");
     expect(m).toBeDefined();
     expect(m.modelId).toBe("gpt-4o-mini");
-  });
-
-  test("resolves ollama model without API key (local provider)", () => {
-    delete process.env.OLLAMA_HOST;
-    const m = resolveModel("ollama/llama3");
-    expect(m).toBeDefined();
-    expect(m.modelId).toBe("llama3");
   });
 });
