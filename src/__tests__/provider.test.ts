@@ -174,8 +174,8 @@ describe("parseModel", () => {
 // ── SUPPORTED_PROVIDERS ────────────────────────────────────────────────
 
 describe("SUPPORTED_PROVIDERS", () => {
-  test("has exactly 17 providers", () => {
-    expect(SUPPORTED_PROVIDERS).toHaveLength(17);
+  test("has exactly 18 providers", () => {
+    expect(SUPPORTED_PROVIDERS).toHaveLength(18);
   });
 
   test("includes all expected providers", () => {
@@ -189,6 +189,7 @@ describe("SUPPORTED_PROVIDERS", () => {
       "groq",
       "deepseek",
       "cohere",
+      "deepinfra",
       "fireworks",
       "openrouter",
       "azure",
