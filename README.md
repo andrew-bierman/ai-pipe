@@ -79,6 +79,10 @@ echo "hello world" | ai-pipe "translate to French"
 ai-pipe -m anthropic/claude-sonnet-4-5 "write a haiku"
 ai-pipe -m google/gemini-2.5-flash "summarize this" < article.txt
 
+# Include file contents
+ai-pipe -f main.go "review this code"
+ai-pipe -f src/app.ts -f src/utils.ts "find bugs"
+
 # Set a system prompt
 ai-pipe -s "you are a senior Go developer" "review this PR" < diff.txt
 
@@ -196,6 +200,7 @@ Usage: ai-pipe [options] [prompt...]
 Options:
   -m, --model <model>          Model in provider/model-id format
   -s, --system <prompt>        System prompt
+  -f, --file <path>            Include file contents in prompt (repeatable)
   -j, --json                   Output full JSON response object
   --no-stream                  Wait for full response, then print
   -t, --temperature <n>        Sampling temperature (0-2)
@@ -229,20 +234,35 @@ Binaries are output to `dist/`.
 
 ```sh
 bun install
-bun test              # 211 tests across 7 files
+bun test              # 227 tests across 7 files
 bun run typecheck     # TypeScript type checking
 ```
 
+## Releasing
+
+1. `bun pm version patch` (or `minor` / `major`)
+2. `git push --follow-tags`
+
+The release workflow handles `bun publish`, binary builds, and GitHub release.
+
 ## Roadmap
 
-- **Conversation history** — continue previous conversations with `-C`, named sessions with `--session`
-- **Image input** — attach images for vision models with `--image`
-- **File attachments** — include file contents in prompts with `-f`
-- **Roles** — saved system prompts in `~/.ai-pipe/roles/` (e.g. `ai-pipe --role reviewer`)
-- **Markdown rendering** — syntax-highlighted, formatted output in the terminal
-- **Cost tracking** — show estimated token costs per request
-- **Response caching** — skip duplicate API calls for identical prompts
-- **Tool use** — function calling and MCP support
+- [x] **Streaming by default** — tokens print as they arrive
+- [x] **Pipe-friendly** — reads from stdin, writes to stdout, errors to stderr
+- [x] **JSON output** — structured response with usage and finish reason
+- [x] **Config directory** — set defaults in `~/.ai-pipe/`
+- [x] **Shell completions** — bash, zsh, fish
+- [x] **Standalone binary** — compile to a single executable with `bun build --compile`
+- [x] **16 providers** — OpenAI, Anthropic, Google, and 13 more
+- [x] **npm publishing** — `npm install -g ai-pipe` / `bun install -g ai-pipe`
+- [x] **File attachments** — include file contents in prompts with `-f`
+- [ ] **Conversation history** — continue previous conversations with `-C`, named sessions with `--session`
+- [ ] **Image input** — attach images for vision models with `--image`
+- [ ] **Roles** — saved system prompts in `~/.ai-pipe/roles/` (e.g. `ai-pipe --role reviewer`)
+- [ ] **Markdown rendering** — syntax-highlighted, formatted output in the terminal
+- [ ] **Cost tracking** — show estimated token costs per request
+- [ ] **Response caching** — skip duplicate API calls for identical prompts
+- [ ] **Tool use** — function calling and MCP support
 
 ## License
 

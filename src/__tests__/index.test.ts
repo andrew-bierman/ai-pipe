@@ -1,5 +1,7 @@
 import { test, expect, describe } from "bun:test";
-import { buildPrompt, resolveOptions, CLIOptionsSchema, JsonOutputSchema, type CLIOptions } from "../index.ts";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { buildPrompt, readFiles, resolveOptions, CLIOptionsSchema, JsonOutputSchema, type CLIOptions } from "../index.ts";
 import type { Config } from "../config.ts";
 
 // ── buildPrompt ────────────────────────────────────────────────────────
@@ -36,6 +38,63 @@ describe("buildPrompt", () => {
   test("preserves multiline arg prompt", () => {
     const result = buildPrompt("do this\nand that", null);
     expect(result).toBe("do this\nand that");
+  });
+
+  test("includes file content between arg and stdin", () => {
+    const result = buildPrompt("review", "stdin data", "# file.ts\n```\ncode\n```");
+    expect(result).toBe("review\n\n# file.ts\n```\ncode\n```\n\nstdin data");
+  });
+
+  test("returns file content only", () => {
+    const result = buildPrompt(null, null, "# f.txt\n```\nhello\n```");
+    expect(result).toBe("# f.txt\n```\nhello\n```");
+  });
+
+  test("combines arg and file content without stdin", () => {
+    const result = buildPrompt("summarize", null, "# f.txt\n```\ncontent\n```");
+    expect(result).toBe("summarize\n\n# f.txt\n```\ncontent\n```");
+  });
+
+  test("combines file content and stdin without arg", () => {
+    const result = buildPrompt(null, "stdin", "# f.txt\n```\ncontent\n```");
+    expect(result).toBe("# f.txt\n```\ncontent\n```\n\nstdin");
+  });
+
+  test("returns null when all three are null", () => {
+    expect(buildPrompt(null, null, null)).toBeNull();
+  });
+
+  test("file content default param preserves two-arg behavior", () => {
+    expect(buildPrompt("hello", null)).toBe("hello");
+    expect(buildPrompt(null, "stdin")).toBe("stdin");
+    expect(buildPrompt("a", "b")).toBe("a\n\nb");
+  });
+});
+
+// ── readFiles ─────────────────────────────────────────────────────────
+
+describe("readFiles", () => {
+  const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  test("reads a single file", async () => {
+    const path = join(tmpdir(), `test-${uid()}.txt`);
+    await Bun.write(path, "hello world");
+    const result = await readFiles([path]);
+    expect(result).toBe(`# ${path}\n\`\`\`\nhello world\n\`\`\``);
+  });
+
+  test("reads multiple files", async () => {
+    const path1 = join(tmpdir(), `test-${uid()}-a.txt`);
+    const path2 = join(tmpdir(), `test-${uid()}-b.txt`);
+    await Bun.write(path1, "file one");
+    await Bun.write(path2, "file two");
+    const result = await readFiles([path1, path2]);
+    expect(result).toContain(`# ${path1}`);
+    expect(result).toContain("file one");
+    expect(result).toContain(`# ${path2}`);
+    expect(result).toContain("file two");
+    // Files separated by double newline
+    expect(result).toContain("```\n\n# ");
   });
 });
 
@@ -163,6 +222,20 @@ describe("CLIOptionsSchema", () => {
     expect(
       CLIOptionsSchema.safeParse({ json: "yes", stream: true }).success
     ).toBe(false);
+  });
+
+  test("accepts file as string array", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      file: ["a.txt", "b.txt"],
+    });
+    expect(result.file).toEqual(["a.txt", "b.txt"]);
+  });
+
+  test("file is optional", () => {
+    const result = CLIOptionsSchema.parse({ json: false, stream: true });
+    expect(result.file).toBeUndefined();
   });
 });
 

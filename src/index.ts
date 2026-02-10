@@ -13,6 +13,7 @@ import pkg from "../package.json";
 export interface CLIOptions {
   model?: string;
   system?: string;
+  file?: string[];
   json: boolean;
   stream: boolean;
   temperature?: number;
@@ -25,6 +26,7 @@ export interface CLIOptions {
 export const CLIOptionsSchema = z.object({
   model: z.string().optional(),
   system: z.string().optional(),
+  file: z.array(z.string()).optional(),
   json: z.boolean(),
   stream: z.boolean(),
   temperature: z.number().min(APP.temperature.min).max(APP.temperature.max).optional(),
@@ -60,14 +62,30 @@ export const JsonOutputSchema = z.object({
 
 export type JsonOutput = z.infer<typeof JsonOutputSchema>;
 
+export async function readFiles(paths: string[]): Promise<string> {
+  const parts: string[] = [];
+  for (const path of paths) {
+    const file = Bun.file(path);
+    if (!(await file.exists())) {
+      console.error(`Error: File not found: ${path}`);
+      process.exit(1);
+    }
+    const content = await file.text();
+    parts.push(`# ${path}\n\`\`\`\n${content}\n\`\`\``);
+  }
+  return parts.join("\n\n");
+}
+
 export function buildPrompt(
   argPrompt: string | null,
-  stdinContent: string | null
+  stdinContent: string | null,
+  fileContent: string | null = null
 ): string | null {
-  if (argPrompt && stdinContent) {
-    return `${argPrompt}\n\n${stdinContent}`;
-  }
-  return argPrompt ?? stdinContent;
+  const parts: string[] = [];
+  if (argPrompt) parts.push(argPrompt);
+  if (fileContent) parts.push(fileContent);
+  if (stdinContent) parts.push(stdinContent);
+  return parts.length > 0 ? parts.join("\n\n") : null;
 }
 
 export function resolveOptions(
@@ -133,8 +151,9 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
   const hasStdin = !process.stdin.isTTY;
   const argPrompt = promptArgs.length > 0 ? promptArgs.join(" ") : null;
   const stdinContent = hasStdin ? await readStdin() : null;
+  const fileContent = opts.file?.length ? await readFiles(opts.file) : null;
 
-  const prompt = buildPrompt(argPrompt, stdinContent);
+  const prompt = buildPrompt(argPrompt, stdinContent, fileContent);
   if (!prompt) {
     program.help();
     return;
@@ -197,6 +216,7 @@ if (import.meta.main) {
     .argument("[prompt...]", "Prompt text. Multiple words are joined.")
     .option("-m, --model <model>", "Model in provider/model-id format")
     .option("-s, --system <prompt>", "System prompt")
+    .option("-f, --file <path>", "Include file contents in prompt (repeatable)", (val: string, acc: string[]) => { acc.push(val); return acc; }, [] as string[])
     .option("-j, --json", "Output full JSON response object", false)
     .option("--no-stream", "Wait for full response, then print")
     .option("-t, --temperature <n>", `Sampling temperature (${APP.temperature.min}-${APP.temperature.max})`, parseFloat)

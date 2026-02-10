@@ -71,7 +71,7 @@ describe("CLI: help and version", () => {
 
   test("help contains all flags", async () => {
     const { stdout } = await runCLI(["--help"]);
-    for (const flag of ["--model", "--system", "--json", "--no-stream", "--temperature", "--max-output-tokens", "--config", "--providers", "--completions"]) {
+    for (const flag of ["--model", "--system", "--file", "--json", "--no-stream", "--temperature", "--max-output-tokens", "--config", "--providers", "--completions"]) {
       expect(stdout).toContain(flag);
     }
   });
@@ -337,6 +337,71 @@ describe("CLI: stdin handling", () => {
       stdin: "const x = 1;",
       env: CLEAN_ENV,
     });
+    expect(stderr).toContain("Missing required environment variable");
+    expect(exitCode).toBe(1);
+  });
+});
+
+// ── File Attachments ──────────────────────────────────────────────────
+
+describe("CLI: file attachments", () => {
+  test("--file appears in help", async () => {
+    const { stdout } = await runCLI(["--help"]);
+    expect(stdout).toContain("--file");
+    expect(stdout).toContain("-f");
+  });
+
+  test("-f with nonexistent file errors to stderr", async () => {
+    const { stderr, exitCode } = await runCLI(
+      ["-f", "/nonexistent/file.txt", "hello"],
+      { env: CLEAN_ENV }
+    );
+    expect(stderr).toContain("File not found");
+    expect(exitCode).toBe(1);
+  });
+
+  test("-f with valid file reaches API key check", async () => {
+    const path = join(tmpDir, `cli-test-${uid()}.txt`);
+    await Bun.write(path, "file content");
+    const { stderr, exitCode } = await runCLI(
+      ["-f", path, "review this"],
+      { env: CLEAN_ENV }
+    );
+    expect(stderr).toContain("Missing required environment variable");
+    expect(exitCode).toBe(1);
+  });
+
+  test("multiple -f flags accepted", async () => {
+    const path1 = join(tmpDir, `cli-test-${uid()}-a.txt`);
+    const path2 = join(tmpDir, `cli-test-${uid()}-b.txt`);
+    await Bun.write(path1, "file one");
+    await Bun.write(path2, "file two");
+    const { stderr, exitCode } = await runCLI(
+      ["-f", path1, "-f", path2, "review"],
+      { env: CLEAN_ENV }
+    );
+    expect(stderr).toContain("Missing required environment variable");
+    expect(exitCode).toBe(1);
+  });
+
+  test("-f combined with stdin", async () => {
+    const path = join(tmpDir, `cli-test-${uid()}.txt`);
+    await Bun.write(path, "file content");
+    const { stderr, exitCode } = await runCLI(
+      ["-f", path, "review"],
+      { stdin: "stdin content", env: CLEAN_ENV }
+    );
+    expect(stderr).toContain("Missing required environment variable");
+    expect(exitCode).toBe(1);
+  });
+
+  test("-f alone (no prompt, no stdin) reaches API key check", async () => {
+    const path = join(tmpDir, `cli-test-${uid()}.txt`);
+    await Bun.write(path, "file content");
+    const { stderr, exitCode } = await runCLI(
+      ["-f", path],
+      { env: CLEAN_ENV }
+    );
     expect(stderr).toContain("Missing required environment variable");
     expect(exitCode).toBe(1);
   });
