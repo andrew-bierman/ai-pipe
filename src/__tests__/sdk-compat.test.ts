@@ -115,18 +115,27 @@ describe("AI SDK registry compatibility", () => {
     // Verify the registry actually has all our providers registered.
     // We can't make a real API call, but we can verify the registry
     // doesn't throw when resolving a provider/model pair.
+    // Note: some providers (vertex) require env vars at model creation time,
+    // so we skip providers that throw LoadSettingError.
     for (const provider of SUPPORTED_PROVIDERS) {
-      expect(() => {
+      try {
         registry.languageModel(`${provider}/test-model` as `${ProviderId}/${string}`);
-      }).not.toThrow();
+      } catch (e: any) {
+        // Allow LoadSettingError (missing env config), but fail on other errors
+        expect(e.name).toBe("AI_LoadSettingError");
+      }
     }
   });
 
-  test("every SUPPORTED_PROVIDER has a corresponding env var", () => {
+  test("every SUPPORTED_PROVIDER has corresponding env var(s)", () => {
     for (const provider of SUPPORTED_PROVIDERS) {
-      const envVar = PROVIDER_ENV_VARS[provider];
-      expect(envVar).toBeDefined();
-      expect(envVar).toMatch(/^[A-Z_]+$/);
+      const envVars = PROVIDER_ENV_VARS[provider];
+      expect(envVars).toBeDefined();
+      expect(Array.isArray(envVars)).toBe(true);
+      expect(envVars.length).toBeGreaterThan(0);
+      for (const v of envVars) {
+        expect(v).toMatch(/^[A-Z_]+$/);
+      }
     }
   });
 
