@@ -1,13 +1,13 @@
-import { test, expect, describe, afterEach } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import {
+  ModelStringSchema,
+  PROVIDER_ENV_VARS,
+  type ProviderId,
+  ProviderIdSchema,
   parseModel,
+  registry,
   resolveModel,
   SUPPORTED_PROVIDERS,
-  PROVIDER_ENV_VARS,
-  registry,
-  ModelStringSchema,
-  ProviderIdSchema,
-  type ProviderId,
 } from "../provider.ts";
 
 // ── ModelStringSchema ──────────────────────────────────────────────────
@@ -72,21 +72,76 @@ describe("ProviderIdSchema", () => {
 describe("parseModel", () => {
   const cases: Array<[string, string, string, string]> = [
     ["openai/gpt-4o", "openai", "gpt-4o", "openai/gpt-4o"],
-    ["anthropic/claude-sonnet-4-5", "anthropic", "claude-sonnet-4-5", "anthropic/claude-sonnet-4-5"],
-    ["google/gemini-2.5-flash", "google", "gemini-2.5-flash", "google/gemini-2.5-flash"],
+    [
+      "anthropic/claude-sonnet-4-5",
+      "anthropic",
+      "claude-sonnet-4-5",
+      "anthropic/claude-sonnet-4-5",
+    ],
+    [
+      "google/gemini-2.5-flash",
+      "google",
+      "gemini-2.5-flash",
+      "google/gemini-2.5-flash",
+    ],
     ["perplexity/sonar", "perplexity", "sonar", "perplexity/sonar"],
     ["xai/grok-3", "xai", "grok-3", "xai/grok-3"],
-    ["mistral/mistral-large-latest", "mistral", "mistral-large-latest", "mistral/mistral-large-latest"],
-    ["groq/llama-3.3-70b-versatile", "groq", "llama-3.3-70b-versatile", "groq/llama-3.3-70b-versatile"],
-    ["deepseek/deepseek-chat", "deepseek", "deepseek-chat", "deepseek/deepseek-chat"],
-    ["cohere/command-r-plus", "cohere", "command-r-plus", "cohere/command-r-plus"],
-    ["openrouter/openrouter", "openrouter", "openrouter", "openrouter/openrouter"],
+    [
+      "mistral/mistral-large-latest",
+      "mistral",
+      "mistral-large-latest",
+      "mistral/mistral-large-latest",
+    ],
+    [
+      "groq/llama-3.3-70b-versatile",
+      "groq",
+      "llama-3.3-70b-versatile",
+      "groq/llama-3.3-70b-versatile",
+    ],
+    [
+      "deepseek/deepseek-chat",
+      "deepseek",
+      "deepseek-chat",
+      "deepseek/deepseek-chat",
+    ],
+    [
+      "cohere/command-r-plus",
+      "cohere",
+      "command-r-plus",
+      "cohere/command-r-plus",
+    ],
+    [
+      "openrouter/openrouter",
+      "openrouter",
+      "openrouter",
+      "openrouter/openrouter",
+    ],
     ["azure/azure-model-id", "azure", "azure-model-id", "azure/azure-model-id"],
-    ["togetherai/meta-llama/Llama-3.3-70b-Instruct", "togetherai", "meta-llama/Llama-3.3-70b-Instruct", "togetherai/meta-llama/Llama-3.3-70b-Instruct"],
-    ["bedrock/anthropic.claude-sonnet-4-2025-02-19", "bedrock", "anthropic.claude-sonnet-4-2025-02-19", "bedrock/anthropic.claude-sonnet-4-2025-02-19"],
-    ["vertex/google/cloud/llama-3.1", "vertex", "google/cloud/llama-3.1", "vertex/google/cloud/llama-3.1"],
+    [
+      "togetherai/meta-llama/Llama-3.3-70b-Instruct",
+      "togetherai",
+      "meta-llama/Llama-3.3-70b-Instruct",
+      "togetherai/meta-llama/Llama-3.3-70b-Instruct",
+    ],
+    [
+      "bedrock/anthropic.claude-sonnet-4-2025-02-19",
+      "bedrock",
+      "anthropic.claude-sonnet-4-2025-02-19",
+      "bedrock/anthropic.claude-sonnet-4-2025-02-19",
+    ],
+    [
+      "vertex/google/cloud/llama-3.1",
+      "vertex",
+      "google/cloud/llama-3.1",
+      "vertex/google/cloud/llama-3.1",
+    ],
     ["ollama/llama3", "ollama", "llama3", "ollama/llama3"],
-    ["huggingface/meta-llama/Llama-3.3-70b-Instruct", "huggingface", "meta-llama/Llama-3.3-70b-Instruct", "huggingface/meta-llama/Llama-3.3-70b-Instruct"],
+    [
+      "huggingface/meta-llama/Llama-3.3-70b-Instruct",
+      "huggingface",
+      "meta-llama/Llama-3.3-70b-Instruct",
+      "huggingface/meta-llama/Llama-3.3-70b-Instruct",
+    ],
   ];
 
   for (const [input, provider, modelId, fullId] of cases) {
@@ -124,7 +179,24 @@ describe("SUPPORTED_PROVIDERS", () => {
   });
 
   test("includes all expected providers", () => {
-    const expected: ProviderId[] = ["openai", "anthropic", "google", "perplexity", "xai", "mistral", "groq", "deepseek", "cohere", "openrouter", "azure", "togetherai", "bedrock", "vertex", "ollama", "huggingface"];
+    const expected: ProviderId[] = [
+      "openai",
+      "anthropic",
+      "google",
+      "perplexity",
+      "xai",
+      "mistral",
+      "groq",
+      "deepseek",
+      "cohere",
+      "openrouter",
+      "azure",
+      "togetherai",
+      "bedrock",
+      "vertex",
+      "ollama",
+      "huggingface",
+    ];
     for (const p of expected) {
       expect(SUPPORTED_PROVIDERS).toContain(p);
     }
@@ -194,23 +266,108 @@ describe("resolveModel", () => {
     process.env = { ...originalEnv };
   });
 
-  const providerCases: Array<{ provider: ProviderId; model: string; envVars: string[]; expectedModelId: string }> = [
-    { provider: "openai", model: "openai/gpt-4o", envVars: ["OPENAI_API_KEY"], expectedModelId: "gpt-4o" },
-    { provider: "anthropic", model: "anthropic/claude-sonnet-4-5", envVars: ["ANTHROPIC_API_KEY"], expectedModelId: "claude-sonnet-4-5" },
-    { provider: "google", model: "google/gemini-2.5-flash", envVars: ["GOOGLE_GENERATIVE_AI_API_KEY"], expectedModelId: "gemini-2.5-flash" },
-    { provider: "perplexity", model: "perplexity/sonar", envVars: ["PERPLEXITY_API_KEY"], expectedModelId: "sonar" },
-    { provider: "xai", model: "xai/grok-3", envVars: ["XAI_API_KEY"], expectedModelId: "grok-3" },
-    { provider: "mistral", model: "mistral/mistral-large-latest", envVars: ["MISTRAL_API_KEY"], expectedModelId: "mistral-large-latest" },
-    { provider: "groq", model: "groq/llama-3.3-70b-versatile", envVars: ["GROQ_API_KEY"], expectedModelId: "llama-3.3-70b-versatile" },
-    { provider: "deepseek", model: "deepseek/deepseek-chat", envVars: ["DEEPSEEK_API_KEY"], expectedModelId: "deepseek-chat" },
-    { provider: "cohere", model: "cohere/command-r-plus", envVars: ["COHERE_API_KEY"], expectedModelId: "command-r-plus" },
-    { provider: "openrouter", model: "openrouter/openrouter", envVars: ["OPENROUTER_API_KEY"], expectedModelId: "openrouter" },
-    { provider: "azure", model: "azure/azure-model-id", envVars: ["AZURE_AI_API_KEY"], expectedModelId: "azure-model-id" },
-    { provider: "togetherai", model: "togetherai/meta-llama/Llama-3.3-70b-Instruct", envVars: ["TOGETHERAI_API_KEY"], expectedModelId: "meta-llama/Llama-3.3-70b-Instruct" },
-    { provider: "bedrock", model: "bedrock/anthropic.claude-sonnet-4-2025-02-19", envVars: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"], expectedModelId: "anthropic.claude-sonnet-4-2025-02-19" },
-    { provider: "vertex", model: "vertex/google/cloud/llama-3.1", envVars: ["GOOGLE_VERTEX_PROJECT", "GOOGLE_VERTEX_LOCATION"], expectedModelId: "google/cloud/llama-3.1" },
-    { provider: "ollama", model: "ollama/llama3", envVars: ["OLLAMA_HOST"], expectedModelId: "llama3" },
-    { provider: "huggingface", model: "huggingface/meta-llama/Llama-3.3-70b-Instruct", envVars: ["HF_TOKEN"], expectedModelId: "meta-llama/Llama-3.3-70b-Instruct" },
+  const providerCases: Array<{
+    provider: ProviderId;
+    model: string;
+    envVars: string[];
+    expectedModelId: string;
+  }> = [
+    {
+      provider: "openai",
+      model: "openai/gpt-4o",
+      envVars: ["OPENAI_API_KEY"],
+      expectedModelId: "gpt-4o",
+    },
+    {
+      provider: "anthropic",
+      model: "anthropic/claude-sonnet-4-5",
+      envVars: ["ANTHROPIC_API_KEY"],
+      expectedModelId: "claude-sonnet-4-5",
+    },
+    {
+      provider: "google",
+      model: "google/gemini-2.5-flash",
+      envVars: ["GOOGLE_GENERATIVE_AI_API_KEY"],
+      expectedModelId: "gemini-2.5-flash",
+    },
+    {
+      provider: "perplexity",
+      model: "perplexity/sonar",
+      envVars: ["PERPLEXITY_API_KEY"],
+      expectedModelId: "sonar",
+    },
+    {
+      provider: "xai",
+      model: "xai/grok-3",
+      envVars: ["XAI_API_KEY"],
+      expectedModelId: "grok-3",
+    },
+    {
+      provider: "mistral",
+      model: "mistral/mistral-large-latest",
+      envVars: ["MISTRAL_API_KEY"],
+      expectedModelId: "mistral-large-latest",
+    },
+    {
+      provider: "groq",
+      model: "groq/llama-3.3-70b-versatile",
+      envVars: ["GROQ_API_KEY"],
+      expectedModelId: "llama-3.3-70b-versatile",
+    },
+    {
+      provider: "deepseek",
+      model: "deepseek/deepseek-chat",
+      envVars: ["DEEPSEEK_API_KEY"],
+      expectedModelId: "deepseek-chat",
+    },
+    {
+      provider: "cohere",
+      model: "cohere/command-r-plus",
+      envVars: ["COHERE_API_KEY"],
+      expectedModelId: "command-r-plus",
+    },
+    {
+      provider: "openrouter",
+      model: "openrouter/openrouter",
+      envVars: ["OPENROUTER_API_KEY"],
+      expectedModelId: "openrouter",
+    },
+    {
+      provider: "azure",
+      model: "azure/azure-model-id",
+      envVars: ["AZURE_AI_API_KEY"],
+      expectedModelId: "azure-model-id",
+    },
+    {
+      provider: "togetherai",
+      model: "togetherai/meta-llama/Llama-3.3-70b-Instruct",
+      envVars: ["TOGETHERAI_API_KEY"],
+      expectedModelId: "meta-llama/Llama-3.3-70b-Instruct",
+    },
+    {
+      provider: "bedrock",
+      model: "bedrock/anthropic.claude-sonnet-4-2025-02-19",
+      envVars: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
+      expectedModelId: "anthropic.claude-sonnet-4-2025-02-19",
+    },
+    {
+      provider: "vertex",
+      model: "vertex/google/cloud/llama-3.1",
+      envVars: ["GOOGLE_VERTEX_PROJECT", "GOOGLE_VERTEX_LOCATION"],
+      expectedModelId: "google/cloud/llama-3.1",
+    },
+    {
+      provider: "ollama",
+      model: "ollama/llama3",
+      envVars: ["OLLAMA_HOST"],
+      expectedModelId: "llama3",
+    },
+    {
+      provider: "huggingface",
+      model: "huggingface/meta-llama/Llama-3.3-70b-Instruct",
+      envVars: ["HF_TOKEN"],
+      expectedModelId: "meta-llama/Llama-3.3-70b-Instruct",
+    },
   ];
 
   for (const { provider, model, envVars, expectedModelId } of providerCases) {

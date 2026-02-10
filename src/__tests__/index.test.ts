@@ -1,8 +1,15 @@
-import { test, expect, describe } from "bun:test";
-import { join } from "node:path";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
-import { buildPrompt, readFiles, resolveOptions, CLIOptionsSchema, JsonOutputSchema, type CLIOptions } from "../index.ts";
+import { join } from "node:path";
 import type { Config } from "../config.ts";
+import {
+  buildPrompt,
+  type CLIOptions,
+  CLIOptionsSchema,
+  JsonOutputSchema,
+  readFiles,
+  resolveOptions,
+} from "../index.ts";
 
 // ── buildPrompt ────────────────────────────────────────────────────────
 
@@ -25,7 +32,7 @@ describe("buildPrompt", () => {
   });
 
   test("arg prompt comes first in combined output", () => {
-    const result = buildPrompt("summarize", null, "long document text")!;
+    const result = buildPrompt("summarize", null, "long document text");
     expect(result.startsWith("summarize")).toBe(true);
     expect(result.endsWith("long document text")).toBe(true);
   });
@@ -41,7 +48,11 @@ describe("buildPrompt", () => {
   });
 
   test("includes file content between arg and stdin", () => {
-    const result = buildPrompt("review", "# file.ts\n```\ncode\n```", "stdin data");
+    const result = buildPrompt(
+      "review",
+      "# file.ts\n```\ncode\n```",
+      "stdin data",
+    );
     expect(result).toBe("review\n\n# file.ts\n```\ncode\n```\n\nstdin data");
   });
 
@@ -84,7 +95,10 @@ describe("readFiles", () => {
   });
 
   test("throws on nonexistent file", async () => {
-    expect(readFiles(["/nonexistent/file.txt"])).rejects.toThrow("File not found: /nonexistent/file.txt");
+    const missing = join(tmpdir(), `nonexistent-${uid()}.txt`);
+    await expect(readFiles([missing])).rejects.toThrow(
+      `File not found: ${missing}`,
+    );
   });
 
   test("reads multiple files", async () => {
@@ -164,7 +178,12 @@ describe("resolveOptions", () => {
   });
 
   test("all undefined opts fall through to config", () => {
-    const config: Config = { model: "xai/grok-3", system: "sys", temperature: 1.5, maxOutputTokens: 300 };
+    const config: Config = {
+      model: "xai/grok-3",
+      system: "sys",
+      temperature: 1.5,
+      maxOutputTokens: 300,
+    };
     const result = resolveOptions(defaultOpts, config);
     expect(result.modelString).toBe("xai/grok-3");
     expect(result.system).toBe("sys");
@@ -200,31 +219,41 @@ describe("CLIOptionsSchema", () => {
 
   test("rejects temperature below 0", () => {
     expect(
-      CLIOptionsSchema.safeParse({ json: false, stream: true, temperature: -1 }).success
+      CLIOptionsSchema.safeParse({ json: false, stream: true, temperature: -1 })
+        .success,
     ).toBe(false);
   });
 
   test("rejects temperature above 2", () => {
     expect(
-      CLIOptionsSchema.safeParse({ json: false, stream: true, temperature: 3 }).success
+      CLIOptionsSchema.safeParse({ json: false, stream: true, temperature: 3 })
+        .success,
     ).toBe(false);
   });
 
   test("rejects negative maxOutputTokens", () => {
     expect(
-      CLIOptionsSchema.safeParse({ json: false, stream: true, maxOutputTokens: -5 }).success
+      CLIOptionsSchema.safeParse({
+        json: false,
+        stream: true,
+        maxOutputTokens: -5,
+      }).success,
     ).toBe(false);
   });
 
   test("rejects float maxOutputTokens", () => {
     expect(
-      CLIOptionsSchema.safeParse({ json: false, stream: true, maxOutputTokens: 10.5 }).success
+      CLIOptionsSchema.safeParse({
+        json: false,
+        stream: true,
+        maxOutputTokens: 10.5,
+      }).success,
     ).toBe(false);
   });
 
   test("rejects non-boolean json", () => {
     expect(
-      CLIOptionsSchema.safeParse({ json: "yes", stream: true }).success
+      CLIOptionsSchema.safeParse({ json: "yes", stream: true }).success,
     ).toBe(false);
   });
 
@@ -277,7 +306,11 @@ describe("JsonOutputSchema", () => {
         inputTokens: 5,
         outputTokens: 10,
         totalTokens: 15,
-        inputTokenDetails: { noCacheTokens: 3, cacheReadTokens: 2, cacheWriteTokens: 0 },
+        inputTokenDetails: {
+          noCacheTokens: 3,
+          cacheReadTokens: 2,
+          cacheWriteTokens: 0,
+        },
         outputTokenDetails: { textTokens: 8, reasoningTokens: 2 },
       },
       finishReason: "stop",
@@ -292,7 +325,7 @@ describe("JsonOutputSchema", () => {
         model: "openai/gpt-4o",
         usage: {},
         finishReason: "stop",
-      }).success
+      }).success,
     ).toBe(false);
   });
 
@@ -302,7 +335,7 @@ describe("JsonOutputSchema", () => {
         text: "hi",
         usage: {},
         finishReason: "stop",
-      }).success
+      }).success,
     ).toBe(false);
   });
 
@@ -312,7 +345,7 @@ describe("JsonOutputSchema", () => {
         text: "hi",
         model: "m",
         usage: {},
-      }).success
+      }).success,
     ).toBe(false);
   });
 });

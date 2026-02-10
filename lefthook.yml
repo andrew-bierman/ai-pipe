@@ -1,0 +1,7 @@
+pre-commit:
+  parallel: true
+  jobs:
+    - name: lint
+      run: bunx biome check --write {staged_files}
+      glob: "*.{ts,tsx,js,jsx,json,css}"
+      stage_fixed: true

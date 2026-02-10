@@ -1,5 +1,5 @@
+import { APP, type Shell, ShellSchema } from "./constants.ts";
 import { SUPPORTED_PROVIDERS } from "./provider.ts";
-import { APP, ShellSchema, type Shell } from "./constants.ts";
 
 const providers = SUPPORTED_PROVIDERS.join(" ");
 const shells = APP.supportedShells.join(" ");
@@ -9,9 +9,7 @@ const funcName = APP.name.replace(/-/g, "_");
 export function generateCompletions(shell: string): string {
   const result = ShellSchema.safeParse(shell);
   if (!result.success) {
-    console.error(
-      `Error: Unknown shell "${shell}". Supported: ${shells}`
-    );
+    console.error(`Error: Unknown shell "${shell}". Supported: ${shells}`);
     process.exit(1);
   }
 

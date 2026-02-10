@@ -1,26 +1,40 @@
-import { z } from "zod";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { ProviderIdSchema, SUPPORTED_PROVIDERS } from "./provider.ts";
+import { z } from "zod";
 import { APP } from "./constants.ts";
+import { ProviderIdSchema, SUPPORTED_PROVIDERS } from "./provider.ts";
 
-const ApiKeysSchema = z.record(z.string(), z.string()).refine(
-  (obj) => Object.keys(obj).every((k) => ProviderIdSchema.safeParse(k).success),
-  { message: `apiKeys keys must be valid providers: ${SUPPORTED_PROVIDERS.join(", ")}` }
-);
+const ApiKeysSchema = z
+  .record(z.string(), z.string())
+  .refine(
+    (obj) =>
+      Object.keys(obj).every((k) => ProviderIdSchema.safeParse(k).success),
+    {
+      message: `apiKeys keys must be valid providers: ${SUPPORTED_PROVIDERS.join(", ")}`,
+    },
+  );
 
 export const ConfigSchema = z.object({
   model: z.string().optional(),
   system: z.string().optional(),
-  temperature: z.number().min(APP.temperature.min).max(APP.temperature.max).optional(),
+  temperature: z
+    .number()
+    .min(APP.temperature.min)
+    .max(APP.temperature.max)
+    .optional(),
   maxOutputTokens: z.number().int().positive().optional(),
 });
 
-export type Config = z.infer<typeof ConfigSchema> & { apiKeys?: Record<string, string> };
+export type Config = z.infer<typeof ConfigSchema> & {
+  apiKeys?: Record<string, string>;
+};
 
 const DEFAULT_CONFIG_DIR = join(homedir(), APP.configDirName);
 
-async function loadJsonFile<T>(path: string, schema: z.ZodType<T>): Promise<T | null> {
+async function loadJsonFile<T>(
+  path: string,
+  schema: z.ZodType<T>,
+): Promise<T | null> {
   const file = Bun.file(path);
   if (!(await file.exists())) return null;
   try {

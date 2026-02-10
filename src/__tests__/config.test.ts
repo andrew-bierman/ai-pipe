@@ -1,8 +1,8 @@
-import { test, expect, describe } from "bun:test";
-import { loadConfig, ConfigSchema } from "../config.ts";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { ConfigSchema, loadConfig } from "../config.ts";
 
 const tmpDir = tmpdir();
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -84,7 +84,10 @@ describe("ConfigSchema", () => {
   });
 
   test("strips unknown properties", () => {
-    const result = ConfigSchema.parse({ model: "openai/gpt-4o", unknown: true });
+    const result = ConfigSchema.parse({
+      model: "openai/gpt-4o",
+      unknown: true,
+    });
     expect((result as Record<string, unknown>).unknown).toBeUndefined();
   });
 
@@ -118,7 +121,7 @@ describe("loadConfig", () => {
         system: "Be concise.",
         temperature: 0.7,
         maxOutputTokens: 500,
-      })
+      }),
     );
 
     const config = await loadConfig(dir);
@@ -133,12 +136,15 @@ describe("loadConfig", () => {
     const dir = makeTmpDir();
     await Bun.write(
       join(dir, "apiKeys.json"),
-      JSON.stringify({ anthropic: "sk-ant-test", openai: "sk-test" })
+      JSON.stringify({ anthropic: "sk-ant-test", openai: "sk-test" }),
     );
 
     const config = await loadConfig(dir);
     expect(config.model).toBeUndefined();
-    expect(config.apiKeys).toEqual({ anthropic: "sk-ant-test", openai: "sk-test" });
+    expect(config.apiKeys).toEqual({
+      anthropic: "sk-ant-test",
+      openai: "sk-test",
+    });
   });
 
   test("loads both config.json and apiKeys.json", async () => {
@@ -146,11 +152,11 @@ describe("loadConfig", () => {
     await Promise.all([
       Bun.write(
         join(dir, "config.json"),
-        JSON.stringify({ model: "anthropic/claude-sonnet-4-5" })
+        JSON.stringify({ model: "anthropic/claude-sonnet-4-5" }),
       ),
       Bun.write(
         join(dir, "apiKeys.json"),
-        JSON.stringify({ anthropic: "sk-ant-test" })
+        JSON.stringify({ anthropic: "sk-ant-test" }),
       ),
     ]);
 
@@ -161,7 +167,10 @@ describe("loadConfig", () => {
 
   test("loads partial config.json (only model)", async () => {
     const dir = makeTmpDir();
-    await Bun.write(join(dir, "config.json"), JSON.stringify({ model: "google/gemini-2.5-flash" }));
+    await Bun.write(
+      join(dir, "config.json"),
+      JSON.stringify({ model: "google/gemini-2.5-flash" }),
+    );
 
     const config = await loadConfig(dir);
     expect(config.model).toBe("google/gemini-2.5-flash");
@@ -196,7 +205,10 @@ describe("loadConfig", () => {
 
   test("ignores zod-invalid config.json (temperature out of range)", async () => {
     const dir = makeTmpDir();
-    await Bun.write(join(dir, "config.json"), JSON.stringify({ temperature: 5 }));
+    await Bun.write(
+      join(dir, "config.json"),
+      JSON.stringify({ temperature: 5 }),
+    );
 
     const config = await loadConfig(dir);
     expect(config).toEqual({});
@@ -222,7 +234,7 @@ describe("loadConfig", () => {
     const dir = makeTmpDir();
     await Bun.write(
       join(dir, "apiKeys.json"),
-      JSON.stringify({ fakeprovider: "sk-test" })
+      JSON.stringify({ fakeprovider: "sk-test" }),
     );
 
     const config = await loadConfig(dir);
@@ -253,7 +265,10 @@ describe("loadConfig", () => {
     const dir = makeTmpDir();
     await Promise.all([
       Bun.write(join(dir, "config.json"), "bad json"),
-      Bun.write(join(dir, "apiKeys.json"), JSON.stringify({ openai: "sk-test" })),
+      Bun.write(
+        join(dir, "apiKeys.json"),
+        JSON.stringify({ openai: "sk-test" }),
+      ),
     ]);
 
     const config = await loadConfig(dir);
@@ -264,7 +279,10 @@ describe("loadConfig", () => {
   test("invalid apiKeys.json does not affect valid config.json", async () => {
     const dir = makeTmpDir();
     await Promise.all([
-      Bun.write(join(dir, "config.json"), JSON.stringify({ model: "openai/gpt-4o" })),
+      Bun.write(
+        join(dir, "config.json"),
+        JSON.stringify({ model: "openai/gpt-4o" }),
+      ),
       Bun.write(join(dir, "apiKeys.json"), "bad json"),
     ]);
 
