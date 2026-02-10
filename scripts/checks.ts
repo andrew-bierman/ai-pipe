@@ -5,9 +5,9 @@
  * Run all pre-commit checks: sort-package-json, biome, typecheck
  */
 
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { $ } from "bun";
-import { readFileSync, writeFileSync } from "fs";
-import { join } from "path";
 
 const PKG_PATH = join(process.cwd(), "package.json");
 
@@ -40,7 +40,7 @@ function sortPackageJson() {
     );
   }
 
-  writeFileSync(PKG_PATH, JSON.stringify(pkg, null, 2) + "\n");
+  writeFileSync(PKG_PATH, `${JSON.stringify(pkg, null, 2)}\n`);
   console.log("✅ package.json sorted");
 }
 
