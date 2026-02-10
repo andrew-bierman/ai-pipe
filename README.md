@@ -28,10 +28,11 @@ Or run without installing:
 bunx ai-pipe "explain monads in one sentence"
 ```
 
-Also available via npm:
+Also available via npm (requires [Bun](https://bun.sh/) at runtime):
 
 ```sh
 npm install -g ai-pipe
+npx ai-pipe "explain monads in one sentence"
 ```
 
 ### From source
