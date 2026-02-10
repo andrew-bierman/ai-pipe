@@ -6,7 +6,7 @@ Built on the [Vercel AI SDK](https://sdk.vercel.ai/) with [Bun](https://bun.sh/)
 
 ## Features
 
-- **10 providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, OpenRouter
+- **11 providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, OpenRouter, Ollama
 - **Streaming by default** — tokens print as they arrive
 - **Pipe-friendly** — reads from stdin, writes to stdout, errors to stderr
 - **JSON output** — structured response with usage and finish reason
@@ -31,6 +31,9 @@ Set an API key for at least one provider:
 export OPENAI_API_KEY="sk-..."
 export ANTHROPIC_API_KEY="sk-ant-..."
 export OPENROUTER_API_KEY="sk-or-..."
+
+# Ollama (local)
+export OLLAMA_HOST="http://localhost:11434"
 ```
 
 Run `ai-pipe --providers` to see which keys are configured.
@@ -81,6 +84,7 @@ If no `provider/` prefix is given, the model defaults to `openai`. If no `-m` fl
 | deepseek | `DEEPSEEK_API_KEY` | `deepseek/deepseek-chat` |
 | cohere | `COHERE_API_KEY` | `cohere/command-r-plus` |
 | openrouter | `OPENROUTER_API_KEY` | `openrouter/openrouter` |
+| ollama | `OLLAMA_HOST` | `ollama/llama3` |
 
 ## Config File
 

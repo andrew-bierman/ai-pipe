@@ -81,6 +81,7 @@ describe("parseModel", () => {
     ["deepseek/deepseek-chat", "deepseek", "deepseek-chat", "deepseek/deepseek-chat"],
     ["cohere/command-r-plus", "cohere", "command-r-plus", "cohere/command-r-plus"],
     ["openrouter/openrouter", "openrouter", "openrouter", "openrouter/openrouter"],
+    ["ollama/llama3", "ollama", "llama3", "ollama/llama3"],
   ];
 
   for (const [input, provider, modelId, fullId] of cases) {
@@ -113,12 +114,12 @@ describe("parseModel", () => {
 // ── SUPPORTED_PROVIDERS ────────────────────────────────────────────────
 
 describe("SUPPORTED_PROVIDERS", () => {
-  test("has exactly 10 providers", () => {
-    expect(SUPPORTED_PROVIDERS).toHaveLength(10);
+  test("has exactly 11 providers", () => {
+    expect(SUPPORTED_PROVIDERS).toHaveLength(11);
   });
 
   test("includes all expected providers", () => {
-    const expected: ProviderId[] = ["openai", "anthropic", "google", "perplexity", "xai", "mistral", "groq", "deepseek", "cohere", "openrouter"];
+    const expected: ProviderId[] = ["openai", "anthropic", "google", "perplexity", "xai", "mistral", "groq", "deepseek", "cohere", "openrouter", "ollama"];
     for (const p of expected) {
       expect(SUPPORTED_PROVIDERS).toContain(p);
     }
@@ -152,6 +153,7 @@ describe("PROVIDER_ENV_VARS", () => {
     deepseek: "DEEPSEEK_API_KEY",
     cohere: "COHERE_API_KEY",
     openrouter: "OPENROUTER_API_KEY",
+    ollama: "OLLAMA_HOST",
   };
 
   for (const [provider, envVar] of Object.entries(expected)) {
@@ -193,11 +195,12 @@ describe("resolveModel", () => {
     { provider: "deepseek", model: "deepseek/deepseek-chat", envVar: "DEEPSEEK_API_KEY", expectedModelId: "deepseek-chat" },
     { provider: "cohere", model: "cohere/command-r-plus", envVar: "COHERE_API_KEY", expectedModelId: "command-r-plus" },
     { provider: "openrouter", model: "openrouter/openrouter", envVar: "OPENROUTER_API_KEY", expectedModelId: "openrouter" },
+    { provider: "ollama", model: "ollama/llama3", envVar: "OLLAMA_HOST", expectedModelId: "llama3" },
   ];
 
   for (const { provider, model, envVar, expectedModelId } of providerCases) {
-    test(`resolves ${provider} model when API key is set`, () => {
-      process.env[envVar] = "test-key";
+    test(`resolves ${provider} model when ${envVar.includes("HOST") ? "host URL is set" : "API key is set"}`, () => {
+      process.env[envVar] = envVar.includes("HOST") ? "http://localhost:11434" : "test-key";
       const m = resolveModel(model);
       expect(m).toBeDefined();
       expect(m.modelId).toBe(expectedModelId);
