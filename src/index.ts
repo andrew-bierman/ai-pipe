@@ -76,7 +76,10 @@ export type JsonOutput = z.infer<typeof JsonOutputSchema>;
  * Load a file's content as a Data URL (base64 encoded).
  * Used for images and other binary attachments.
  */
-async function loadAsDataUrl(path: string, mimeType: string): Promise<string> {
+export async function loadAsDataUrl(
+  path: string,
+  mimeType: string,
+): Promise<string> {
   const file = Bun.file(path);
   if (!(await file.exists())) {
     throw new Error(`File not found: ${path}`);
@@ -86,40 +89,62 @@ async function loadAsDataUrl(path: string, mimeType: string): Promise<string> {
   return `data:${mimeType};base64,${base64}`;
 }
 
-export async function readFiles(paths: string[]): Promise<string> {
-  const parts: string[] = [];
+/**
+ * Helper to reduce duplication between readFiles and readImages.
+ * Validates file exists, then applies the processing function.
+ * Throws with label-prefixed error message on failure.
+ */
+async function loadOrExit<T>(
+  label: string,
+  fn: (path: string) => Promise<T>,
+  paths: string[],
+): Promise<T[]> {
+  const results: T[] = [];
   for (const path of paths) {
     const file = Bun.file(path);
     if (!(await file.exists())) {
-      throw new Error(`File not found: ${path}`);
+      throw new Error(`${label} not found: ${path}`);
     }
-    const content = await file.text();
-    parts.push(`# ${path}\n\`\`\`\n${content}\n\`\`\``);
+    results.push(await fn(path));
   }
+  return results;
+}
+
+export async function readFiles(paths: string[]): Promise<string> {
+  const parts = await loadOrExit(
+    "File",
+    async (path: string) => {
+      const file = Bun.file(path);
+      return `# ${path}\n\`\`\`\n${await file.text()}\n\`\`\``;
+    },
+    paths,
+  );
   return parts.join("\n\n");
 }
 
 export async function readImages(paths: string[]): Promise<{ url: string }[]> {
-  const images: { url: string }[] = [];
-  for (const path of paths) {
-    const file = Bun.file(path);
-    const mimeType = file.type || "image/png";
-    const dataUrl = await loadAsDataUrl(path, mimeType);
-    images.push({ url: dataUrl });
-  }
-  return images;
+  return loadOrExit(
+    "Image",
+    async (path: string) => {
+      const file = Bun.file(path);
+      const mimeType = file.type || "image/png";
+      const dataUrl = await loadAsDataUrl(path, mimeType);
+      return { url: dataUrl };
+    },
+    paths,
+  );
 }
 
 export function buildPrompt(
   argPrompt: string | null,
   fileContent: string | null = null,
   stdinContent: string | null = null,
-): string | null {
+): string {
   const parts: string[] = [];
   if (argPrompt) parts.push(argPrompt);
   if (fileContent) parts.push(fileContent);
   if (stdinContent) parts.push(stdinContent);
-  return parts.length > 0 ? parts.join("\n\n") : null;
+  return parts.join("\n\n");
 }
 
 export function resolveOptions(
@@ -205,7 +230,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
     process.exit(1);
   }
 
-  const prompt = buildPrompt(argPrompt, fileContent, stdinContent) ?? "";
+  const prompt = buildPrompt(argPrompt, fileContent, stdinContent);
   if (!prompt && images.length === 0) {
     program.help();
     return;

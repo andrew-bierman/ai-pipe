@@ -28,8 +28,8 @@ describe("buildPrompt", () => {
     expect(result).toBe("review this code\n\nconst x = 1;");
   });
 
-  test("returns null when neither provided", () => {
-    expect(buildPrompt(null, null)).toBeNull();
+  test("returns empty string when neither provided", () => {
+    expect(buildPrompt(null, null)).toBe("");
   });
 
   test("arg prompt comes first in combined output", () => {
@@ -73,8 +73,8 @@ describe("buildPrompt", () => {
     expect(result).toBe("# f.txt\n```\ncontent\n```\n\nstdin");
   });
 
-  test("returns null when all three are null", () => {
-    expect(buildPrompt(null, null, null)).toBeNull();
+  test("returns empty string when all three are null", () => {
+    expect(buildPrompt(null, null, null)).toBe("");
   });
 
   test("file content default param preserves two-arg behavior", () => {
@@ -146,7 +146,7 @@ describe("readImages", () => {
   test("throws on nonexistent image file", async () => {
     const missing = join(tmpdir(), `nonexistent-${uid()}.png`);
     await expect(readImages([missing])).rejects.toThrow(
-      `File not found: ${missing}`,
+      `Image not found: ${missing}`,
     );
   });
 
@@ -155,7 +155,7 @@ describe("readImages", () => {
     const missingPath = join(tmpdir(), `missing-${uid()}.png`);
     await Bun.write(validPath, "valid image");
     await expect(readImages([validPath, missingPath])).rejects.toThrow(
-      `File not found: ${missingPath}`,
+      `Image not found: ${missingPath}`,
     );
   });
 
