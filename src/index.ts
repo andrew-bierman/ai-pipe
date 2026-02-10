@@ -5,7 +5,7 @@ import { program } from "commander";
 import { z } from "zod";
 import pkg from "../package.json";
 import { generateCompletions } from "./completions.ts";
-import { type Config, loadConfig } from "./config.ts";
+import { type Config, listRoles, loadConfig, loadRole } from "./config.ts";
 import { APP } from "./constants.ts";
 import { renderMarkdown } from "./markdown.ts";
 import {
@@ -18,6 +18,7 @@ import {
 export interface CLIOptions {
   model?: string;
   system?: string;
+  role?: string;
   file?: string[];
   image?: string[];
   json: boolean;
@@ -28,11 +29,13 @@ export interface CLIOptions {
   config?: string;
   providers?: boolean;
   completions?: string;
+  roles?: boolean;
 }
 
 export const CLIOptionsSchema = z.object({
   model: z.string().optional(),
   system: z.string().optional(),
+  role: z.string().optional(),
   file: z.array(z.string()).optional(),
   image: z.array(z.string()).optional(),
   json: z.boolean(),
@@ -47,6 +50,7 @@ export const CLIOptionsSchema = z.object({
   config: z.string().optional(),
   providers: z.boolean().optional(),
   completions: z.string().optional(),
+  roles: z.boolean().optional(),
 });
 
 export const JsonOutputSchema = z.object({
@@ -201,6 +205,22 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
     return;
   }
 
+  // List available roles
+  if (opts.roles) {
+    const roles = await listRoles();
+    const rolesDir = `~/${APP.configDirName}/roles/`;
+    if (roles.length === 0) {
+      console.log(`No roles found. Create role files in ${rolesDir}`);
+      console.log(`Example: ${rolesDir}reviewer.txt`);
+    } else {
+      console.log("Available roles:");
+      for (const role of roles) {
+        console.log(`  - ${role}`);
+      }
+    }
+    return;
+  }
+
   const config = await loadConfig(opts.config);
 
   // Inject config API keys into process.env (env vars take precedence)
@@ -244,13 +264,29 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
   const { modelString, system, temperature, maxOutputTokens, markdown } =
     resolveOptions(opts, config);
 
+  // Resolve system prompt from role, CLI --system, or config
+  // CLI --system takes precedence over role
+  let systemPrompt = system;
+  if (opts.role && opts.system === undefined) {
+    const roleContent = await loadRole(opts.role);
+    if (roleContent) {
+      systemPrompt = roleContent;
+    } else {
+      console.error(
+        `Error: Role "${opts.role}" not found in ~/${APP.configDirName}/roles/`,
+      );
+      console.error("Use --roles to list available roles.");
+      process.exit(1);
+    }
+  }
+
   const model = resolveModel(modelString);
 
   try {
     if (opts.json || !opts.stream) {
       const result = await generateText({
         model,
-        system,
+        system: systemPrompt,
         prompt,
         temperature,
         maxOutputTokens,
@@ -274,7 +310,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
     } else {
       const result = streamText({
         model,
-        system,
+        system: systemPrompt,
         prompt,
         temperature,
         maxOutputTokens,
@@ -311,6 +347,10 @@ export function setupCLI() {
     .option("-m, --model <model>", "Model in provider/model-id format")
     .option("-s, --system <prompt>", "System prompt")
     .option(
+      "-r, --role <name>",
+      `Use a role from ~/${APP.configDirName}/roles/`,
+    )
+    .option(
       "-f, --file <path>",
       "Include file contents in prompt (repeatable)",
       (val: string, acc: string[]) => {
@@ -339,6 +379,10 @@ export function setupCLI() {
     .option("--max-output-tokens <n>", "Maximum tokens to generate", parseInt)
     .option("-c, --config <path>", "Path to config directory")
     .option("--providers", "List supported providers and their API key status")
+    .option(
+      "--roles",
+      `List available roles from ~/${APP.configDirName}/roles/`,
+    )
     .option(
       "--completions <shell>",
       `Generate shell completions (${APP.supportedShells.join(", ")})`,

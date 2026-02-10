@@ -16,6 +16,8 @@ describe("generateCompletions", () => {
       const result = generateCompletions("bash");
       expect(result).toContain("--model");
       expect(result).toContain("--system");
+      expect(result).toContain("--role");
+      expect(result).toContain("--roles");
       expect(result).toContain("--file");
       expect(result).toContain("--json");
       expect(result).toContain("--no-stream");
@@ -75,6 +77,8 @@ describe("generateCompletions", () => {
       const result = generateCompletions("fish");
       expect(result).toContain("-l model");
       expect(result).toContain("-l system");
+      expect(result).toContain("-l role");
+      expect(result).toContain("-l roles");
       expect(result).toContain("-l file");
       expect(result).toContain("-l json");
       expect(result).toContain("-l no-stream");
