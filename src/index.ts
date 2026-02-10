@@ -18,6 +18,7 @@ export interface CLIOptions {
   model?: string;
   system?: string;
   file?: string[];
+  image?: string[];
   json: boolean;
   stream: boolean;
   temperature?: number;
@@ -31,6 +32,7 @@ export const CLIOptionsSchema = z.object({
   model: z.string().optional(),
   system: z.string().optional(),
   file: z.array(z.string()).optional(),
+  image: z.array(z.string()).optional(),
   json: z.boolean(),
   stream: z.boolean(),
   temperature: z
@@ -81,6 +83,23 @@ export async function readFiles(paths: string[]): Promise<string> {
     parts.push(`# ${path}\n\`\`\`\n${content}\n\`\`\``);
   }
   return parts.join("\n\n");
+}
+
+export async function readImages(
+  paths: string[],
+): Promise<{ url: string }[]> {
+  const images: { url: string }[] = [];
+  for (const path of paths) {
+    const file = Bun.file(path);
+    if (!(await file.exists())) {
+      throw new Error(`Image file not found: ${path}`);
+    }
+    const arrayBuffer = await file.arrayBuffer();
+    const base64 = Buffer.from(arrayBuffer).toString("base64");
+    const mimeType = file.type || "image/png";
+    images.push({ url: `data:${mimeType};base64,${base64}` });
+  }
+  return images;
 }
 
 export function buildPrompt(
@@ -170,8 +189,16 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
     process.exit(1);
   }
 
+  let images: { url: string }[] = [];
+  try {
+    images = opts.image?.length ? await readImages(opts.image) : [];
+  } catch (err: unknown) {
+    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+
   const prompt = buildPrompt(argPrompt, fileContent, stdinContent);
-  if (!prompt) {
+  if (!prompt && images.length === 0) {
     program.help();
     return;
   }
@@ -191,6 +218,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
         prompt,
         temperature,
         maxOutputTokens,
+        images: images.length > 0 ? images : undefined,
       });
 
       if (opts.json) {
@@ -211,6 +239,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
         prompt,
         temperature,
         maxOutputTokens,
+        images: images.length > 0 ? images : undefined,
       });
 
       for await (const chunk of result.textStream) {
@@ -235,6 +264,15 @@ export function setupCLI() {
     .option(
       "-f, --file <path>",
       "Include file contents in prompt (repeatable)",
+      (val: string, acc: string[]) => {
+        acc.push(val);
+        return acc;
+      },
+      [] as string[],
+    )
+    .option(
+      "-i, --image <path>",
+      "Include image in prompt for vision models (repeatable)",
       (val: string, acc: string[]) => {
         acc.push(val);
         return acc;
