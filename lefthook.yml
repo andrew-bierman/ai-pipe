@@ -6,10 +6,10 @@ pre-commit:
       glob: "package.json"
       stage_fixed: true
     - name: biome
-      run: bun scripts/biome.ts
+      run: bunx biome check --write {staged_files}
       glob: "*.{ts,tsx,js,jsx}"
       stage_fixed: true
     - name: typecheck
-      run: bun scripts/typecheck.ts
+      run: bun run typecheck
       glob: "*.{ts,tsx}"
       stage_fixed: true
