@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { z } from "zod";
 import { program } from "commander";
 import { streamText, generateText, type LanguageModelUsage, type FinishReason } from "ai";
 import { resolveModel, printProviders } from "./provider.ts";
@@ -20,12 +21,30 @@ export interface CLIOptions {
   completions?: string;
 }
 
-interface JsonOutput {
-  text: string;
-  model: string;
-  usage: LanguageModelUsage;
-  finishReason: FinishReason;
-}
+export const CLIOptionsSchema = z.object({
+  model: z.string().optional(),
+  system: z.string().optional(),
+  json: z.boolean(),
+  stream: z.boolean(),
+  temperature: z.number().min(0).max(2).optional(),
+  maxOutputTokens: z.number().int().positive().optional(),
+  config: z.string().optional(),
+  providers: z.boolean().optional(),
+  completions: z.string().optional(),
+});
+
+export const JsonOutputSchema = z.object({
+  text: z.string(),
+  model: z.string(),
+  usage: z.object({
+    inputTokens: z.number().optional(),
+    outputTokens: z.number().optional(),
+    totalTokens: z.number().optional(),
+  }),
+  finishReason: z.string(),
+});
+
+export type JsonOutput = z.infer<typeof JsonOutputSchema>;
 
 export function buildPrompt(
   argPrompt: string | null,
@@ -62,7 +81,16 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf-8").trimEnd();
 }
 
-async function run(promptArgs: string[], opts: CLIOptions) {
+async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
+  const parsed = CLIOptionsSchema.safeParse(rawOpts);
+  if (!parsed.success) {
+    for (const issue of parsed.error.issues) {
+      console.error(`Error: Invalid option "${issue.path.join(".")}": ${issue.message}`);
+    }
+    process.exit(1);
+  }
+  const opts = parsed.data;
+
   // Handle info flags first
   if (opts.providers) {
     printProviders();

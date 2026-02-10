@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { createProviderRegistry } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
@@ -26,7 +27,8 @@ export const SUPPORTED_PROVIDERS = [
   "cohere",
 ] as const;
 
-export type ProviderId = (typeof SUPPORTED_PROVIDERS)[number];
+export const ProviderIdSchema = z.enum(SUPPORTED_PROVIDERS);
+export type ProviderId = z.infer<typeof ProviderIdSchema>;
 
 export const PROVIDER_ENV_VARS: Record<ProviderId, string> = {
   openai: "OPENAI_API_KEY",
@@ -42,30 +44,32 @@ export const PROVIDER_ENV_VARS: Record<ProviderId, string> = {
 
 const DEFAULT_PROVIDER: ProviderId = "openai";
 
-export function parseModel(modelString: string): {
-  provider: string;
-  modelId: string;
-  fullId: string;
-} {
-  const slashIndex = modelString.indexOf("/");
-  if (slashIndex === -1) {
+export const ModelStringSchema = z
+  .string()
+  .min(1, "Model string cannot be empty")
+  .transform((val) => {
+    const slashIndex = val.indexOf("/");
+    if (slashIndex === -1) {
+      return { provider: DEFAULT_PROVIDER, modelId: val, fullId: `${DEFAULT_PROVIDER}/${val}` };
+    }
     return {
-      provider: DEFAULT_PROVIDER,
-      modelId: modelString,
-      fullId: `${DEFAULT_PROVIDER}/${modelString}`,
+      provider: val.slice(0, slashIndex),
+      modelId: val.slice(slashIndex + 1),
+      fullId: val,
     };
-  }
-  return {
-    provider: modelString.slice(0, slashIndex),
-    modelId: modelString.slice(slashIndex + 1),
-    fullId: modelString,
-  };
+  });
+
+export type ParsedModel = z.infer<typeof ModelStringSchema>;
+
+export function parseModel(modelString: string): ParsedModel {
+  return ModelStringSchema.parse(modelString);
 }
 
 export function resolveModel(modelString: string) {
   const { provider, fullId } = parseModel(modelString);
 
-  if (!SUPPORTED_PROVIDERS.includes(provider as ProviderId)) {
+  const result = ProviderIdSchema.safeParse(provider);
+  if (!result.success) {
     const supported = SUPPORTED_PROVIDERS.join(", ");
     console.error(
       `Error: Unknown provider "${provider}". Supported: ${supported}`
@@ -73,7 +77,7 @@ export function resolveModel(modelString: string) {
     process.exit(1);
   }
 
-  const envVar = PROVIDER_ENV_VARS[provider as ProviderId];
+  const envVar = PROVIDER_ENV_VARS[result.data];
   if (!process.env[envVar]) {
     console.error(
       `Error: Missing API key. Set ${envVar} or check your provider config.`
