@@ -45,6 +45,7 @@
     "@ai-sdk/xai": "^3.0.49",
     "@openrouter/ai-sdk-provider": "^2.2.1",
     "ai": "^6.0.78",
+    "ai-sdk-ollama": "^3.5.0",
     "commander": "^14.0.3",
     "radash": "^12.1.1",
     "zod": "^4.3.6"
