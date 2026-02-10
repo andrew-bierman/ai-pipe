@@ -1,6 +1,6 @@
 {
   "name": "ai-pipe",
-  "version": "1.0.1",
+  "version": "1.0.6",
   "description": "A lean CLI for calling LLMs from the terminal. Text in, text out.",
   "module": "src/index.ts",
   "type": "module",
