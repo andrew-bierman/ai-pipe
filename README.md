@@ -30,6 +30,7 @@ A powerful CLI for calling LLMs from the terminal. Text in, text out. Built on t
 - 🔧 **Tool Use** — function calling via `--tools`
 - 📄 **Prompt Templates** — reusable prompt snippets with `--template`
 - 📤 **Session Export/Import** — share conversations as JSON or Markdown
+- 📊 **Output Formats** — structured output in JSON, YAML, CSV, or text
 
 ## 📦 Installation
 
@@ -347,6 +348,26 @@ Pipe into `jq` for further processing:
 ai-pipe --json "list 3 colors" | jq -r '.text'
 ```
 
+### Output Formats
+
+Use `--format` (or `-F`) to get structured output in different formats:
+
+```bash
+# JSON output (same as --json)
+ai-pipe --format json "what is 2+2"
+
+# YAML output
+ai-pipe --format yaml "what is 2+2"
+
+# CSV output (great for spreadsheets)
+ai-pipe --format csv "list 3 colors" >> results.csv
+
+# Text only (strips metadata)
+ai-pipe --format text "hello"
+```
+
+When `--format` is used, streaming is automatically disabled (same behavior as `--json`).
+
 ## 💬 Session Management
 
 Export, import, and manage conversation sessions:
@@ -392,6 +413,7 @@ Options:
   -s, --system <prompt>        System prompt
   -f, --file <path>            Include file contents in prompt (repeatable)
   -j, --json                   Output full JSON response object
+  -F, --format <fmt>           Output format (json, yaml, csv, text)
   --no-stream                  Wait for full response, then print
   -t, --temperature <n>        Sampling temperature (0-2)
   --max-output-tokens <n>      Maximum tokens to generate
@@ -479,7 +501,7 @@ The release workflow handles `bun publish`, binary builds, and GitHub release.
 - [x] **Config commands** — `ai-pipe init` wizard, `config set/show/reset/path`
 - [x] **citty migration** — replaced Commander.js with citty (UnJS)
 - [x] **Prompt templates** — reusable prompt snippets in `~/.ai-pipe/templates/`
-- [ ] **Output formats** — CSV, YAML, TOML structured output modes
+- [x] **Output formats** — CSV, YAML, JSON, text structured output modes
 - [ ] **Piped chain mode** — chain multiple LLM calls with `|` syntax
 - [x] **Session export/import** — share conversations as JSON/Markdown
 - [x] **Token budget** — set a max spend per session with `--budget`
