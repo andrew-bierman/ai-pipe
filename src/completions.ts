@@ -51,13 +51,23 @@ _${funcName}_completions() {
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
   opts="--model -m --system -s --role -r --roles --template -T --templates --file -f --image -i --json -j --no-stream --no-cache --temperature -t --max-output-tokens --config -c --cost --markdown --chat --session -C --providers --completions --tools --mcp --no-update-check --version -V --help -h"
   providers="${providers}"
-  subcommands="init config"
+  subcommands="init config session"
   config_subcommands="set show reset path"
+  session_subcommands="list export import delete"
 
   # Handle config subcommands
   if [[ "\${COMP_WORDS[1]}" == "config" ]]; then
     if [[ \${COMP_CWORD} -eq 2 ]]; then
       COMPREPLY=( $(compgen -W "\${config_subcommands}" -- "\${cur}") )
+      return 0
+    fi
+    return 0
+  fi
+
+  # Handle session subcommands
+  if [[ "\${COMP_WORDS[1]}" == "session" ]]; then
+    if [[ \${COMP_CWORD} -eq 2 ]]; then
+      COMPREPLY=( $(compgen -W "\${session_subcommands}" -- "\${cur}") )
       return 0
     fi
     return 0
@@ -109,15 +119,25 @@ function zsh(): string {
   return `# ${name} zsh completions
 # Add to ~/.zshrc: eval "$(${name} --completions zsh)"
 _${funcName}() {
-  local -a providers subcommands config_subcommands
+  local -a providers subcommands config_subcommands session_subcommands
   providers=(${SUPPORTED_PROVIDERS.map((p) => `'${p}/'`).join(" ")})
-  subcommands=('init:Run interactive setup wizard' 'config:Manage configuration')
+  subcommands=('init:Run interactive setup wizard' 'config:Manage configuration' 'session:Manage conversation sessions')
   config_subcommands=('set:Set a config value' 'show:Show current config' 'reset:Reset config to defaults' 'path:Print config directory path')
+  session_subcommands=('list:List all saved sessions' 'export:Export a session (json or md)' 'import:Import a session from file' 'delete:Delete a session')
 
   # Handle config subcommands
   if [[ "\${words[2]}" == "config" ]]; then
     if [[ \${CURRENT} -eq 3 ]]; then
       _describe -t commands 'config command' config_subcommands
+      return 0
+    fi
+    return 0
+  fi
+
+  # Handle session subcommands
+  if [[ "\${words[2]}" == "session" ]]; then
+    if [[ \${CURRENT} -eq 3 ]]; then
+      _describe -t commands 'session command' session_subcommands
       return 0
     fi
     return 0
@@ -173,12 +193,19 @@ function fish(): string {
 # Subcommands
 complete -c ${name} -n '__fish_use_subcommand' -a 'init' -d 'Run interactive setup wizard'
 complete -c ${name} -n '__fish_use_subcommand' -a 'config' -d 'Manage configuration'
+complete -c ${name} -n '__fish_use_subcommand' -a 'session' -d 'Manage conversation sessions'
 
 # Config subcommands
 complete -c ${name} -n '__fish_seen_subcommand_from config' -a 'set' -d 'Set a config value'
 complete -c ${name} -n '__fish_seen_subcommand_from config' -a 'show' -d 'Show current config'
 complete -c ${name} -n '__fish_seen_subcommand_from config' -a 'reset' -d 'Reset config to defaults'
 complete -c ${name} -n '__fish_seen_subcommand_from config' -a 'path' -d 'Print config directory path'
+
+# Session subcommands
+complete -c ${name} -n '__fish_seen_subcommand_from session' -a 'list' -d 'List all saved sessions'
+complete -c ${name} -n '__fish_seen_subcommand_from session' -a 'export' -d 'Export a session (json or md)'
+complete -c ${name} -n '__fish_seen_subcommand_from session' -a 'import' -d 'Import a session from file'
+complete -c ${name} -n '__fish_seen_subcommand_from session' -a 'delete' -d 'Delete a session'
 
 # Global options
 complete -c ${name} -s m -l model -d 'Model in provider/model-id format' -x -a '${SUPPORTED_PROVIDERS.map((p) => `${p}/`).join(" ")}'
@@ -210,10 +237,15 @@ complete -c ${name} -s h -l help -d 'Print help'
 # ai alias completions
 complete -c ai -n '__fish_use_subcommand' -a 'init' -d 'Run interactive setup wizard'
 complete -c ai -n '__fish_use_subcommand' -a 'config' -d 'Manage configuration'
+complete -c ai -n '__fish_use_subcommand' -a 'session' -d 'Manage conversation sessions'
 complete -c ai -n '__fish_seen_subcommand_from config' -a 'set' -d 'Set a config value'
 complete -c ai -n '__fish_seen_subcommand_from config' -a 'show' -d 'Show current config'
 complete -c ai -n '__fish_seen_subcommand_from config' -a 'reset' -d 'Reset config to defaults'
 complete -c ai -n '__fish_seen_subcommand_from config' -a 'path' -d 'Print config directory path'
+complete -c ai -n '__fish_seen_subcommand_from session' -a 'list' -d 'List all saved sessions'
+complete -c ai -n '__fish_seen_subcommand_from session' -a 'export' -d 'Export a session (json or md)'
+complete -c ai -n '__fish_seen_subcommand_from session' -a 'import' -d 'Import a session from file'
+complete -c ai -n '__fish_seen_subcommand_from session' -a 'delete' -d 'Delete a session'
 complete -c ai -s m -l model -d 'Model in provider/model-id format' -x -a '${SUPPORTED_PROVIDERS.map((p) => `${p}/`).join(" ")}'
 complete -c ai -s s -l system -d 'System prompt' -x
 complete -c ai -s r -l role -d 'Role name from roles directory' -x
