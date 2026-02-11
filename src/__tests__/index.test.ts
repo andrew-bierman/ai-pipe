@@ -1311,7 +1311,7 @@ describe("resolveOptions with aliases", () => {
     };
     // Simulate what runAction does: resolve alias first, then pass to resolveOptions
     const opts: CLIOptions = { ...defaultOpts, model: "claude" };
-    opts.model = resolveAlias(config, opts.model!);
+    if (opts.model) opts.model = resolveAlias(config, opts.model);
     const result = resolveOptions(opts, config);
     expect(result.modelString).toBe("anthropic/claude-sonnet-4-5");
   });
@@ -1323,7 +1323,7 @@ describe("resolveOptions with aliases", () => {
       },
     };
     const opts: CLIOptions = { ...defaultOpts, model: "openai/gpt-4o" };
-    opts.model = resolveAlias(config, opts.model!);
+    if (opts.model) opts.model = resolveAlias(config, opts.model);
     const result = resolveOptions(opts, config);
     expect(result.modelString).toBe("openai/gpt-4o");
   });
@@ -1353,7 +1353,7 @@ describe("resolveOptions with aliases", () => {
       },
     };
     const opts: CLIOptions = { ...defaultOpts, model: "claude" };
-    opts.model = resolveAlias(config, opts.model!);
+    if (opts.model) opts.model = resolveAlias(config, opts.model);
     const result = resolveOptions(opts, config);
     expect(result.modelString).toBe("anthropic/claude-sonnet-4-5");
     // Provider-specific defaults should apply since the resolved model is anthropic/...
@@ -1363,7 +1363,7 @@ describe("resolveOptions with aliases", () => {
   test("alias resolution with empty aliases map", () => {
     const config: Config = { aliases: {} };
     const opts: CLIOptions = { ...defaultOpts, model: "claude" };
-    opts.model = resolveAlias(config, opts.model!);
+    if (opts.model) opts.model = resolveAlias(config, opts.model);
     const result = resolveOptions(opts, config);
     expect(result.modelString).toBe("claude");
   });
@@ -1371,7 +1371,7 @@ describe("resolveOptions with aliases", () => {
   test("alias resolution without aliases in config", () => {
     const config: Config = {};
     const opts: CLIOptions = { ...defaultOpts, model: "claude" };
-    opts.model = resolveAlias(config, opts.model!);
+    if (opts.model) opts.model = resolveAlias(config, opts.model);
     const result = resolveOptions(opts, config);
     expect(result.modelString).toBe("claude");
   });
