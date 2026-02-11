@@ -112,7 +112,7 @@ src/
 | **config.ts** | Loads `config.json` and `apiKeys.json` from the config directory. Handles role loading from `~/.ai-pipe/roles/*.md` and listing available roles. All file I/O uses `Bun.file()`. |
 | **cost.ts** | Contains pricing data for all providers and models. Exports `calculateCost()` and `formatCost()` for the `--cost` flag. Prices are per 1M tokens. |
 | **completions.ts** | Generates shell completion scripts for bash, zsh, and fish. Used by the `--completions` flag. |
-| **markdown.ts** | Renders markdown to ANSI-formatted terminal output using `Bun.markdown.render()`. Handles headings, code blocks, lists, tables, links, and more. |
+| **markdown.ts** | Provides terminal markdown rendering used by the `--markdown` flag. Uses `Bun.markdown.render()` to convert markdown to ANSI-formatted output with headings, code blocks, lists, tables, links, and more. |
 
 ### Data Flow
 

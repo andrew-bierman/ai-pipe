@@ -355,6 +355,8 @@ ai-pipe -c ./ai-config "explain the architecture"
 ai-pipe -c ./.ai-pipe -f src/app.ts "review this code"
 ```
 
+> **Note:** The `--config` flag only affects where `config.json` and `apiKeys.json` are loaded from. Roles are always loaded from `~/.ai-pipe/roles/` and session history is always stored in `~/.ai-pipe/history/`, regardless of the `--config` value.
+
 ## Full Setup Example
 
 Here is a complete setup from scratch:

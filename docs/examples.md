@@ -279,7 +279,7 @@ ai-pipe --no-stream "list 5 programming languages"
 
 ### Markdown rendering
 
-Render the response with ANSI colors and formatting in the terminal:
+Render the response with ANSI colors and formatting in the terminal. The `--markdown` flag passes the model output through `Bun.markdown.render()` which applies terminal formatting including headings, code highlighting, bold, italic, lists, and more:
 
 ```bash
 ai-pipe --markdown "explain async/await with code examples"

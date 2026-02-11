@@ -18,7 +18,7 @@ Prompt words are joined with spaces. If no prompt is given and no stdin is avail
 |------|-------|------|---------|-------------|
 | `[prompt...]` | | string | | Prompt text. Multiple words are joined with spaces. |
 | `--system <prompt>` | `-s` | string | | System prompt sent before the user prompt. |
-| `--role <name>` | `-r` | string | | Load a system prompt from `~/.ai-pipe/roles/<name>.md`. |
+| `--role <name>` | `-r` | string | | Load a role file from `~/.ai-pipe/roles/<name>.md` and apply its content as the system prompt. Ignored if `--system` is also provided. |
 | `--file <path>` | `-f` | string | | Include file contents in the prompt. Repeatable for multiple files. |
 | `--image <path>` | `-i` | string | | Include an image in the prompt for vision models. Repeatable. |
 
@@ -34,7 +34,7 @@ Prompt words are joined with spaces. If no prompt is given and no stdin is avail
 |------|-------|------|---------|-------------|
 | `--json` | `-j` | boolean | `false` | Output the full JSON response object (text, model, usage, finishReason). |
 | `--no-stream` | | boolean | `false` | Wait for the full response before printing. Streaming is on by default. |
-| `--markdown` | | boolean | `false` | Render the response as formatted markdown in the terminal (ANSI colors). |
+| `--markdown` | | boolean | `false` | Render the response as formatted markdown in the terminal with ANSI colors, headings, code highlighting, and other formatting via `Bun.markdown.render()`. |
 | `--cost` | | boolean | `false` | Show estimated cost of the request on stderr after the response. |
 
 ### Generation Parameters
@@ -151,9 +151,9 @@ When `--json` / `-j` is used, the response is a JSON object written to stdout:
 |-------|------|-------------|
 | `text` | string | The generated text response. |
 | `model` | string | The model string used (in `provider/model-id` format). |
-| `usage.inputTokens` | number | Number of input tokens consumed. |
-| `usage.outputTokens` | number | Number of output tokens generated. |
-| `usage.totalTokens` | number | Total tokens (input + output). |
+| `usage.inputTokens` | number? | Number of input tokens consumed. Optional; may be absent depending on the provider. |
+| `usage.outputTokens` | number? | Number of output tokens generated. Optional; may be absent depending on the provider. |
+| `usage.totalTokens` | number? | Total tokens (input + output). Optional; may be absent depending on the provider. |
 | `usage.inputTokenDetails` | object | Breakdown of input token types (optional, provider-dependent). |
 | `usage.inputTokenDetails.noCacheTokens` | number | Tokens not served from cache. |
 | `usage.inputTokenDetails.cacheReadTokens` | number | Tokens served from prompt cache. |
