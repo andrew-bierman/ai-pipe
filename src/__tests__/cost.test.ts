@@ -162,53 +162,62 @@ describe("getPricing", () => {
 
 describe("calculateCost", () => {
   test("calculates cost for OpenAI GPT-4o", () => {
-    const cost = calculateCost({ provider: "openai", modelId: "gpt-4o", usage: {
-      inputTokens: 1000,
-      outputTokens: 2000,
-    }});
+    const cost = calculateCost({
+      provider: "openai",
+      modelId: "gpt-4o",
+      usage: { inputTokens: 1000, outputTokens: 2000 },
+    });
     expect(cost.inputCost).toBe(0.0025); // 1000/1M * $2.50
     expect(cost.outputCost).toBe(0.02); // 2000/1M * $10.00
     expect(cost.totalCost).toBe(0.0225);
   });
 
   test("calculates cost for Anthropic Claude", () => {
-    const cost = calculateCost({ provider: "anthropic", modelId: "claude-sonnet-4-5", usage: {
-      inputTokens: 5000,
-      outputTokens: 10000,
-    }});
+    const cost = calculateCost({
+      provider: "anthropic",
+      modelId: "claude-sonnet-4-5",
+      usage: { inputTokens: 5000, outputTokens: 10000 },
+    });
     expect(cost.inputCost).toBeCloseTo(0.015, 5);
     expect(cost.outputCost).toBeCloseTo(0.15, 5);
     expect(cost.totalCost).toBeCloseTo(0.165, 5);
   });
 
   test("handles zero tokens", () => {
-    const cost = calculateCost({ provider: "openai", modelId: "gpt-4o", usage: {
-      inputTokens: 0,
-      outputTokens: 0,
-    }});
+    const cost = calculateCost({
+      provider: "openai",
+      modelId: "gpt-4o",
+      usage: { inputTokens: 0, outputTokens: 0 },
+    });
     expect(cost.totalCost).toBe(0);
   });
 
   test("handles missing usage gracefully", () => {
-    const cost = calculateCost({ provider: "openai", modelId: "gpt-4o", usage: {} });
+    const cost = calculateCost({
+      provider: "openai",
+      modelId: "gpt-4o",
+      usage: {},
+    });
     expect(cost.totalCost).toBe(0);
     expect(cost.inputTokens).toBe(0);
     expect(cost.outputTokens).toBe(0);
   });
 
   test("handles Ollama (free) correctly", () => {
-    const cost = calculateCost({ provider: "ollama", modelId: "llama3", usage: {
-      inputTokens: 100000,
-      outputTokens: 100000,
-    }});
+    const cost = calculateCost({
+      provider: "ollama",
+      modelId: "llama3",
+      usage: { inputTokens: 100000, outputTokens: 100000 },
+    });
     expect(cost.totalCost).toBe(0);
   });
 
   test("returns correct token counts", () => {
-    const cost = calculateCost({ provider: "groq", modelId: "llama-3.3-70b-versatile", usage: {
-      inputTokens: 5000,
-      outputTokens: 7500,
-    }});
+    const cost = calculateCost({
+      provider: "groq",
+      modelId: "llama-3.3-70b-versatile",
+      usage: { inputTokens: 5000, outputTokens: 7500 },
+    });
     expect(cost.inputTokens).toBe(5000);
     expect(cost.outputTokens).toBe(7500);
   });
@@ -574,24 +583,27 @@ describe("Cost Calculation Integration", () => {
       outputTokens,
       maxTotalCost,
     } of testCases) {
-      const cost = calculateCost({ provider, modelId, usage: {
-        inputTokens,
-        outputTokens,
-      }});
+      const cost = calculateCost({
+        provider,
+        modelId,
+        usage: { inputTokens, outputTokens },
+      });
       expect(cost.totalCost).toBeLessThanOrEqual(maxTotalCost);
     }
   });
 
   test("cost is proportional to token count", () => {
-    const cost1 = calculateCost({ provider: "openai", modelId: "gpt-4o", usage: {
-      inputTokens: 1000,
-      outputTokens: 1000,
-    }});
+    const cost1 = calculateCost({
+      provider: "openai",
+      modelId: "gpt-4o",
+      usage: { inputTokens: 1000, outputTokens: 1000 },
+    });
 
-    const cost2 = calculateCost({ provider: "openai", modelId: "gpt-4o", usage: {
-      inputTokens: 2000,
-      outputTokens: 2000,
-    }});
+    const cost2 = calculateCost({
+      provider: "openai",
+      modelId: "gpt-4o",
+      usage: { inputTokens: 2000, outputTokens: 2000 },
+    });
 
     expect(cost2.totalCost).toBe(cost1.totalCost * 2);
   });

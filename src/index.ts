@@ -199,6 +199,7 @@ export interface BuildPromptOptions {
   stdinContent?: string | null;
 }
 
+// Breaking change (pre-1.0): signature changed from positional args to object param
 export function buildPrompt({
   prompt,
   fileContent = null,

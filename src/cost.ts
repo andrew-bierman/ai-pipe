@@ -179,7 +179,8 @@ export interface CalculateCostOptions {
 }
 
 /**
- * Calculate cost from token usage
+ * Calculate cost from token usage.
+ * Breaking change (pre-1.0): signature changed from positional args to object param.
  */
 export function calculateCost({
   provider,

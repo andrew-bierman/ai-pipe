@@ -5,7 +5,6 @@ import { join } from "node:path";
 import type { Config } from "../config.ts";
 import {
   buildPrompt,
-  type BuildPromptOptions,
   type CLIOptions,
   CLIOptionsSchema,
   HistoryMessageSchema,
