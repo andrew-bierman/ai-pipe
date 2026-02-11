@@ -1,4 +1,3 @@
-import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { z } from "zod";
 import { APP } from "./constants.ts";
@@ -29,7 +28,11 @@ export type Config = z.infer<typeof ConfigSchema> & {
   apiKeys?: Record<string, string>;
 };
 
-const DEFAULT_CONFIG_DIR = join(homedir(), APP.configDirName);
+const HOME_DIR = Bun.env.HOME ?? Bun.env.USERPROFILE ?? "";
+if (!HOME_DIR) {
+  console.warn("Warning: Neither HOME nor USERPROFILE environment variable is set. Config paths may not resolve correctly.");
+}
+const DEFAULT_CONFIG_DIR = join(HOME_DIR, APP.configDirName);
 
 async function loadJsonFile<T>(
   path: string,

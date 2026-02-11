@@ -72,7 +72,6 @@
     "ai": "^6.0.78",
     "ai-sdk-ollama": "^3.5.0",
     "commander": "^14.0.3",
-    "radash": "^12.1.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {

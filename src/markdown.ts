@@ -1,4 +1,9 @@
-/** ANSI escape codes for terminal styling */
+/**
+ * ANSI escape codes for terminal styling.
+ * NOTE: Bun.color() converts named colors to hex/rgb but does not produce ANSI
+ * escape sequences for bold/dim/italic/underline/strikethrough. Manual ANSI codes
+ * are still the right approach here for full terminal formatting control.
+ */
 const ANSI = {
   RESET: "\x1b[0m",
   BOLD: "\x1b[1m",
