@@ -49,7 +49,7 @@ _${funcName}_completions() {
   COMPREPLY=()
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
-  opts="--model -m --system -s --role -r --roles --template -T --templates --file -f --image -i --json -j --format -F --no-stream --no-cache --temperature -t --max-output-tokens --config -c --cost --markdown --chat --session -C --budget -B --retries --providers --completions --tools --mcp --chain --verbose -v --no-update-check --version -V --help -h"
+  opts="--model -m --system -s --role -r --roles --template -T --templates --file -f --image -i --json -j --format -F --no-stream --no-cache --temperature -t --max-output-tokens --config -c --cost --markdown --chat --session -C --budget -B --retries --providers --completions --tools --mcp --chain --verbose -v --plugins -P --no-update-check --version -V --help -h"
   providers="${providers}"
   subcommands="init config session"
   config_subcommands="set show reset path"
@@ -83,7 +83,7 @@ _${funcName}_completions() {
       compopt -o nospace
       return 0
       ;;
-    -f|--file|-i|--image|--tools|--mcp|--chain)
+    -f|--file|-i|--image|--tools|--mcp|--chain|-P|--plugins)
       COMPREPLY=( $(compgen -f -- "\${cur}") )
       return 0
       ;;
@@ -175,6 +175,7 @@ _${funcName}() {
     '--mcp[Path to MCP server configuration file (JSON)]:file:_files' \\
     '--chain[Path to chain config JSON file]:file:_files' \\
     '(-v --verbose)'{-v,--verbose}'[Show intermediate chain outputs on stderr]' \\
+    '(-P --plugins)'{-P,--plugins}'[Path to plugins configuration file (JSON)]:file:_files' \\
     '--no-update-check[Disable update notifications]' \\
     '(-V --version)'{-V,--version}'[Print version]' \\
     '(-h --help)'{-h,--help}'[Print help]' \\
@@ -244,6 +245,7 @@ complete -c ${name} -l tools -d 'Path to tools configuration file (JSON)' -r -F
 complete -c ${name} -l mcp -d 'Path to MCP server configuration file (JSON)' -r -F
 complete -c ${name} -l chain -d 'Path to chain config JSON file' -r -F
 complete -c ${name} -s v -l verbose -d 'Show intermediate chain outputs on stderr'
+complete -c ${name} -s P -l plugins -d 'Path to plugins configuration file (JSON)' -r -F
 complete -c ${name} -l no-update-check -d 'Disable update notifications'
 complete -c ${name} -s V -l version -d 'Print version'
 complete -c ${name} -s h -l help -d 'Print help'
@@ -286,6 +288,7 @@ complete -c ai -l tools -d 'Path to tools configuration file (JSON)' -r -F
 complete -c ai -l mcp -d 'Path to MCP server configuration file (JSON)' -r -F
 complete -c ai -l chain -d 'Path to chain config JSON file' -r -F
 complete -c ai -s v -l verbose -d 'Show intermediate chain outputs on stderr'
+complete -c ai -s P -l plugins -d 'Path to plugins configuration file (JSON)' -r -F
 complete -c ai -s V -l version -d 'Print version'
 complete -c ai -s h -l help -d 'Print help'`;
 }

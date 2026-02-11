@@ -37,6 +37,7 @@ import {
 import { runInit } from "./init.ts";
 import { renderMarkdown } from "./markdown.ts";
 import { loadMCPConfig, MCPManager } from "./mcp.ts";
+import { PluginManager } from "./plugins.ts";
 import {
   PROVIDER_ENV_VARS,
   ProviderIdSchema,
@@ -127,6 +128,7 @@ export interface CLIOptions {
   budget?: number;
   chain?: string;
   verbose?: boolean;
+  plugins?: string;
 }
 
 /** Zod schema for validating and coercing CLI options from citty. */
@@ -163,6 +165,7 @@ export const CLIOptionsSchema = z.object({
   budget: z.number().positive().optional(),
   chain: z.string().optional(),
   verbose: z.boolean().optional().default(false),
+  plugins: z.string().optional(),
 });
 
 /**
@@ -580,6 +583,8 @@ interface ExecutePromptParams {
   budget?: number;
   /** Number of retries on transient/rate-limit errors (0 = no retries) */
   retries?: number;
+  /** Optional transform applied to response text before output (plugin afterResponse) */
+  afterResponseTransform?: (text: string) => Promise<string>;
 }
 
 /**
@@ -606,6 +611,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
     tools,
     budget,
     retries,
+    afterResponseTransform,
   } = params;
 
   // Check cache before making API call (only for non-session, non-streaming)
@@ -664,6 +670,11 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
           })
         : await generateText(callOptions);
 
+    // Apply afterResponse plugin transform if provided
+    const responseText = afterResponseTransform
+      ? await afterResponseTransform(result.text)
+      : result.text;
+
     // Store in cache if applicable (failures are non-fatal)
     if (cacheKey) {
       try {
@@ -680,13 +691,13 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
 
     // Save to session history if applicable
     if (session) {
-      session.messages.push({ role: "assistant", content: result.text });
+      session.messages.push({ role: "assistant", content: responseText });
       await saveHistory(session.name, session.messages);
     }
 
     if (format) {
       const outputData: JsonOutput = {
-        text: result.text,
+        text: responseText,
         model: modelString,
         usage: result.usage,
         finishReason: result.finishReason,
@@ -695,7 +706,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
       process.stdout.write(`${output}\n`);
     } else if (json) {
       const output: JsonOutput = {
-        text: result.text,
+        text: responseText,
         model: modelString,
         usage: result.usage,
         finishReason: result.finishReason,
@@ -705,8 +716,8 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
       // Note: when --markdown is used with streaming, output is silently
       // buffered (see streaming path below) rather than displayed per-chunk.
       const output = markdown
-        ? renderMarkdown(result.text)
-        : `${result.text}\n`;
+        ? renderMarkdown(responseText)
+        : `${responseText}\n`;
       process.stdout.write(output);
     }
 
@@ -724,11 +735,16 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
         }
         renderer.finish();
 
+        // Apply afterResponse plugin transform to collected buffer
+        const streamedText = afterResponseTransform
+          ? await afterResponseTransform(renderer.getBuffer())
+          : renderer.getBuffer();
+
         // Save to session history if applicable
         if (session) {
           session.messages.push({
             role: "assistant",
-            content: renderer.getBuffer(),
+            content: streamedText,
           });
           await saveHistory(session.name, session.messages);
         }
@@ -740,9 +756,14 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
         }
         process.stdout.write("\n");
 
+        // Apply afterResponse plugin transform to collected response
+        const streamedText = afterResponseTransform
+          ? await afterResponseTransform(fullResponse)
+          : fullResponse;
+
         // Save to session history if applicable
         if (session) {
-          session.messages.push({ role: "assistant", content: fullResponse });
+          session.messages.push({ role: "assistant", content: streamedText });
           await saveHistory(session.name, session.messages);
         }
       }
@@ -1006,6 +1027,30 @@ async function runAction(
   const tools: Record<string, unknown> | undefined =
     Object.keys(allTools).length > 0 ? allTools : undefined;
 
+  // Load plugins if --plugins flag is provided (or auto-load from default path)
+  let pluginManager: PluginManager | undefined;
+  const defaultPluginsPath = join(HOME_DIR, ".ai-pipe", "plugins.json");
+  const pluginsConfigPath = opts.plugins ?? defaultPluginsPath;
+  try {
+    const pluginsFile = Bun.file(pluginsConfigPath);
+    if (await pluginsFile.exists()) {
+      pluginManager = new PluginManager();
+      await pluginManager.loadPlugins(pluginsConfigPath);
+    }
+  } catch (err: unknown) {
+    console.error(`Error loading plugins: ${formatError(err)}`);
+    process.exit(1);
+  }
+
+  // Run beforeRequest plugin hooks to transform the prompt
+  if (pluginManager) {
+    prompt = await pluginManager.beforeRequest({
+      prompt,
+      model: modelString,
+      system: systemPrompt,
+    });
+  }
+
   // Load conversation history if session is provided
   // Sanitize session name to prevent directory traversal
   const sessionName = opts.session ? sanitizeSessionName(opts.session) : null;
@@ -1054,6 +1099,10 @@ async function runAction(
       tools,
       budget: opts.budget,
       retries: opts.retries,
+      afterResponseTransform: pluginManager
+        ? async (text: string) =>
+            pluginManager.afterResponse({ text, model: modelString })
+        : undefined,
     });
   } catch (err: unknown) {
     console.error(`Error: ${formatError(err)}`);
@@ -1062,6 +1111,10 @@ async function runAction(
     // Clean up MCP server connections on exit
     if (mcpManager) {
       await mcpManager.close();
+    }
+    // Clean up plugins on exit
+    if (pluginManager) {
+      await pluginManager.cleanup();
     }
   }
 
@@ -1307,6 +1360,11 @@ export const mainCommand = defineCommand({
       description: "Show intermediate chain outputs on stderr",
       default: false,
     },
+    plugins: {
+      type: "string",
+      alias: "P",
+      description: "Path to plugins configuration file (JSON)",
+    },
     updateCheck: {
       type: "boolean",
       description: "Check for updates after execution",
@@ -1376,6 +1434,7 @@ export const mainCommand = defineCommand({
         args.budget !== undefined ? Number.parseFloat(args.budget) : undefined,
       chain: args.chain,
       verbose: args.verbose,
+      plugins: args.plugins,
       updateCheck: args.updateCheck,
     };
 
