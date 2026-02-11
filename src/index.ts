@@ -388,6 +388,8 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
           };
           process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
         } else {
+          // Note: when --markdown is used with streaming, output is silently
+          // buffered (see streaming path below) rather than displayed per-chunk.
           const output = markdown ? renderMarkdown(result.text) : `${result.text}\n`;
           process.stdout.write(output);
         }
@@ -402,19 +404,23 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
           maxOutputTokens,
         });
 
-        let fullResponse = "";
-        for await (const chunk of result.textStream) {
-          process.stdout.write(chunk);
-          fullResponse += chunk;
-        }
+        // When markdown is enabled, silently buffer the full response
+        // and render once complete (streaming chunks are not displayed).
         if (markdown) {
-          process.stdout.write(`\r\x1b[2K${renderMarkdown(fullResponse)}`);
+          let fullResponse = "";
+          for await (const chunk of result.textStream) {
+            fullResponse += chunk;
+          }
+          process.stdout.write(renderMarkdown(fullResponse));
         } else {
+          for await (const chunk of result.textStream) {
+            process.stdout.write(chunk);
+          }
           process.stdout.write("\n");
         }
 
-        // Save to history
-        messages.push({ role: "assistant", content: fullResponse });
+        // Save to history using the full accumulated text from the stream
+        messages.push({ role: "assistant", content: await result.text });
         await saveHistory(sessionName, messages);
 
         // Display cost if requested (usage is available after stream completes)
@@ -455,14 +461,18 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
           maxOutputTokens,
         });
 
-        let fullResponse = "";
-        for await (const chunk of result.textStream) {
-          process.stdout.write(chunk);
-          fullResponse += chunk;
-        }
+        // When markdown is enabled, silently buffer the full response
+        // and render once complete (streaming chunks are not displayed).
         if (markdown) {
-          process.stdout.write(`\r\x1b[2K${renderMarkdown(fullResponse)}`);
+          let fullResponse = "";
+          for await (const chunk of result.textStream) {
+            fullResponse += chunk;
+          }
+          process.stdout.write(renderMarkdown(fullResponse));
         } else {
+          for await (const chunk of result.textStream) {
+            process.stdout.write(chunk);
+          }
           process.stdout.write("\n");
         }
 
