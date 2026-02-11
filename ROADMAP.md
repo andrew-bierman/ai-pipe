@@ -6,15 +6,18 @@
 - Conversation history (#34)
 - Cost tracking (#50)
 - Package.json checks script
+- Response caching
+- Tool use / MCP support
+- Shell completions
 
 ## In Progress 🔧
 
 ## Backlog 📋
-- Response caching
-- Tool use / MCP support
-- Provider-specific defaults
+- Interactive chat mode — back-and-forth conversation in the CLI
+- MCP support — Model Context Protocol for tool integration
+- Provider-specific defaults — per-provider temperature/maxTokens in config
+- Streaming markdown — progressive markdown rendering during streaming
 - Better error messages
-- Shell completions for ai-pipe itself
 
 ## Subagent Pattern
 To start work on a roadmap item:
