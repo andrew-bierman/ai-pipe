@@ -611,8 +611,9 @@ async function run(
     if (roleContent) {
       systemPrompt = roleContent;
     } else {
+      const roleFilename = opts.role.endsWith(".md") ? opts.role : `${opts.role}.md`;
       console.error(
-        `Error: Role "${opts.role}" not found. Create it at ~/${APP.configDirName}/roles/${opts.role}.md or run "ai-pipe --roles" to see available roles.`,
+        `Error: Role "${opts.role}" not found. Create it at ~/${APP.configDirName}/roles/${roleFilename} or run "ai-pipe --roles" to see available roles.`,
       );
       process.exit(1);
     }

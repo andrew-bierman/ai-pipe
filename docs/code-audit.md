@@ -70,7 +70,7 @@ ai-pipe is a well-structured CLI tool with strong fundamentals. The codebase dem
 
 | Severity | Finding |
 |----------|---------|
-| **Info** | No significant dead code was found. The `SESSION_SCHEMA` constant (line 21 of `index.ts`) is defined but never used -- the validation is done with `SESSION_NAME_REGEX.test()` via `isValidSessionName()` instead. |
+| **Info** | No significant dead code was found. The `SESSION_SCHEMA` constant that was previously defined but unused has been removed in this PR. Session validation is done with `SESSION_NAME_REGEX.test()` via `isValidSessionName()`. |
 | **Low** | The `HistoryMessageSchema` and `HistorySchema` are exported but only used internally for history validation. They could be kept internal unless there is an external consumer. |
 
 #### 1.5 Naming Clarity

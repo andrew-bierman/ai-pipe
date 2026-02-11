@@ -172,7 +172,7 @@ export function resolveModel(modelString: string) {
   if (!result.success) {
     const supported = SUPPORTED_PROVIDERS.join(", ");
     console.error(
-      `Error: Unknown provider "${provider}". Supported providers: ${supported}. Run "ai-pipe --providers" to see full list with API key status.`,
+      `Error: Unknown provider "${provider}". Supported providers: ${supported}. Run "ai-pipe --providers" to see supported providers and their required environment variables.`,
     );
     process.exit(1);
   }
@@ -181,8 +181,11 @@ export function resolveModel(modelString: string) {
   const missingVars = envVars.filter((v) => !process.env[v]);
 
   if (missingVars.length > 0) {
+    const exportCmds = missingVars.map((v) => `export ${v}=<your-key>`).join("\n  ");
+    const usesApiKey = missingVars.some((v) => v.endsWith("_API_KEY") || v.endsWith("_TOKEN"));
+    const apiKeysHint = usesApiKey ? ` Or add the key(s) to ~/.ai-pipe/apiKeys.json.` : "";
     console.error(
-      `Error: Missing required environment variable(s): ${missingVars.join(", ")}. Set them with: export ${missingVars[0]}=<your-key>. Or add the key to ~/.ai-pipe/apiKeys.json.`,
+      `Error: Missing required environment variable(s): ${missingVars.join(", ")}.\nSet them with:\n  ${exportCmds}${apiKeysHint}`,
     );
     process.exit(1);
   }
