@@ -49,7 +49,7 @@ _${funcName}_completions() {
   COMPREPLY=()
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
-  opts="--model --system --role --roles --file --json --no-stream --no-cache --temperature --max-output-tokens --config --providers --completions --no-update-check --version --help"
+  opts="--model -m --system -s --role -r --roles --file -f --image -i --json -j --no-stream --no-cache --temperature -t --max-output-tokens --config -c --cost --markdown --session -C --providers --completions --no-update-check --version -V --help -h"
   providers="${providers}"
 
   case "\${prev}" in
@@ -62,7 +62,7 @@ _${funcName}_completions() {
       compopt -o nospace
       return 0
       ;;
-    -f|--file)
+    -f|--file|-i|--image)
       COMPREPLY=( $(compgen -f -- "\${cur}") )
       return 0
       ;;
@@ -74,7 +74,7 @@ _${funcName}_completions() {
       COMPREPLY=( $(compgen -W "${shells}" -- "\${cur}") )
       return 0
       ;;
-    -s|--system|-r|--role|--roles|-t|--temperature|--max-output-tokens)
+    -C|--session|-s|--system|-r|--role|-t|--temperature|--max-output-tokens)
       return 0
       ;;
   esac
@@ -84,7 +84,8 @@ _${funcName}_completions() {
     return 0
   fi
 }
-complete -F _${funcName}_completions ${name}`;
+complete -F _${funcName}_completions ${name}
+complete -F _${funcName}_completions ai`;
 }
 
 function zsh(): string {
@@ -98,14 +99,18 @@ _${funcName}() {
     '(-m --model)'{-m,--model}'[Model in provider/model-id format]:model:->models' \\
     '(-s --system)'{-s,--system}'[System prompt]:prompt:' \\
     '(-r --role)'{-r,--role}'[Role name from roles directory]:role:' \\
-    '(-R --roles)'{-R,--roles}'[List available roles]' \\
+    '--roles[List available roles]' \\
     '*'{-f,--file}'[Include file contents]:file:_files' \\
+    '*'{-i,--image}'[Include image file (repeatable)]:file:_files' \\
     '(-j --json)'{-j,--json}'[Output full JSON response object]' \\
     '--no-stream[Wait for full response, then print]' \\
     '--no-cache[Disable response caching]' \\
     '(-t --temperature)'{-t,--temperature}'[Sampling temperature (${APP.temperature.min}-${APP.temperature.max})]:temp:' \\
     '--max-output-tokens[Maximum tokens to generate]:tokens:' \\
     '(-c --config)'{-c,--config}'[Path to config directory]:dir:_directories' \\
+    '--cost[Show token usage and cost after response]' \\
+    '--markdown[Render response as formatted markdown]' \\
+    '(-C --session)'{-C,--session}'[Session name for conversation continuity]:session:' \\
     '--providers[List supported providers]' \\
     '--completions[Generate shell completions]:shell:(${shells})' \\
     '--no-update-check[Disable update notifications]' \\
@@ -120,7 +125,8 @@ _${funcName}() {
       ;;
   esac
 }
-compdef _${funcName} ${name}`;
+compdef _${funcName} ${name}
+compdef _${funcName} ai`;
 }
 
 function fish(): string {
@@ -129,17 +135,41 @@ function fish(): string {
 complete -c ${name} -s m -l model -d 'Model in provider/model-id format' -x -a '${SUPPORTED_PROVIDERS.map((p) => `${p}/`).join(" ")}'
 complete -c ${name} -s s -l system -d 'System prompt' -x
 complete -c ${name} -s r -l role -d 'Role name from roles directory' -x
-complete -c ${name} -s R -l roles -d 'List available roles'
+complete -c ${name} -l roles -d 'List available roles'
 complete -c ${name} -s f -l file -d 'Include file contents in prompt (repeatable)' -r -F
+complete -c ${name} -s i -l image -d 'Include image file (repeatable)' -r -F
 complete -c ${name} -s j -l json -d 'Output full JSON response object'
 complete -c ${name} -l no-stream -d 'Wait for full response, then print'
 complete -c ${name} -l no-cache -d 'Disable response caching'
 complete -c ${name} -s t -l temperature -d 'Sampling temperature (${APP.temperature.min}-${APP.temperature.max})' -x
 complete -c ${name} -l max-output-tokens -d 'Maximum tokens to generate' -x
 complete -c ${name} -s c -l config -d 'Path to config directory' -x -a '(__fish_complete_directories)'
+complete -c ${name} -l cost -d 'Show token usage and cost after response'
+complete -c ${name} -l markdown -d 'Render response as formatted markdown'
+complete -c ${name} -s C -l session -d 'Session name for conversation continuity' -x
 complete -c ${name} -l providers -d 'List supported providers'
 complete -c ${name} -l completions -d 'Generate shell completions' -x -a '${shells}'
 complete -c ${name} -l no-update-check -d 'Disable update notifications'
 complete -c ${name} -s V -l version -d 'Print version'
-complete -c ${name} -s h -l help -d 'Print help'`;
+complete -c ${name} -s h -l help -d 'Print help'
+
+# ai alias completions
+complete -c ai -s m -l model -d 'Model in provider/model-id format' -x -a '${SUPPORTED_PROVIDERS.map((p) => `${p}/`).join(" ")}'
+complete -c ai -s s -l system -d 'System prompt' -x
+complete -c ai -s r -l role -d 'Role name from roles directory' -x
+complete -c ai -l roles -d 'List available roles'
+complete -c ai -s f -l file -d 'Include file contents in prompt (repeatable)' -r -F
+complete -c ai -s i -l image -d 'Include image file (repeatable)' -r -F
+complete -c ai -s j -l json -d 'Output full JSON response object'
+complete -c ai -l no-stream -d 'Wait for full response, then print'
+complete -c ai -s t -l temperature -d 'Sampling temperature (${APP.temperature.min}-${APP.temperature.max})' -x
+complete -c ai -l max-output-tokens -d 'Maximum tokens to generate' -x
+complete -c ai -s c -l config -d 'Path to config directory' -x -a '(__fish_complete_directories)'
+complete -c ai -l cost -d 'Show token usage and cost after response'
+complete -c ai -l markdown -d 'Render response as formatted markdown'
+complete -c ai -s C -l session -d 'Session name for conversation continuity' -x
+complete -c ai -l providers -d 'List supported providers'
+complete -c ai -l completions -d 'Generate shell completions' -x -a '${shells}'
+complete -c ai -s V -l version -d 'Print version'
+complete -c ai -s h -l help -d 'Print help'`;
 }
