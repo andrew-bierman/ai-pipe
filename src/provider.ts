@@ -19,10 +19,18 @@ import { openrouter } from "@openrouter/ai-sdk-provider";
 import { createProviderRegistry } from "ai";
 import { ollama } from "ai-sdk-ollama";
 import { z } from "zod";
+
 import { APP } from "./constants.ts";
 
 const openrouterProvider = openrouter as unknown as ProviderV3;
 
+/**
+ * Central AI SDK provider registry.
+ *
+ * All supported LLM providers are registered here using the Vercel AI SDK's
+ * `createProviderRegistry`. Models are resolved via "provider/model-id" strings
+ * with "/" as the separator.
+ */
 export const registry = createProviderRegistry(
   {
     openai,
@@ -47,6 +55,7 @@ export const registry = createProviderRegistry(
   { separator: "/" },
 );
 
+/** Frozen tuple of all supported provider IDs. Used for validation and iteration. */
 export const SUPPORTED_PROVIDERS = Object.freeze([
   "openai",
   "anthropic",
@@ -68,10 +77,19 @@ export const SUPPORTED_PROVIDERS = Object.freeze([
   "deepinfra",
 ] as const);
 
+/** Zod schema for validating a provider ID against the supported providers list. */
 export const ProviderIdSchema = z.enum(SUPPORTED_PROVIDERS);
+
+/** Union type of all valid provider identifiers. */
 export type ProviderId = z.infer<typeof ProviderIdSchema>;
 
-// Provider env vars - some providers require multiple env vars
+/**
+ * Map of provider IDs to their required environment variable names.
+ *
+ * Most providers require a single API key, but some (e.g., bedrock, vertex)
+ * require multiple environment variables. All variables must be set for the
+ * provider to be usable.
+ */
 export const PROVIDER_ENV_VARS: Record<ProviderId, readonly string[]> = {
   openai: ["OPENAI_API_KEY"],
   anthropic: ["ANTHROPIC_API_KEY"],
@@ -93,6 +111,13 @@ export const PROVIDER_ENV_VARS: Record<ProviderId, readonly string[]> = {
   deepinfra: ["DEEPINFRA_API_KEY"],
 } as const satisfies Record<ProviderId, readonly string[]>;
 
+/**
+ * Zod schema that parses a "provider/model-id" string into structured components.
+ *
+ * If no "/" is present, the provider defaults to the APP default provider (openai).
+ * Only the first "/" is used as a delimiter, so model IDs containing slashes
+ * (e.g., "togetherai/meta-llama/Llama-3.3-70b") are handled correctly.
+ */
 export const ModelStringSchema = z
   .string()
   .min(1, "Model string cannot be empty")
@@ -112,12 +137,34 @@ export const ModelStringSchema = z
     };
   });
 
+/** Parsed model string with provider, model ID, and full ID components. */
 export type ParsedModel = z.infer<typeof ModelStringSchema>;
 
+/**
+ * Parse a model string into its provider, model ID, and full ID components.
+ *
+ * @param modelString - A string in "provider/model-id" format (e.g., "openai/gpt-4o").
+ * @returns A parsed model object.
+ * @throws If the model string is empty.
+ */
 export function parseModel(modelString: string): ParsedModel {
   return ModelStringSchema.parse(modelString);
 }
 
+/**
+ * Resolve a model string to an AI SDK LanguageModel instance.
+ *
+ * Validates the provider ID, checks that all required environment variables
+ * are set, and returns a model instance from the provider registry.
+ *
+ * @param modelString - A string in "provider/model-id" format (e.g., "openai/gpt-4o").
+ * @returns An AI SDK LanguageModel ready for use with `generateText`/`streamText`.
+ *
+ * @remarks
+ * Exits the process with code 1 if the provider is unknown or required
+ * environment variables are missing. Error messages are written to stderr
+ * with actionable guidance.
+ */
 export function resolveModel(modelString: string) {
   const { provider, fullId } = parseModel(modelString);
 
@@ -125,7 +172,7 @@ export function resolveModel(modelString: string) {
   if (!result.success) {
     const supported = SUPPORTED_PROVIDERS.join(", ");
     console.error(
-      `Error: Unknown provider "${provider}". Supported: ${supported}`,
+      `Error: Unknown provider "${provider}". Supported providers: ${supported}. Run "ai-pipe --providers" to see supported providers and their required environment variables.`,
     );
     process.exit(1);
   }
@@ -134,8 +181,11 @@ export function resolveModel(modelString: string) {
   const missingVars = envVars.filter((v) => !process.env[v]);
 
   if (missingVars.length > 0) {
+    const exportCmds = missingVars.map((v) => `export ${v}=<your-key>`).join("\n  ");
+    const usesApiKey = missingVars.some((v) => v.endsWith("_API_KEY") || v.endsWith("_TOKEN"));
+    const apiKeysHint = usesApiKey ? ` Or add the key(s) to ~/.ai-pipe/apiKeys.json.` : "";
     console.error(
-      `Error: Missing required environment variable(s): ${missingVars.join(", ")}. Set them or check your provider config.`,
+      `Error: Missing required environment variable(s): ${missingVars.join(", ")}.\nSet them with:\n  ${exportCmds}${apiKeysHint}`,
     );
     process.exit(1);
   }
@@ -143,6 +193,12 @@ export function resolveModel(modelString: string) {
   return registry.languageModel(fullId as `${ProviderId}/${string}`);
 }
 
+/**
+ * Print a formatted table of all supported providers, their required
+ * environment variables, and whether those variables are currently set.
+ *
+ * Output is written to stdout and intended for the `--providers` CLI flag.
+ */
 export function printProviders(): void {
   const maxName = Math.max(...SUPPORTED_PROVIDERS.map((p) => p.length));
   const maxVar = Math.max(

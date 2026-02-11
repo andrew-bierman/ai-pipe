@@ -6,10 +6,29 @@ const shells = APP.supportedShells.join(" ");
 const name = APP.name;
 const funcName = APP.name.replace(/-/g, "_");
 
+/**
+ * Generate shell completion scripts for the specified shell.
+ *
+ * Outputs a script that can be eval'd in the user's shell profile to enable
+ * tab completion for all ai-pipe flags, providers, and options.
+ *
+ * Supported shells: bash, zsh, fish.
+ *
+ * @param shell - The shell name to generate completions for.
+ * @returns The completion script as a string.
+ *
+ * @example
+ * ```bash
+ * # Add to ~/.bashrc:
+ * eval "$(ai-pipe --completions bash)"
+ * ```
+ */
 export function generateCompletions(shell: string): string {
   const result = ShellSchema.safeParse(shell);
   if (!result.success) {
-    console.error(`Error: Unknown shell "${shell}". Supported: ${shells}`);
+    console.error(
+      `Error: Unknown shell "${shell}". Supported shells: ${shells}. Example: ai-pipe --completions bash`,
+    );
     process.exit(1);
   }
 

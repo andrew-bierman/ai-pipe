@@ -110,7 +110,7 @@ describe("CLI: provider validation", () => {
       { env: CLEAN_ENV },
     );
     expect(stderr).toContain('Unknown provider "fakeprovider"');
-    expect(stderr).toContain("Supported:");
+    expect(stderr).toContain("Supported providers:");
     expect(exitCode).toBe(1);
   });
 

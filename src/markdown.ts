@@ -20,6 +20,16 @@ const ANSI = {
 /** Width of horizontal rules in characters */
 const HR_WIDTH = 40;
 
+/**
+ * Render a markdown string as ANSI-styled terminal output.
+ *
+ * Uses Bun's built-in markdown parser with custom ANSI escape code renderers
+ * for headings, bold, italic, code blocks, links, lists, blockquotes, tables,
+ * strikethrough, and task lists.
+ *
+ * @param text - Raw markdown string to render.
+ * @returns The markdown rendered with ANSI escape codes for terminal display.
+ */
 export function renderMarkdown(text: string): string {
   return Bun.markdown.render(
     text,

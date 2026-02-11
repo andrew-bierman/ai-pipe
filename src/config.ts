@@ -1,8 +1,11 @@
 import { basename, join } from "node:path";
+
 import { z } from "zod";
+
 import { APP } from "./constants.ts";
 import { ProviderIdSchema, SUPPORTED_PROVIDERS } from "./provider.ts";
 
+/** Zod schema for the API keys file. Keys must be valid provider IDs. */
 const ApiKeysSchema = z
   .record(z.string(), z.string())
   .refine(
@@ -13,6 +16,12 @@ const ApiKeysSchema = z
     },
   );
 
+/**
+ * Zod schema for `config.json`.
+ *
+ * Validates model string, system prompt, temperature (within APP bounds),
+ * and maxOutputTokens (positive integer). All fields are optional.
+ */
 export const ConfigSchema = z.object({
   model: z.string().optional(),
   system: z.string().optional(),
@@ -24,6 +33,12 @@ export const ConfigSchema = z.object({
   maxOutputTokens: z.number().int().positive().optional(),
 });
 
+/**
+ * Application configuration type.
+ *
+ * Extends the ConfigSchema fields with an optional `apiKeys` map that is
+ * loaded from a separate `apiKeys.json` file for security isolation.
+ */
 export type Config = z.infer<typeof ConfigSchema> & {
   apiKeys?: Record<string, string>;
 };
@@ -48,6 +63,16 @@ async function loadJsonFile<T>(
   }
 }
 
+/**
+ * Load application configuration from a directory.
+ *
+ * Reads `config.json` and `apiKeys.json` from the specified directory
+ * (or the default `~/.ai-pipe/` directory). Invalid or missing files are
+ * silently ignored, returning an empty config.
+ *
+ * @param configDir - Optional path to the config directory. Defaults to `~/.ai-pipe/`.
+ * @returns The merged configuration object.
+ */
 export async function loadConfig(configDir?: string): Promise<Config> {
   const dir = configDir ?? DEFAULT_CONFIG_DIR;
 
@@ -64,6 +89,17 @@ export async function loadConfig(configDir?: string): Promise<Config> {
 
 const ROLES_DIR = "roles";
 
+/**
+ * Load a role's system prompt from a `.md` file in the roles directory.
+ *
+ * Role files are stored as `~/.ai-pipe/roles/<name>.md`. The role name is
+ * sanitized to prevent path traversal attacks. If the role name includes
+ * a `.md` extension, it is stripped to avoid double-extension issues.
+ *
+ * @param roleName - The role name (e.g., "reviewer" or "reviewer.md").
+ * @param configDir - Optional config directory. Defaults to `~/.ai-pipe/`.
+ * @returns The role file contents, or `null` if the role does not exist.
+ */
 export async function loadRole(
   roleName: string,
   configDir?: string,
@@ -84,6 +120,15 @@ export async function loadRole(
   return null;
 }
 
+/**
+ * List all available role names from the roles directory.
+ *
+ * Scans `~/.ai-pipe/roles/` for `.md` files and returns their names
+ * (without extension), sorted alphabetically and deduplicated.
+ *
+ * @param configDir - Optional config directory. Defaults to `~/.ai-pipe/`.
+ * @returns A sorted array of role names, or an empty array if none exist.
+ */
 export async function listRoles(configDir?: string): Promise<string[]> {
   const dir = configDir ?? DEFAULT_CONFIG_DIR;
   const rolesPath = join(dir, ROLES_DIR);

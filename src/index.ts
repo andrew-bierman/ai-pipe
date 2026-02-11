@@ -7,6 +7,7 @@ import {
 } from "ai";
 import { program } from "commander";
 import { z } from "zod";
+
 import pkg from "../package.json";
 import {
   buildCacheKey,
@@ -30,25 +31,45 @@ import { checkForUpdates } from "./update.ts";
 // Session name sanitization: only allow alphanumeric, hyphens, underscores
 const SESSION_NAME_REGEX = /^[A-Za-z0-9_-]+$/;
 
+/**
+ * Sanitize a session name by replacing invalid characters with underscores.
+ *
+ * Only alphanumeric characters, hyphens, and underscores are preserved.
+ * All other characters are replaced with "_" to prevent directory traversal
+ * and filesystem issues.
+ *
+ * @param session - The raw session name to sanitize.
+ * @returns A sanitized session name safe for use as a filename.
+ */
 export function sanitizeSessionName(session: string): string {
   return session.replace(/[^A-Za-z0-9_-]/g, "_");
 }
 
+/**
+ * Check whether a session name contains only valid characters.
+ *
+ * Valid characters: A-Z, a-z, 0-9, hyphens, and underscores.
+ *
+ * @param session - The session name to validate.
+ * @returns `true` if the session name is valid, `false` otherwise.
+ */
 export function isValidSessionName(session: string): boolean {
   return SESSION_NAME_REGEX.test(session);
 }
 
-// Zod schema for history messages
+/** Zod schema for a single conversation history message. */
 export const HistoryMessageSchema = z.object({
   role: z.enum(["user", "assistant", "system"]),
   content: z.string(),
 });
 
+/** A single message in the conversation history. */
 export type HistoryMessage = z.infer<typeof HistoryMessageSchema>;
 
-// History file schema: array of messages
+/** Zod schema for validating a full conversation history (array of messages). */
 export const HistorySchema = z.array(HistoryMessageSchema);
 
+/** CLI option values as parsed by Commander and validated by CLIOptionsSchema. */
 export interface CLIOptions {
   model?: string;
   system?: string;
@@ -70,6 +91,7 @@ export interface CLIOptions {
   updateCheck?: boolean;
 }
 
+/** Zod schema for validating and coercing CLI options from Commander. */
 export const CLIOptionsSchema = z.object({
   model: z.string().optional(),
   system: z.string().optional(),
@@ -95,6 +117,12 @@ export const CLIOptionsSchema = z.object({
   updateCheck: z.boolean().optional().default(true),
 });
 
+/**
+ * Zod schema for the structured JSON output emitted with `--json`.
+ *
+ * Aligned with the Vercel AI SDK's `LanguageModelUsage` and `FinishReason` types.
+ * See `sdk-compat.test.ts` for compile-time alignment tests.
+ */
 export const JsonOutputSchema = z.object({
   text: z.string(),
   model: z.string(),
@@ -119,6 +147,7 @@ export const JsonOutputSchema = z.object({
   finishReason: z.string(),
 });
 
+/** The structured JSON output type for `--json` mode. */
 export type JsonOutput = z.infer<typeof JsonOutputSchema>;
 
 /**
@@ -168,6 +197,14 @@ async function loadOrExit<T>({
   return results;
 }
 
+/**
+ * Read one or more files and return their contents formatted as markdown
+ * code blocks, each prefixed with the file path as a heading.
+ *
+ * @param paths - Array of file paths to read.
+ * @returns A single string with all file contents, separated by double newlines.
+ * @throws If any file does not exist.
+ */
 export async function readFiles(paths: string[]): Promise<string> {
   const parts = await loadOrExit({
     label: "File",
@@ -180,6 +217,16 @@ export async function readFiles(paths: string[]): Promise<string> {
   return parts.join("\n\n");
 }
 
+/**
+ * Read one or more image files and return them as base64-encoded data URLs.
+ *
+ * The MIME type is detected from each file's content. Used for vision model
+ * support with the `-i` / `--image` CLI flag.
+ *
+ * @param paths - Array of image file paths to read.
+ * @returns An array of objects with `url` properties containing data URLs.
+ * @throws If any image file does not exist.
+ */
 export async function readImages(paths: string[]): Promise<{ url: string }[]> {
   return loadOrExit({
     label: "Image",
@@ -199,7 +246,16 @@ export interface BuildPromptOptions {
   stdinContent?: string | null;
 }
 
-// Breaking change (pre-1.0): signature changed from positional args to object param
+/**
+ * Build the final prompt string from argument text, file contents, and stdin.
+ *
+ * Non-null parts are joined with double newlines. The order is:
+ * argument prompt, file content, stdin content.
+ * Breaking change (pre-1.0): signature changed from positional args to object param.
+ *
+ * @param options - Object containing prompt, fileContent, and stdinContent.
+ * @returns The combined prompt string (may be empty if all inputs are null).
+ */
 export function buildPrompt({
   prompt,
   fileContent = null,
@@ -212,6 +268,15 @@ export function buildPrompt({
   return parts.join("\n\n");
 }
 
+/**
+ * Resolve effective options by merging CLI flags, config file values, and defaults.
+ *
+ * Priority order (highest to lowest): CLI flags > config file > built-in defaults.
+ *
+ * @param opts - CLI options as parsed by Commander.
+ * @param config - Loaded configuration from config files.
+ * @returns The merged options with all values resolved.
+ */
 export function resolveOptions(
   opts: CLIOptions,
   config: Config,
@@ -250,6 +315,16 @@ function getHistoryPath(session: string): string {
   return join(HISTORY_DIR, `${session}.json`);
 }
 
+/**
+ * Load conversation history for a named session from disk.
+ *
+ * History is stored as JSON in `~/.ai-pipe/history/<session>.json`.
+ * Returns an empty array if the file does not exist, contains invalid JSON,
+ * or fails Zod validation.
+ *
+ * @param session - The sanitized session name.
+ * @returns An array of conversation messages, or empty array on any failure.
+ */
 export async function loadHistory(session: string): Promise<ModelMessage[]> {
   const path = getHistoryPath(session);
   const file = Bun.file(path);
@@ -270,6 +345,15 @@ export async function loadHistory(session: string): Promise<ModelMessage[]> {
   }
 }
 
+/**
+ * Save conversation history for a named session to disk.
+ *
+ * Creates the history directory (`~/.ai-pipe/history/`) if it does not exist.
+ * The session file is written as pretty-printed JSON.
+ *
+ * @param session - The sanitized session name.
+ * @param messages - The full conversation history to persist.
+ */
 export async function saveHistory(
   session: string,
   messages: ModelMessage[],
@@ -527,10 +611,10 @@ async function run(
     if (roleContent) {
       systemPrompt = roleContent;
     } else {
+      const roleFilename = opts.role.endsWith(".md") ? opts.role : `${opts.role}.md`;
       console.error(
-        `Error: Role "${opts.role}" not found in ~/${APP.configDirName}/roles/`,
+        `Error: Role "${opts.role}" not found. Create it at ~/${APP.configDirName}/roles/${roleFilename} or run "ai-pipe --roles" to see available roles.`,
       );
-      console.error("Use --roles to list available roles.");
       process.exit(1);
     }
   }
@@ -625,6 +709,15 @@ function displayCostIfEnabled({
   console.error(`\n💰 Cost: ${formattedCost}`);
 }
 
+/**
+ * Configure and return the Commander program instance with all CLI options.
+ *
+ * This is the main entry point for the CLI. It registers all flags, options,
+ * and the `run()` action handler. Call `.parse()` on the returned program
+ * to execute.
+ *
+ * @returns The configured Commander program instance.
+ */
 export function setupCLI(): typeof program {
   program
     .name(APP.name)
