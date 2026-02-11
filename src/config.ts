@@ -28,8 +28,11 @@ export type Config = z.infer<typeof ConfigSchema> & {
   apiKeys?: Record<string, string>;
 };
 
-// TODO: Bun.env.HOME is undefined on Windows — add fallback if Windows support needed
-const DEFAULT_CONFIG_DIR = join(Bun.env.HOME ?? "", APP.configDirName);
+const HOME_DIR = Bun.env.HOME ?? Bun.env.USERPROFILE ?? "";
+if (!HOME_DIR) {
+  console.warn("Warning: Neither HOME nor USERPROFILE environment variable is set. Config paths may not resolve correctly.");
+}
+const DEFAULT_CONFIG_DIR = join(HOME_DIR, APP.configDirName);
 
 async function loadJsonFile<T>(
   path: string,
