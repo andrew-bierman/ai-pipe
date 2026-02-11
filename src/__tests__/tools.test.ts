@@ -24,7 +24,7 @@ describe("ToolsConfigSchema", () => {
     };
     const result = ToolsConfigSchema.parse(config);
     expect(result.tools).toHaveLength(1);
-    expect(result.tools![0]!.name).toBe("getWeather");
+    expect(result.tools?.[0]?.name).toBe("getWeather");
   });
 
   test("accepts empty tools array", () => {
@@ -67,7 +67,7 @@ describe("loadToolsConfig", () => {
 
     const result = await loadToolsConfig(configPath);
     expect(result).toHaveLength(1);
-    expect(result[0]!.name).toBe("getWeather");
+    expect(result[0]?.name).toBe("getWeather");
 
     rmSync(configPath);
   });

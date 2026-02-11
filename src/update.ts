@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { join, dirname } from "node:path";
+import { dirname, join } from "node:path";
 import pkg from "../package.json";
 import { APP } from "./constants.ts";
 

@@ -2,7 +2,10 @@
 const TOKENS_PER_UNIT = 1_000_000;
 
 /** Default pricing for unknown providers/models */
-const ZERO_PRICING: ModelPricing = Object.freeze({ inputPrice: 0, outputPrice: 0 });
+const ZERO_PRICING: ModelPricing = Object.freeze({
+  inputPrice: 0,
+  outputPrice: 0,
+});
 
 /** Cost decimal precision for formatting */
 const COST_DECIMAL_PLACES = 4;

@@ -223,10 +223,14 @@ describe("calculateCost", () => {
   });
 
   test("handles unknown provider with tokens", () => {
-    const cost = calculateCost({ provider: "nonexistent", modelId: "model", usage: {
-      inputTokens: 1000,
-      outputTokens: 1000,
-    }});
+    const cost = calculateCost({
+      provider: "nonexistent",
+      modelId: "model",
+      usage: {
+        inputTokens: 1000,
+        outputTokens: 1000,
+      },
+    });
     expect(cost.inputCost).toBe(0);
     expect(cost.outputCost).toBe(0);
     expect(cost.totalCost).toBe(0);
@@ -235,9 +239,13 @@ describe("calculateCost", () => {
   });
 
   test("handles undefined inputTokens but defined outputTokens", () => {
-    const cost = calculateCost({ provider: "openai", modelId: "gpt-4o", usage: {
-      outputTokens: 500,
-    }});
+    const cost = calculateCost({
+      provider: "openai",
+      modelId: "gpt-4o",
+      usage: {
+        outputTokens: 500,
+      },
+    });
     expect(cost.inputTokens).toBe(0);
     expect(cost.inputCost).toBe(0);
     expect(cost.outputTokens).toBe(500);
@@ -245,9 +253,13 @@ describe("calculateCost", () => {
   });
 
   test("handles defined inputTokens but undefined outputTokens", () => {
-    const cost = calculateCost({ provider: "openai", modelId: "gpt-4o", usage: {
-      inputTokens: 500,
-    }});
+    const cost = calculateCost({
+      provider: "openai",
+      modelId: "gpt-4o",
+      usage: {
+        inputTokens: 500,
+      },
+    });
     expect(cost.inputTokens).toBe(500);
     expect(cost.inputCost).toBeGreaterThan(0);
     expect(cost.outputTokens).toBe(0);
@@ -255,39 +267,55 @@ describe("calculateCost", () => {
   });
 
   test("calculates cost for Google Gemini Flash (cheap model)", () => {
-    const cost = calculateCost({ provider: "google", modelId: "gemini-2.5-flash", usage: {
-      inputTokens: 1_000_000,
-      outputTokens: 1_000_000,
-    }});
+    const cost = calculateCost({
+      provider: "google",
+      modelId: "gemini-2.5-flash",
+      usage: {
+        inputTokens: 1_000_000,
+        outputTokens: 1_000_000,
+      },
+    });
     expect(cost.inputCost).toBeCloseTo(0.075, 5);
     expect(cost.outputCost).toBeCloseTo(0.3, 5);
   });
 
   test("calculates cost for 1M tokens exactly", () => {
-    const cost = calculateCost({ provider: "openai", modelId: "gpt-4o", usage: {
-      inputTokens: 1_000_000,
-      outputTokens: 1_000_000,
-    }});
+    const cost = calculateCost({
+      provider: "openai",
+      modelId: "gpt-4o",
+      usage: {
+        inputTokens: 1_000_000,
+        outputTokens: 1_000_000,
+      },
+    });
     expect(cost.inputCost).toBe(2.5);
     expect(cost.outputCost).toBe(10.0);
     expect(cost.totalCost).toBe(12.5);
   });
 
   test("handles very small token counts", () => {
-    const cost = calculateCost({ provider: "openai", modelId: "gpt-4o", usage: {
-      inputTokens: 1,
-      outputTokens: 1,
-    }});
+    const cost = calculateCost({
+      provider: "openai",
+      modelId: "gpt-4o",
+      usage: {
+        inputTokens: 1,
+        outputTokens: 1,
+      },
+    });
     expect(cost.inputCost).toBeGreaterThan(0);
     expect(cost.outputCost).toBeGreaterThan(0);
     expect(cost.totalCost).toBeGreaterThan(0);
   });
 
   test("handles very large token counts", () => {
-    const cost = calculateCost({ provider: "openai", modelId: "gpt-4o", usage: {
-      inputTokens: 100_000_000,
-      outputTokens: 100_000_000,
-    }});
+    const cost = calculateCost({
+      provider: "openai",
+      modelId: "gpt-4o",
+      usage: {
+        inputTokens: 100_000_000,
+        outputTokens: 100_000_000,
+      },
+    });
     expect(cost.inputCost).toBe(250);
     expect(cost.outputCost).toBe(1000);
     expect(cost.totalCost).toBe(1250);
@@ -526,15 +554,17 @@ describe("PRICING", () => {
     for (const provider of Object.keys(PRICING)) {
       if (provider !== "openrouter") {
         // openrouter doesn't have default as it routes to other providers
-        expect(PRICING[provider]!.default).toBeDefined();
+        expect(PRICING[provider]?.default).toBeDefined();
       }
     }
   });
 
   test("all prices are non-negative", () => {
     for (const provider of Object.keys(PRICING)) {
-      for (const model of Object.keys(PRICING[provider]!)) {
-        const pricing = PRICING[provider]![model] as ModelPricing;
+      const providerPricing = PRICING[provider];
+      if (!providerPricing) continue;
+      for (const model of Object.keys(providerPricing)) {
+        const pricing = PRICING[provider]?.[model] as ModelPricing;
         expect(pricing.inputPrice).toBeGreaterThanOrEqual(0);
         expect(pricing.outputPrice).toBeGreaterThanOrEqual(0);
       }
@@ -609,47 +639,73 @@ describe("Cost Calculation Integration", () => {
   });
 
   test("Anthropic is more expensive than Groq for same token count", () => {
-    const anthropicCost = calculateCost({ provider: "anthropic", modelId: "claude-sonnet-4-5", usage: {
-      inputTokens: 10000,
-      outputTokens: 10000,
-    }});
-    const groqCost = calculateCost({ provider: "groq", modelId: "llama-3.3-70b-versatile", usage: {
-      inputTokens: 10000,
-      outputTokens: 10000,
-    }});
+    const anthropicCost = calculateCost({
+      provider: "anthropic",
+      modelId: "claude-sonnet-4-5",
+      usage: {
+        inputTokens: 10000,
+        outputTokens: 10000,
+      },
+    });
+    const groqCost = calculateCost({
+      provider: "groq",
+      modelId: "llama-3.3-70b-versatile",
+      usage: {
+        inputTokens: 10000,
+        outputTokens: 10000,
+      },
+    });
     expect(anthropicCost.totalCost).toBeGreaterThan(groqCost.totalCost);
   });
 
   test("Ollama is always free regardless of token count", () => {
-    const cost = calculateCost({ provider: "ollama", modelId: "any-model", usage: {
-      inputTokens: 10_000_000,
-      outputTokens: 10_000_000,
-    }});
+    const cost = calculateCost({
+      provider: "ollama",
+      modelId: "any-model",
+      usage: {
+        inputTokens: 10_000_000,
+        outputTokens: 10_000_000,
+      },
+    });
     expect(cost.totalCost).toBe(0);
   });
 
   test("output cost is typically higher than input cost per token", () => {
     // For most providers, output is more expensive than input
-    const cost = calculateCost({ provider: "openai", modelId: "gpt-4o", usage: {
-      inputTokens: 1000,
-      outputTokens: 1000,
-    }});
+    const cost = calculateCost({
+      provider: "openai",
+      modelId: "gpt-4o",
+      usage: {
+        inputTokens: 1000,
+        outputTokens: 1000,
+      },
+    });
     expect(cost.outputCost).toBeGreaterThan(cost.inputCost);
   });
 
   test("parseModelString + calculateCost integration", () => {
-    const { provider, modelId } = parseModelString("anthropic/claude-sonnet-4-5");
-    const cost = calculateCost({ provider, modelId, usage: {
-      inputTokens: 1000,
-      outputTokens: 500,
-    }});
+    const { provider, modelId } = parseModelString(
+      "anthropic/claude-sonnet-4-5",
+    );
+    const cost = calculateCost({
+      provider,
+      modelId,
+      usage: {
+        inputTokens: 1000,
+        outputTokens: 500,
+      },
+    });
     expect(cost.inputCost).toBeGreaterThan(0);
     expect(cost.outputCost).toBeGreaterThan(0);
     expect(cost.totalCost).toBe(cost.inputCost + cost.outputCost);
   });
 
   test("formatCost + calculateCost integration for zero usage", () => {
-    const cost = calculateCost({ provider: "openai", modelId: "gpt-4o", usage: {} });
+    const cost = calculateCost({
+      provider: "openai",
+      modelId: "gpt-4o",
+      usage: {},
+    });
     const formatted = formatCost(cost);
     expect(formatted).toBe("$0.0000 (0 tokens)");
   });

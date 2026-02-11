@@ -17,10 +17,31 @@ const ApiKeysSchema = z
   );
 
 /**
+ * Zod schema for per-provider config overrides.
+ *
+ * Each provider entry can override model, system prompt, temperature,
+ * and maxOutputTokens. All fields are optional.
+ */
+export const ProviderConfigSchema = z.object({
+  model: z.string().optional(),
+  system: z.string().optional(),
+  temperature: z
+    .number()
+    .min(APP.temperature.min)
+    .max(APP.temperature.max)
+    .optional(),
+  maxOutputTokens: z.number().int().positive().optional(),
+});
+
+/** Type for a single provider's config overrides. */
+export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
+
+/**
  * Zod schema for `config.json`.
  *
  * Validates model string, system prompt, temperature (within APP bounds),
  * and maxOutputTokens (positive integer). All fields are optional.
+ * Supports an optional `providers` record for per-provider overrides.
  */
 export const ConfigSchema = z.object({
   model: z.string().optional(),
@@ -31,6 +52,7 @@ export const ConfigSchema = z.object({
     .max(APP.temperature.max)
     .optional(),
   maxOutputTokens: z.number().int().positive().optional(),
+  providers: z.record(z.string(), ProviderConfigSchema).optional(),
 });
 
 /**
@@ -43,9 +65,29 @@ export type Config = z.infer<typeof ConfigSchema> & {
   apiKeys?: Record<string, string>;
 };
 
+/**
+ * Get provider-specific config overrides merged with global config values.
+ *
+ * Looks up the `providers[providerId]` section from the config and returns
+ * the provider-specific values. Fields not set in the provider section are
+ * omitted (callers should fall through to global config values).
+ *
+ * @param config - The loaded application config.
+ * @param providerId - The provider identifier (e.g., "anthropic", "openai").
+ * @returns The provider-specific overrides, or an empty object if none exist.
+ */
+export function getProviderDefaults(
+  config: Config,
+  providerId: string,
+): ProviderConfig {
+  return config.providers?.[providerId] ?? {};
+}
+
 const HOME_DIR = Bun.env.HOME ?? Bun.env.USERPROFILE ?? "";
 if (!HOME_DIR) {
-  console.warn("Warning: Neither HOME nor USERPROFILE environment variable is set. Config paths may not resolve correctly.");
+  console.warn(
+    "Warning: Neither HOME nor USERPROFILE environment variable is set. Config paths may not resolve correctly.",
+  );
 }
 const DEFAULT_CONFIG_DIR = join(HOME_DIR, APP.configDirName);
 
