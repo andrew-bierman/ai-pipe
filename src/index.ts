@@ -14,6 +14,7 @@ import {
   getCachedResponse,
   setCachedResponse,
 } from "./cache.ts";
+import { executeChain, loadChainConfig } from "./chain.ts";
 import { startChat } from "./chat.ts";
 import { generateCompletions } from "./completions.ts";
 import {
@@ -124,6 +125,8 @@ export interface CLIOptions {
   tools?: string;
   mcp?: string;
   budget?: number;
+  chain?: string;
+  verbose?: boolean;
 }
 
 /** Zod schema for validating and coercing CLI options from citty. */
@@ -158,6 +161,8 @@ export const CLIOptionsSchema = z.object({
   tools: z.string().optional(),
   mcp: z.string().optional(),
   budget: z.number().positive().optional(),
+  chain: z.string().optional(),
+  verbose: z.boolean().optional().default(false),
 });
 
 /**
@@ -926,6 +931,49 @@ async function runAction(
     return;
   }
 
+  // If --chain is set, execute chain mode (non-streaming, sequential LLM calls)
+  if (opts.chain) {
+    try {
+      const steps = await loadChainConfig(opts.chain);
+      const result = await executeChain({
+        steps,
+        initialInput: prompt,
+        defaultModel: model,
+        defaultModelString: modelString,
+        config,
+        temperature,
+        maxOutputTokens,
+        verbose: opts.verbose,
+      });
+
+      if (opts.format) {
+        const outputData: JsonOutput = {
+          text: result,
+          model: modelString,
+          usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+          finishReason: "stop",
+        };
+        const output = formatOutput(outputData, opts.format);
+        process.stdout.write(`${output}\n`);
+      } else if (opts.json) {
+        const output: JsonOutput = {
+          text: result,
+          model: modelString,
+          usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+          finishReason: "stop",
+        };
+        process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+      } else {
+        const output = markdown ? renderMarkdown(result) : `${result}\n`;
+        process.stdout.write(output);
+      }
+    } catch (err: unknown) {
+      console.error(`Error: ${formatError(err)}`);
+      process.exit(1);
+    }
+    return;
+  }
+
   // Load tools from config file if --tools flag is provided
   const toolConfigs = await loadToolsConfig(opts.tools);
   const staticTools: Record<string, unknown> =
@@ -1249,6 +1297,16 @@ export const mainCommand = defineCommand({
       alias: "B",
       description: "Max dollar budget per request (e.g., 0.05)",
     },
+    chain: {
+      type: "string",
+      description: "Path to chain config JSON file for multi-step LLM calls",
+    },
+    verbose: {
+      type: "boolean",
+      alias: "v",
+      description: "Show intermediate chain outputs on stderr",
+      default: false,
+    },
     updateCheck: {
       type: "boolean",
       description: "Check for updates after execution",
@@ -1316,6 +1374,8 @@ export const mainCommand = defineCommand({
       mcp: args.mcp,
       budget:
         args.budget !== undefined ? Number.parseFloat(args.budget) : undefined,
+      chain: args.chain,
+      verbose: args.verbose,
       updateCheck: args.updateCheck,
     };
 
