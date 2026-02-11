@@ -49,7 +49,7 @@ _${funcName}_completions() {
   COMPREPLY=()
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
-  opts="--model -m --system -s --role -r --roles --file -f --image -i --json -j --no-stream --no-cache --temperature -t --max-output-tokens --config -c --cost --markdown --session -C --providers --completions --no-update-check --version -V --help -h"
+  opts="--model -m --system -s --role -r --roles --file -f --image -i --json -j --no-stream --no-cache --temperature -t --max-output-tokens --config -c --cost --markdown --chat --session -C --providers --completions --no-update-check --version -V --help -h"
   providers="${providers}"
 
   case "\${prev}" in
@@ -110,6 +110,7 @@ _${funcName}() {
     '(-c --config)'{-c,--config}'[Path to config directory]:dir:_directories' \\
     '--cost[Show token usage and cost after response]' \\
     '--markdown[Render response as formatted markdown]' \\
+    '--chat[Start interactive chat mode]' \\
     '(-C --session)'{-C,--session}'[Session name for conversation continuity]:session:' \\
     '--providers[List supported providers]' \\
     '--completions[Generate shell completions]:shell:(${shells})' \\
@@ -146,6 +147,7 @@ complete -c ${name} -l max-output-tokens -d 'Maximum tokens to generate' -x
 complete -c ${name} -s c -l config -d 'Path to config directory' -x -a '(__fish_complete_directories)'
 complete -c ${name} -l cost -d 'Show token usage and cost after response'
 complete -c ${name} -l markdown -d 'Render response as formatted markdown'
+complete -c ${name} -l chat -d 'Start interactive chat mode'
 complete -c ${name} -s C -l session -d 'Session name for conversation continuity' -x
 complete -c ${name} -l providers -d 'List supported providers'
 complete -c ${name} -l completions -d 'Generate shell completions' -x -a '${shells}'
@@ -167,6 +169,7 @@ complete -c ai -l max-output-tokens -d 'Maximum tokens to generate' -x
 complete -c ai -s c -l config -d 'Path to config directory' -x -a '(__fish_complete_directories)'
 complete -c ai -l cost -d 'Show token usage and cost after response'
 complete -c ai -l markdown -d 'Render response as formatted markdown'
+complete -c ai -l chat -d 'Start interactive chat mode'
 complete -c ai -s C -l session -d 'Session name for conversation continuity' -x
 complete -c ai -l providers -d 'List supported providers'
 complete -c ai -l completions -d 'Generate shell completions' -x -a '${shells}'

@@ -209,6 +209,7 @@ describe("resolveOptions", () => {
     stream: true,
     markdown: false,
     cost: false,
+    chat: false,
     cache: true,
   };
   const emptyConfig: Config = {};
@@ -1030,6 +1031,7 @@ describe("resolveOptions additional", () => {
     stream: true,
     markdown: false,
     cost: false,
+    chat: false,
     cache: true,
   };
   const emptyConfig: Config = {};
@@ -1082,6 +1084,7 @@ describe("resolveOptions provider-specific defaults", () => {
     stream: true,
     markdown: false,
     cost: false,
+    chat: false,
     cache: true,
   };
   const _emptyConfig: Config = {};

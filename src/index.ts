@@ -14,6 +14,7 @@ import {
   getCachedResponse,
   setCachedResponse,
 } from "./cache.ts";
+import { startChat } from "./chat.ts";
 import { generateCompletions } from "./completions.ts";
 import {
   type Config,
@@ -88,6 +89,7 @@ export interface CLIOptions {
   stream: boolean;
   markdown: boolean;
   cost: boolean;
+  chat: boolean;
   temperature?: number;
   maxOutputTokens?: number;
   config?: string;
@@ -111,6 +113,7 @@ export const CLIOptionsSchema = z.object({
   stream: z.boolean(),
   markdown: z.boolean().optional().default(false),
   cost: z.boolean().optional().default(false),
+  chat: z.boolean().optional().default(false),
   temperature: z
     .number()
     .min(APP.temperature.min)
@@ -619,7 +622,8 @@ async function run(
     }
   }
 
-  const hasStdin = !process.stdin.isTTY;
+  // In chat mode, skip stdin/prompt reading — input comes from the REPL
+  const hasStdin = !opts.chat && !process.stdin.isTTY;
   const argPrompt = promptArgs.length > 0 ? promptArgs.join(" ") : null;
   const stdinContent = hasStdin ? await readStdin() : null;
 
@@ -640,7 +644,7 @@ async function run(
   }
 
   const prompt = buildPrompt({ prompt: argPrompt, fileContent, stdinContent });
-  if (!prompt && images.length === 0) {
+  if (!opts.chat && !prompt && images.length === 0) {
     program.help();
     return;
   }
@@ -667,6 +671,20 @@ async function run(
   }
 
   const model = resolveModel(modelString);
+
+  // If --chat is set, enter interactive chat mode instead of one-shot execution
+  if (opts.chat) {
+    await startChat({
+      model,
+      modelString,
+      system: systemPrompt,
+      temperature,
+      maxOutputTokens,
+      markdown,
+      showCost: opts.cost,
+    });
+    return;
+  }
 
   // Load tools from config file if --tools flag is provided
   const toolConfigs = await loadToolsConfig(opts.tools);
@@ -813,6 +831,7 @@ export function setupCLI(): typeof program {
     .option("--no-cache", "Disable response caching")
     .option("--markdown", "Render markdown output", false)
     .option("--cost", "Show estimated cost of the request", false)
+    .option("--chat", "Start interactive chat mode", false)
     .option(
       "-t, --temperature <n>",
       `Sampling temperature (${APP.temperature.min}-${APP.temperature.max})`,
