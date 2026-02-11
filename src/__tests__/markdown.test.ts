@@ -3,11 +3,16 @@ import { renderMarkdown } from "../markdown.ts";
 
 const RESET = "\x1b[0m";
 const BOLD = "\x1b[1m";
+const BOLD_OFF = "\x1b[22m";
 const DIM = "\x1b[2m";
+const DIM_OFF = "\x1b[22m";
 const ITALIC = "\x1b[3m";
+const ITALIC_OFF = "\x1b[23m";
 const UNDERLINE = "\x1b[4m";
 const STRIKETHROUGH = "\x1b[9m";
+const STRIKETHROUGH_OFF = "\x1b[29m";
 const CYAN = "\x1b[36m";
+const COLOR_OFF = "\x1b[39m";
 const GREEN = "\x1b[32m";
 const YELLOW = "\x1b[33m";
 const MAGENTA = "\x1b[35m";
@@ -131,7 +136,7 @@ describe("renderMarkdown: strikethrough", () => {
     const result = renderMarkdown("~~deleted~~");
     expect(result).toContain(STRIKETHROUGH);
     expect(result).toContain("deleted");
-    expect(result).toContain(RESET);
+    expect(result).toContain(STRIKETHROUGH_OFF);
   });
 });
 
@@ -204,6 +209,23 @@ describe("renderMarkdown: edge cases", () => {
     expect(result).toContain(BOLD);
     expect(result).toContain("bold item");
     expect(result).toContain("normal item");
+  });
+
+  test("nested bold with inline code uses specific off codes (not full reset)", () => {
+    const result = renderMarkdown("**bold with `code` inside**");
+    // The code span should end with COLOR_OFF + DIM_OFF, not a full RESET
+    // that would kill the parent bold context
+    expect(result).toContain(COLOR_OFF);
+    expect(result).toContain(DIM_OFF);
+    // Bold should use BOLD_OFF at the end, not full RESET
+    expect(result).toContain(BOLD_OFF);
+  });
+
+  test("nested italic with inline code preserves italic after code", () => {
+    const result = renderMarkdown("*italic with `code` inside*");
+    expect(result).toContain(ITALIC);
+    expect(result).toContain(ITALIC_OFF);
+    expect(result).toContain(CYAN);
   });
 
   test("handles inline code in paragraph", () => {

@@ -74,6 +74,7 @@
     "ai": "^6.0.78",
     "ai-sdk-ollama": "^3.5.0",
     "citty": "^0.2.0",
+    "remend": "^1.2.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
