@@ -15,7 +15,13 @@ import {
   setCachedResponse,
 } from "./cache.ts";
 import { generateCompletions } from "./completions.ts";
-import { type Config, listRoles, loadConfig, loadRole } from "./config.ts";
+import {
+  type Config,
+  getProviderDefaults,
+  listRoles,
+  loadConfig,
+  loadRole,
+} from "./config.ts";
 import { APP } from "./constants.ts";
 import type { UsageInfo } from "./cost.ts";
 import { calculateCost, formatCost, parseModelString } from "./cost.ts";
@@ -272,9 +278,13 @@ export function buildPrompt({
 }
 
 /**
- * Resolve effective options by merging CLI flags, config file values, and defaults.
+ * Resolve effective options by merging CLI flags, provider config, global config, and defaults.
  *
- * Priority order (highest to lowest): CLI flags > config file > built-in defaults.
+ * Priority order (highest to lowest): CLI flags > provider-specific config > global config > built-in defaults.
+ *
+ * After resolving the model string, the provider is extracted (e.g., "anthropic" from
+ * "anthropic/claude-sonnet-4-5") and used to look up provider-specific overrides from
+ * the config's `providers` section.
  *
  * @param opts - CLI options as parsed by Commander.
  * @param config - Loaded configuration from config files.
@@ -290,12 +300,27 @@ export function resolveOptions(
   maxOutputTokens: number | undefined;
   markdown: boolean;
 } {
+  // First resolve the model string to determine the provider
+  const modelString = opts.model ?? config.model ?? APP.defaultModel;
+  const { provider } = parseModelString(modelString);
+
+  // Look up provider-specific overrides
+  const providerDefaults = getProviderDefaults(config, provider);
+
   return {
-    modelString: opts.model ?? config.model ?? APP.defaultModel,
-    system: opts.system ?? config.system ?? undefined,
-    temperature: opts.temperature ?? config.temperature ?? undefined,
+    modelString,
+    system:
+      opts.system ?? providerDefaults.system ?? config.system ?? undefined,
+    temperature:
+      opts.temperature ??
+      providerDefaults.temperature ??
+      config.temperature ??
+      undefined,
     maxOutputTokens:
-      opts.maxOutputTokens ?? config.maxOutputTokens ?? undefined,
+      opts.maxOutputTokens ??
+      providerDefaults.maxOutputTokens ??
+      config.maxOutputTokens ??
+      undefined,
     markdown: opts.markdown,
   };
 }
@@ -310,7 +335,9 @@ async function readStdin(): Promise<string> {
 
 const HOME_DIR = Bun.env.HOME ?? Bun.env.USERPROFILE ?? "";
 if (!HOME_DIR) {
-  console.warn("Warning: Neither HOME nor USERPROFILE environment variable is set. History paths may not resolve correctly.");
+  console.warn(
+    "Warning: Neither HOME nor USERPROFILE environment variable is set. History paths may not resolve correctly.",
+  );
 }
 const HISTORY_DIR = join(HOME_DIR, ".ai-pipe", "history");
 
@@ -427,7 +454,9 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
         };
         process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
       } else {
-        const text = markdown ? renderMarkdown(cached.text) : `${cached.text}\n`;
+        const text = markdown
+          ? renderMarkdown(cached.text)
+          : `${cached.text}\n`;
         process.stdout.write(text);
       }
       displayCostIfEnabled({ usage: cached.usage, modelString, showCost });
@@ -436,7 +465,15 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
   }
 
   // Build the common model call options with proper type narrowing
-  const baseOptions = { model, temperature, maxOutputTokens, ...(tools ? { tools } : {}) };
+  // Cast tools to satisfy AI SDK's ToolSet type constraint
+  const baseOptions = {
+    model,
+    temperature,
+    maxOutputTokens,
+    ...(tools
+      ? { tools: tools as Parameters<typeof generateText>[0]["tools"] }
+      : {}),
+  };
   const callOptions =
     messages !== undefined
       ? { ...baseOptions, messages }
@@ -476,7 +513,9 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
     } else {
       // Note: when --markdown is used with streaming, output is silently
       // buffered (see streaming path below) rather than displayed per-chunk.
-      const output = markdown ? renderMarkdown(result.text) : `${result.text}\n`;
+      const output = markdown
+        ? renderMarkdown(result.text)
+        : `${result.text}\n`;
       process.stdout.write(output);
     }
 
@@ -617,7 +656,9 @@ async function run(
     if (roleContent) {
       systemPrompt = roleContent;
     } else {
-      const roleFilename = opts.role.endsWith(".md") ? opts.role : `${opts.role}.md`;
+      const roleFilename = opts.role.endsWith(".md")
+        ? opts.role
+        : `${opts.role}.md`;
       console.error(
         `Error: Role "${opts.role}" not found. Create it at ~/${APP.configDirName}/roles/${roleFilename} or run "ai-pipe --roles" to see available roles.`,
       );

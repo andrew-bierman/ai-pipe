@@ -2,7 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ConfigSchema, listRoles, loadConfig, loadRole } from "../config.ts";
+import {
+  ConfigSchema,
+  getProviderDefaults,
+  listRoles,
+  loadConfig,
+  loadRole,
+  ProviderConfigSchema,
+} from "../config.ts";
 
 const tmpDir = tmpdir();
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -532,5 +539,222 @@ describe("ConfigSchema edge cases", () => {
 
   test("rejects array", () => {
     expect(() => ConfigSchema.parse([1, 2, 3])).toThrow();
+  });
+});
+
+// ── Provider-specific config ─────────────────────────────────────────────
+
+describe("ProviderConfigSchema", () => {
+  test("accepts empty object", () => {
+    expect(ProviderConfigSchema.parse({})).toEqual({});
+  });
+
+  test("accepts full valid provider config", () => {
+    const result = ProviderConfigSchema.parse({
+      model: "claude-sonnet-4-5",
+      system: "You are Claude.",
+      temperature: 0.5,
+      maxOutputTokens: 4096,
+    });
+    expect(result.model).toBe("claude-sonnet-4-5");
+    expect(result.system).toBe("You are Claude.");
+    expect(result.temperature).toBe(0.5);
+    expect(result.maxOutputTokens).toBe(4096);
+  });
+
+  test("accepts partial provider config (only temperature)", () => {
+    const result = ProviderConfigSchema.parse({ temperature: 1.0 });
+    expect(result.temperature).toBe(1.0);
+    expect(result.model).toBeUndefined();
+  });
+
+  test("rejects temperature out of range", () => {
+    expect(() => ProviderConfigSchema.parse({ temperature: 5.0 })).toThrow();
+  });
+
+  test("rejects negative maxOutputTokens", () => {
+    expect(() => ProviderConfigSchema.parse({ maxOutputTokens: -1 })).toThrow();
+  });
+});
+
+describe("ConfigSchema with providers", () => {
+  test("accepts config with providers section", () => {
+    const result = ConfigSchema.parse({
+      model: "openai/gpt-4o",
+      temperature: 0.7,
+      providers: {
+        anthropic: {
+          model: "claude-sonnet-4-5",
+          temperature: 0.5,
+          maxOutputTokens: 4096,
+          system: "You are Claude.",
+        },
+        openai: {
+          temperature: 1.0,
+        },
+      },
+    });
+    expect(result.providers).toBeDefined();
+    expect(result.providers?.anthropic?.temperature).toBe(0.5);
+    expect(result.providers?.openai?.temperature).toBe(1.0);
+  });
+
+  test("accepts config without providers key (backward compatible)", () => {
+    const result = ConfigSchema.parse({
+      model: "openai/gpt-4o",
+      temperature: 0.7,
+    });
+    expect(result.providers).toBeUndefined();
+  });
+
+  test("accepts empty providers object", () => {
+    const result = ConfigSchema.parse({ providers: {} });
+    expect(result.providers).toEqual({});
+  });
+
+  test("rejects providers with invalid temperature", () => {
+    expect(() =>
+      ConfigSchema.parse({
+        providers: {
+          openai: { temperature: 5.0 },
+        },
+      }),
+    ).toThrow();
+  });
+
+  test("rejects providers with invalid maxOutputTokens", () => {
+    expect(() =>
+      ConfigSchema.parse({
+        providers: {
+          openai: { maxOutputTokens: -1 },
+        },
+      }),
+    ).toThrow();
+  });
+
+  test("strips unknown properties from provider entries", () => {
+    const result = ConfigSchema.parse({
+      providers: {
+        openai: { temperature: 0.5, unknownField: true },
+      },
+    });
+    expect(
+      (result.providers?.openai as Record<string, unknown>)?.unknownField,
+    ).toBeUndefined();
+  });
+});
+
+describe("getProviderDefaults", () => {
+  test("returns provider-specific overrides when they exist", () => {
+    const config = {
+      model: "openai/gpt-4o",
+      temperature: 0.7,
+      providers: {
+        anthropic: {
+          temperature: 0.5,
+          system: "You are Claude.",
+        },
+      },
+    };
+    const result = getProviderDefaults(config, "anthropic");
+    expect(result.temperature).toBe(0.5);
+    expect(result.system).toBe("You are Claude.");
+  });
+
+  test("returns empty object when provider is not in config", () => {
+    const config = {
+      model: "openai/gpt-4o",
+      providers: {
+        anthropic: { temperature: 0.5 },
+      },
+    };
+    const result = getProviderDefaults(config, "openai");
+    expect(result).toEqual({});
+  });
+
+  test("returns empty object when providers key is missing", () => {
+    const config = { model: "openai/gpt-4o" };
+    const result = getProviderDefaults(config, "anthropic");
+    expect(result).toEqual({});
+  });
+
+  test("returns empty object for empty config", () => {
+    const result = getProviderDefaults({}, "openai");
+    expect(result).toEqual({});
+  });
+
+  test("returns correct overrides for multiple providers", () => {
+    const config = {
+      providers: {
+        anthropic: { temperature: 0.5, model: "claude-sonnet-4-5" },
+        openai: { temperature: 1.0 },
+        ollama: { model: "llama3", temperature: 0.8 },
+      },
+    };
+    expect(getProviderDefaults(config, "anthropic").temperature).toBe(0.5);
+    expect(getProviderDefaults(config, "openai").temperature).toBe(1.0);
+    expect(getProviderDefaults(config, "ollama").model).toBe("llama3");
+  });
+});
+
+describe("loadConfig with providers", () => {
+  test("loads config.json with providers section", async () => {
+    const dir = makeTmpDir();
+    await Bun.write(
+      join(dir, "config.json"),
+      JSON.stringify({
+        model: "openai/gpt-4o",
+        temperature: 0.7,
+        providers: {
+          anthropic: {
+            model: "claude-sonnet-4-5",
+            temperature: 0.5,
+            system: "You are Claude.",
+          },
+          openai: {
+            temperature: 1.0,
+          },
+        },
+      }),
+    );
+
+    const config = await loadConfig(dir);
+    expect(config.model).toBe("openai/gpt-4o");
+    expect(config.providers?.anthropic?.temperature).toBe(0.5);
+    expect(config.providers?.anthropic?.system).toBe("You are Claude.");
+    expect(config.providers?.openai?.temperature).toBe(1.0);
+  });
+
+  test("ignores config.json with invalid provider section", async () => {
+    const dir = makeTmpDir();
+    await Bun.write(
+      join(dir, "config.json"),
+      JSON.stringify({
+        model: "openai/gpt-4o",
+        providers: {
+          openai: { temperature: 99 }, // out of range
+        },
+      }),
+    );
+
+    // Should silently ignore the invalid config
+    const config = await loadConfig(dir);
+    expect(config).toEqual({});
+  });
+
+  test("loads config without providers key (backward compatible)", async () => {
+    const dir = makeTmpDir();
+    await Bun.write(
+      join(dir, "config.json"),
+      JSON.stringify({
+        model: "anthropic/claude-sonnet-4-5",
+        temperature: 0.7,
+      }),
+    );
+
+    const config = await loadConfig(dir);
+    expect(config.model).toBe("anthropic/claude-sonnet-4-5");
+    expect(config.temperature).toBe(0.7);
+    expect(config.providers).toBeUndefined();
   });
 });

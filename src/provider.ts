@@ -181,9 +181,15 @@ export function resolveModel(modelString: string) {
   const missingVars = envVars.filter((v) => !process.env[v]);
 
   if (missingVars.length > 0) {
-    const exportCmds = missingVars.map((v) => `export ${v}=<your-key>`).join("\n  ");
-    const usesApiKey = missingVars.some((v) => v.endsWith("_API_KEY") || v.endsWith("_TOKEN"));
-    const apiKeysHint = usesApiKey ? ` Or add the key(s) to ~/.ai-pipe/apiKeys.json.` : "";
+    const exportCmds = missingVars
+      .map((v) => `export ${v}=<your-key>`)
+      .join("\n  ");
+    const usesApiKey = missingVars.some(
+      (v) => v.endsWith("_API_KEY") || v.endsWith("_TOKEN"),
+    );
+    const apiKeysHint = usesApiKey
+      ? ` Or add the key(s) to ~/.ai-pipe/apiKeys.json.`
+      : "";
     console.error(
       `Error: Missing required environment variable(s): ${missingVars.join(", ")}.\nSet them with:\n  ${exportCmds}${apiKeysHint}`,
     );

@@ -1,8 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { join } from "node:path";
 import {
   buildCacheKey,
-  type CachedResponse,
   CachedResponseSchema,
   type CacheKeyParams,
   clearCache,
@@ -146,7 +144,12 @@ describe("setCachedResponse + getCachedResponse roundtrip", () => {
     const { homedir } = await import("node:os");
     const { join } = await import("node:path");
     const { unlink } = await import("node:fs/promises");
-    const filePath = join(homedir(), APP.configDirName, "cache", `${testKey}.json`);
+    const filePath = join(
+      homedir(),
+      APP.configDirName,
+      "cache",
+      `${testKey}.json`,
+    );
     try {
       await unlink(filePath);
     } catch {
@@ -166,12 +169,12 @@ describe("setCachedResponse + getCachedResponse roundtrip", () => {
     const cached = await getCachedResponse(testKey);
 
     expect(cached).not.toBeNull();
-    expect(cached!.text).toBe(responseData.text);
-    expect(cached!.usage.inputTokens).toBe(15);
-    expect(cached!.usage.outputTokens).toBe(25);
-    expect(cached!.finishReason).toBe("stop");
-    expect(cached!.model).toBe("openai/gpt-4o");
-    expect(cached!.timestamp).toBeGreaterThan(0);
+    expect(cached?.text).toBe(responseData.text);
+    expect(cached?.usage.inputTokens).toBe(15);
+    expect(cached?.usage.outputTokens).toBe(25);
+    expect(cached?.finishReason).toBe("stop");
+    expect(cached?.model).toBe("openai/gpt-4o");
+    expect(cached?.timestamp).toBeGreaterThan(0);
   });
 });
 
@@ -184,7 +187,12 @@ describe("TTL expiration", () => {
     const { homedir } = await import("node:os");
     const { join } = await import("node:path");
     const { unlink } = await import("node:fs/promises");
-    const filePath = join(homedir(), APP.configDirName, "cache", `${testKey}.json`);
+    const filePath = join(
+      homedir(),
+      APP.configDirName,
+      "cache",
+      `${testKey}.json`,
+    );
     try {
       await unlink(filePath);
     } catch {
@@ -220,7 +228,7 @@ describe("TTL expiration", () => {
     // With a large TTL, the entry should still be valid
     const cached = await getCachedResponse(testKey, 60 * 60 * 1000);
     expect(cached).not.toBeNull();
-    expect(cached!.text).toBe("Fresh response");
+    expect(cached?.text).toBe("Fresh response");
   });
 });
 

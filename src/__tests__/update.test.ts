@@ -1,11 +1,11 @@
-import { test, expect, describe, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { mkdir, rm } from "node:fs/promises";
 import {
+  checkForUpdates,
   compareVersions,
   shouldCheckForUpdates,
-  checkForUpdates,
 } from "../update.ts";
 
 describe("compareVersions", () => {
@@ -72,7 +72,7 @@ describe("checkForUpdates", () => {
     // Use a path that will cause the fetch to fail (invalid registry)
     // by mocking fetch to throw
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = () => {
+    (globalThis as Record<string, unknown>).fetch = () => {
       throw new Error("Network error");
     };
 
@@ -89,7 +89,7 @@ describe("checkForUpdates", () => {
     const originalFetch = globalThis.fetch;
     const pkg = await import("../../package.json");
 
-    globalThis.fetch = async () =>
+    (globalThis as Record<string, unknown>).fetch = async () =>
       new Response(JSON.stringify({ version: pkg.default.version }), {
         status: 200,
       });
@@ -106,7 +106,7 @@ describe("checkForUpdates", () => {
   test("returns message when update is available", async () => {
     const originalFetch = globalThis.fetch;
 
-    globalThis.fetch = async () =>
+    (globalThis as Record<string, unknown>).fetch = async () =>
       new Response(JSON.stringify({ version: "99.99.99" }), {
         status: 200,
       });
@@ -126,7 +126,7 @@ describe("checkForUpdates", () => {
   test("returns null when registry returns non-ok status", async () => {
     const originalFetch = globalThis.fetch;
 
-    globalThis.fetch = async () =>
+    (globalThis as Record<string, unknown>).fetch = async () =>
       new Response("Not Found", { status: 404 });
 
     try {
