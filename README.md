@@ -462,7 +462,7 @@ Binaries are output to `dist/`.
 bun install
 
 # Run tests
-bun test              # 646 tests across 17 files
+bun test              # 752 tests across 21 files
 
 # Type checking
 bun run typecheck     # TypeScript type checking
@@ -502,10 +502,13 @@ The release workflow handles `bun publish`, binary builds, and GitHub release.
 - [x] **citty migration** — replaced Commander.js with citty (UnJS)
 - [x] **Prompt templates** — reusable prompt snippets in `~/.ai-pipe/templates/`
 - [x] **Output formats** — CSV, YAML, JSON, text structured output modes
-- [ ] **Piped chain mode** — chain multiple LLM calls with `|` syntax
 - [x] **Session export/import** — share conversations as JSON/Markdown
 - [x] **Token budget** — set a max spend per session with `--budget`
 - [x] **Model aliases** — short names for long model IDs in config
+- [x] **Retry with backoff** — automatic retry on rate limits and transient errors
+- [ ] **Piped chain mode** — chain multiple LLM calls with `|` syntax
+- [ ] **Plugin system** — loadable extensions for custom providers/transforms
+- [ ] **Response diffing** — compare outputs across models for same prompt
 
 ## 📚 Documentation
 
