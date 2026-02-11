@@ -163,7 +163,7 @@ describe("AppSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  test("rejects config with empty supportedShells", () => {
+  test("accepts config with empty supportedShells", () => {
     const result = AppSchema.safeParse({
       name: "test",
       description: "desc",

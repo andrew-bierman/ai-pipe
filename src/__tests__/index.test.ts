@@ -1039,8 +1039,8 @@ describe("resolveOptions additional", () => {
     const config: Config = { system: "config system" };
     const opts: CLIOptions = { ...defaultOpts, system: "" };
     const result = resolveOptions(opts, config);
-    // Empty string is falsy, so it falls through to config
-    expect(result.system).toBe("config system");
+    // Empty string is not nullish, so ?? preserves it over config
+    expect(result.system).toBe("");
   });
 });
 
