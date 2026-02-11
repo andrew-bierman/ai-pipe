@@ -579,7 +579,7 @@ Binaries are output to `dist/`.
 bun install
 
 # Run tests
-bun test              # 752 tests across 21 files
+bun test              # 808 tests across 24 files
 
 # Type checking
 bun run typecheck     # TypeScript type checking
