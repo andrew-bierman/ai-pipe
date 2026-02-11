@@ -30,6 +30,12 @@ import { APP } from "./constants.ts";
 import type { UsageInfo } from "./cost.ts";
 import { calculateCost, formatCost, parseModelString } from "./cost.ts";
 import {
+  type DiffOptions,
+  formatDiffJson,
+  formatDiffResults,
+  runDiff,
+} from "./diff.ts";
+import {
   formatOutput,
   type OutputFormat,
   OutputFormatSchema,
@@ -129,6 +135,7 @@ export interface CLIOptions {
   chain?: string;
   verbose?: boolean;
   plugins?: string;
+  diff?: string;
 }
 
 /** Zod schema for validating and coercing CLI options from citty. */
@@ -166,6 +173,7 @@ export const CLIOptionsSchema = z.object({
   chain: z.string().optional(),
   verbose: z.boolean().optional().default(false),
   plugins: z.string().optional(),
+  diff: z.string().optional(),
 });
 
 /**
@@ -904,9 +912,61 @@ async function runAction(
     }
   }
 
-  if (!opts.chat && !prompt && images.length === 0) {
+  if (!opts.chat && !opts.diff && !prompt && images.length === 0) {
     await showUsage(mainCommand);
     process.exit(0);
+  }
+
+  // Handle --diff: compare multiple models for the same prompt
+  if (opts.diff) {
+    const models = opts.diff
+      .split(",")
+      .map((m) => m.trim())
+      .filter(Boolean)
+      .map((m) => resolveAlias(config, m));
+
+    if (models.length < 2) {
+      console.error(
+        'Error: --diff requires at least 2 comma-separated models (e.g., --diff "openai/gpt-4o,anthropic/claude-sonnet-4-5")',
+      );
+      process.exit(1);
+    }
+
+    if (!prompt) {
+      console.error("Error: --diff requires a prompt.");
+      process.exit(1);
+    }
+
+    // Resolve system prompt from role or --system flag
+    let diffSystem = opts.system;
+    if (opts.role && opts.system === undefined) {
+      const roleContent = await loadRole(opts.role);
+      if (roleContent) {
+        diffSystem = roleContent;
+      }
+    }
+
+    const diffOptions: DiffOptions = {
+      models,
+      prompt,
+      system: diffSystem,
+      temperature: opts.temperature,
+      maxOutputTokens: opts.maxOutputTokens,
+      showCost: opts.cost,
+    };
+
+    try {
+      const results = await runDiff(diffOptions);
+      if (opts.json) {
+        process.stdout.write(`${formatDiffJson(results)}\n`);
+      } else {
+        process.stdout.write(`${formatDiffResults(results)}\n`);
+      }
+    } catch (err: unknown) {
+      console.error(`Error: ${formatError(err)}`);
+      process.exit(1);
+    }
+    return;
   }
 
   // Resolve model aliases before resolveOptions
@@ -1365,6 +1425,12 @@ export const mainCommand = defineCommand({
       alias: "P",
       description: "Path to plugins configuration file (JSON)",
     },
+    diff: {
+      type: "string",
+      alias: "D",
+      description:
+        "Compare models (comma-separated, e.g., openai/gpt-4o,anthropic/claude-sonnet-4-5)",
+    },
     updateCheck: {
       type: "boolean",
       description: "Check for updates after execution",
@@ -1435,6 +1501,7 @@ export const mainCommand = defineCommand({
       chain: args.chain,
       verbose: args.verbose,
       plugins: args.plugins,
+      diff: args.diff,
       updateCheck: args.updateCheck,
     };
 
