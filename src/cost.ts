@@ -1,9 +1,18 @@
+/** Number of tokens per pricing unit (pricing is per 1M tokens) */
+const TOKENS_PER_UNIT = 1_000_000;
+
+/** Default pricing for unknown providers/models */
+const ZERO_PRICING: ModelPricing = { inputPrice: 0, outputPrice: 0 } as const;
+
+/** Cost decimal precision for formatting */
+const COST_DECIMAL_PLACES = 4;
+
 // Pricing per 1M tokens (as of Feb 2025)
 // Format: { inputPrice: number; outputPrice: number }
-export type ModelPricing = {
-  inputPrice: number; // per 1M tokens
-  outputPrice: number; // per 1M tokens
-};
+export interface ModelPricing {
+  readonly inputPrice: number; // per 1M tokens
+  readonly outputPrice: number; // per 1M tokens
+}
 
 export type ProviderPricing = Record<string, ModelPricing>;
 
@@ -108,25 +117,25 @@ export const PRICING: Record<string, ProviderPricing> = {
 };
 
 export interface CostInfo {
-  inputTokens: number;
-  outputTokens: number;
-  inputCost: number;
-  outputCost: number;
-  totalCost: number;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly inputCost: number;
+  readonly outputCost: number;
+  readonly totalCost: number;
 }
 
 export interface UsageInfo {
-  inputTokens?: number;
-  outputTokens?: number;
-  totalTokens?: number;
-  inputTokenDetails?: {
-    noCacheTokens?: number;
-    cacheReadTokens?: number;
-    cacheWriteTokens?: number;
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+  readonly totalTokens?: number;
+  readonly inputTokenDetails?: {
+    readonly noCacheTokens?: number;
+    readonly cacheReadTokens?: number;
+    readonly cacheWriteTokens?: number;
   };
-  outputTokenDetails?: {
-    textTokens?: number;
-    reasoningTokens?: number;
+  readonly outputTokenDetails?: {
+    readonly textTokens?: number;
+    readonly reasoningTokens?: number;
   };
 }
 
@@ -137,7 +146,7 @@ export function getPricing(provider: string, modelId: string): ModelPricing {
   const providerPricing = PRICING[provider];
 
   if (!providerPricing) {
-    return { inputPrice: 0, outputPrice: 0 };
+    return ZERO_PRICING;
   }
 
   // Try exact model match first
@@ -160,7 +169,7 @@ export function getPricing(provider: string, modelId: string): ModelPricing {
     return providerPricing.default;
   }
 
-  return { inputPrice: 0, outputPrice: 0 };
+  return ZERO_PRICING;
 }
 
 /**
@@ -175,8 +184,8 @@ export function calculateCost(
   const inputTokens = usage.inputTokens ?? 0;
   const outputTokens = usage.outputTokens ?? 0;
 
-  const inputCost = (inputTokens / 1_000_000) * pricing.inputPrice;
-  const outputCost = (outputTokens / 1_000_000) * pricing.outputPrice;
+  const inputCost = (inputTokens / TOKENS_PER_UNIT) * pricing.inputPrice;
+  const outputCost = (outputTokens / TOKENS_PER_UNIT) * pricing.outputPrice;
   const totalCost = inputCost + outputCost;
 
   return {
@@ -196,13 +205,13 @@ export function formatCost(costInfo: CostInfo): string {
 
   if (costInfo.inputTokens > 0) {
     parts.push(
-      `$${costInfo.inputCost.toFixed(4)} (${costInfo.inputTokens.toLocaleString()} in)`,
+      `$${costInfo.inputCost.toFixed(COST_DECIMAL_PLACES)} (${costInfo.inputTokens.toLocaleString()} in)`,
     );
   }
 
   if (costInfo.outputTokens > 0) {
     parts.push(
-      `$${costInfo.outputCost.toFixed(4)} (${costInfo.outputTokens.toLocaleString()} out)`,
+      `$${costInfo.outputCost.toFixed(COST_DECIMAL_PLACES)} (${costInfo.outputTokens.toLocaleString()} out)`,
     );
   }
 
@@ -210,7 +219,7 @@ export function formatCost(costInfo: CostInfo): string {
     return "$0.0000 (0 tokens)";
   }
 
-  return `${parts.join(" + ")} = $${costInfo.totalCost.toFixed(4)}`;
+  return `${parts.join(" + ")} = $${costInfo.totalCost.toFixed(COST_DECIMAL_PLACES)}`;
 }
 
 /**

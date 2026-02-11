@@ -72,7 +72,7 @@ export const ProviderIdSchema = z.enum(SUPPORTED_PROVIDERS);
 export type ProviderId = z.infer<typeof ProviderIdSchema>;
 
 // Provider env vars - some providers require multiple env vars
-export const PROVIDER_ENV_VARS: Record<ProviderId, string[]> = {
+export const PROVIDER_ENV_VARS: Record<ProviderId, readonly string[]> = {
   openai: ["OPENAI_API_KEY"],
   anthropic: ["ANTHROPIC_API_KEY"],
   google: ["GOOGLE_GENERATIVE_AI_API_KEY"],
@@ -91,7 +91,7 @@ export const PROVIDER_ENV_VARS: Record<ProviderId, string[]> = {
   ollama: ["OLLAMA_HOST"],
   huggingface: ["HF_TOKEN"],
   deepinfra: ["DEEPINFRA_API_KEY"],
-};
+} as const satisfies Record<ProviderId, readonly string[]>;
 
 export const ModelStringSchema = z
   .string()
