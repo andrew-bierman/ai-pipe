@@ -1,6 +1,6 @@
 {
   "name": "ai-pipe",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "A lean CLI for calling LLMs from the terminal. Text in, text out.",
   "keywords": [
     "ai",
