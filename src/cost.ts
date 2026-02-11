@@ -172,14 +172,21 @@ export function getPricing(provider: string, modelId: string): ModelPricing {
   return ZERO_PRICING;
 }
 
+export interface CalculateCostOptions {
+  provider: string;
+  modelId: string;
+  usage: UsageInfo;
+}
+
 /**
- * Calculate cost from token usage
+ * Calculate cost from token usage.
+ * Breaking change (pre-1.0): signature changed from positional args to object param.
  */
-export function calculateCost(
-  provider: string,
-  modelId: string,
-  usage: UsageInfo,
-): CostInfo {
+export function calculateCost({
+  provider,
+  modelId,
+  usage,
+}: CalculateCostOptions): CostInfo {
   const pricing = getPricing(provider, modelId);
   const inputTokens = usage.inputTokens ?? 0;
   const outputTokens = usage.outputTokens ?? 0;
