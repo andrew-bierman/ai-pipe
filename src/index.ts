@@ -518,11 +518,19 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
     process.exit(1);
   }
 
-  // Check for updates (non-blocking, printed to stderr)
+  // Check for updates (bounded wait, printed to stderr)
   if (opts.updateCheck !== false) {
-    const updateMessage = await checkForUpdates();
-    if (updateMessage) {
-      process.stderr.write(updateMessage);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    try {
+      const updateMessage = await checkForUpdates(undefined, controller.signal);
+      if (updateMessage) {
+        process.stderr.write(updateMessage);
+      }
+    } catch {
+      // Timeout or abort — silently ignore
+    } finally {
+      clearTimeout(timeout);
     }
   }
 }

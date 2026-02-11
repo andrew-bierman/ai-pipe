@@ -9,11 +9,12 @@ const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 /**
  * Compare two semver strings. Returns true if latest > current.
- * Splits on dots and compares each segment numerically.
+ * Strips prerelease/build metadata, then splits on dots and compares each segment numerically.
  */
 export function compareVersions(current: string, latest: string): boolean {
-  const currentParts = current.split(".").map(Number);
-  const latestParts = latest.split(".").map(Number);
+  const strip = (v: string) => v.replace(/[-+].*$/, "");
+  const currentParts = strip(current).split(".").map(Number);
+  const latestParts = strip(latest).split(".").map(Number);
 
   const maxLength = Math.max(currentParts.length, latestParts.length);
 
@@ -46,7 +47,7 @@ export async function shouldCheckForUpdates(
 
     return Date.now() - lastCheck >= CHECK_INTERVAL_MS;
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -64,26 +65,27 @@ async function writeLastCheckTimestamp(
 /**
  * Check for updates to ai-pipe on npm.
  * Returns a formatted message string if an update is available, or null otherwise.
- * Non-blocking and fail-silent: any error returns null.
+ * Best-effort and fail-silent: any error returns null.
  */
 export async function checkForUpdates(
   lastCheckPath: string = UPDATE_CHECK_FILE,
+  signal?: AbortSignal,
 ): Promise<string | null> {
   try {
     if (!(await shouldCheckForUpdates(lastCheckPath))) {
       return null;
     }
 
-    const response = await fetch(NPM_REGISTRY_URL);
+    // Record that we checked immediately to honor 24h backoff even on fetch failures
+    await writeLastCheckTimestamp(lastCheckPath);
+
+    const response = await fetch(NPM_REGISTRY_URL, { signal });
     if (!response.ok) return null;
 
     const data = (await response.json()) as { version?: string };
     const latest = data.version;
 
     if (!latest) return null;
-
-    // Record that we checked, regardless of the result
-    await writeLastCheckTimestamp(lastCheckPath);
 
     const current = pkg.version;
     if (compareVersions(current, latest)) {
