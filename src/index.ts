@@ -28,6 +28,11 @@ import { handleConfigCommand } from "./config-commands.ts";
 import { APP } from "./constants.ts";
 import type { UsageInfo } from "./cost.ts";
 import { calculateCost, formatCost, parseModelString } from "./cost.ts";
+import {
+  formatOutput,
+  type OutputFormat,
+  OutputFormatSchema,
+} from "./formats.ts";
 import { runInit } from "./init.ts";
 import { renderMarkdown } from "./markdown.ts";
 import { loadMCPConfig, MCPManager } from "./mcp.ts";
@@ -115,6 +120,7 @@ export interface CLIOptions {
   cache: boolean;
   updateCheck?: boolean;
   retries?: number;
+  format?: OutputFormat;
   tools?: string;
   mcp?: string;
   budget?: number;
@@ -148,6 +154,7 @@ export const CLIOptionsSchema = z.object({
   cache: z.boolean().optional().default(true),
   updateCheck: z.boolean().optional().default(true),
   retries: z.number().int().nonnegative().optional(),
+  format: OutputFormatSchema.optional(),
   tools: z.string().optional(),
   mcp: z.string().optional(),
   budget: z.number().positive().optional(),
@@ -552,6 +559,7 @@ interface ExecutePromptParams {
   maxOutputTokens: number | undefined;
   stream: boolean;
   json: boolean;
+  format?: OutputFormat;
   markdown: boolean;
   showCost: boolean;
   /** If provided, saves assistant response to session history */
@@ -585,6 +593,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
     maxOutputTokens,
     stream,
     json,
+    format,
     markdown,
     showCost,
     session,
@@ -598,7 +607,16 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
   if (cacheKey) {
     const cached = await getCachedResponse(cacheKey);
     if (cached) {
-      if (json) {
+      if (format) {
+        const outputData: JsonOutput = {
+          text: cached.text,
+          model: cached.model,
+          usage: cached.usage,
+          finishReason: cached.finishReason,
+        };
+        const output = formatOutput(outputData, format);
+        process.stdout.write(`${output}\n`);
+      } else if (json) {
         const output: JsonOutput = {
           text: cached.text,
           model: cached.model,
@@ -633,7 +651,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
       ? { ...baseOptions, messages }
       : { ...baseOptions, system, prompt: prompt ?? "" };
 
-  if (json || !stream) {
+  if (json || format || !stream) {
     const result =
       retries !== undefined && retries > 0
         ? await withRetry(() => generateText(callOptions), {
@@ -661,7 +679,16 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
       await saveHistory(session.name, session.messages);
     }
 
-    if (json) {
+    if (format) {
+      const outputData: JsonOutput = {
+        text: result.text,
+        model: modelString,
+        usage: result.usage,
+        finishReason: result.finishReason,
+      };
+      const output = formatOutput(outputData, format);
+      process.stdout.write(`${output}\n`);
+    } else if (json) {
       const output: JsonOutput = {
         text: result.text,
         model: modelString,
@@ -949,7 +976,8 @@ async function runAction(
 
   try {
     // Build cache key for non-session mode when caching is enabled
-    const useCache = !sessionName && opts.cache && (opts.json || !opts.stream);
+    const useCache =
+      !sessionName && opts.cache && (opts.json || opts.format || !opts.stream);
     const cacheKey = useCache
       ? buildCacheKey({
           model: modelString,
@@ -970,6 +998,7 @@ async function runAction(
       maxOutputTokens,
       stream: opts.stream,
       json: opts.json,
+      format: opts.format,
       markdown,
       showCost: opts.cost,
       session: sessionName ? { name: sessionName, messages } : undefined,
@@ -1128,6 +1157,11 @@ export const mainCommand = defineCommand({
       description: "Output full JSON response object",
       default: false,
     },
+    format: {
+      type: "string",
+      alias: "F",
+      description: "Output format (json, yaml, csv, text)",
+    },
     stream: {
       type: "boolean",
       description: "Stream output as it arrives",
@@ -1253,6 +1287,7 @@ export const mainCommand = defineCommand({
       file: files,
       image: images,
       json: args.json,
+      format: args.format,
       stream: args.stream,
       cache: args.cache,
       markdown: args.markdown,
