@@ -32,6 +32,7 @@ A powerful CLI for calling LLMs from the terminal. Text in, text out. Built on t
 - 📤 **Session Export/Import** — share conversations as JSON or Markdown
 - 📊 **Output Formats** — structured output in JSON, YAML, CSV, or text
 - 🔗 **Chain Mode** — chain multiple LLM calls sequentially with `--chain`
+- 🔌 **Plugin System** — loadable extensions for custom transforms via `--plugins`
 
 ## 📦 Installation
 
@@ -326,6 +327,66 @@ cat src/app.ts | ai-pipe -T review
 ai-pipe --templates
 ```
 
+## 🔌 Plugins
+
+Extend ai-pipe with custom plugins that can transform prompts before sending and responses after receiving. Plugins are loaded from a JSON config file.
+
+### Plugin Config
+
+Create `~/.ai-pipe/plugins.json` (auto-loaded if present, or specify with `--plugins`):
+
+```json
+[
+  { "path": "./my-plugin.ts", "enabled": true },
+  { "path": "./another-plugin.js", "enabled": false }
+]
+```
+
+### Writing a Plugin
+
+A plugin is a TypeScript or JavaScript file that exports an object with a `name` and optional hooks:
+
+```typescript
+// my-plugin.ts
+export default {
+  name: "my-plugin",
+  version: "1.0.0",
+
+  // Transform the prompt before sending to the model
+  beforeRequest: ({ prompt, model, system }) => {
+    return `[Enhanced] ${prompt}`;
+  },
+
+  // Transform the response after receiving from the model
+  afterResponse: ({ text, model, usage }) => {
+    return text.toUpperCase();
+  },
+
+  // Called when the plugin is loaded
+  init: () => {
+    console.error("Plugin initialized");
+  },
+
+  // Called when the CLI exits
+  cleanup: () => {
+    console.error("Plugin cleaned up");
+  },
+};
+```
+
+### Using Plugins
+
+```bash
+# Use the default plugins config (~/.ai-pipe/plugins.json)
+ai-pipe "hello"
+
+# Use a custom plugins config
+ai-pipe --plugins ./my-plugins.json "hello"
+ai-pipe -P ./my-plugins.json "hello"
+```
+
+Plugins run in the order they appear in the config file. The `beforeRequest` hook chains (each plugin receives the previous plugin's output), and likewise for `afterResponse`.
+
 ## 📊 JSON Output
 
 Use `--json` to get structured output:
@@ -467,6 +528,7 @@ Options:
   --tools <path>               Load tool definitions from JSON config
   --chain <path>               Path to chain config JSON for multi-step LLM calls
   -v, --verbose                Show intermediate chain outputs on stderr
+  -P, --plugins <path>         Load plugins from JSON config
   --no-cache                   Disable response caching
   --no-update-check            Disable update version check
   -V, --version                Print version
@@ -543,7 +605,7 @@ The release workflow handles `bun publish`, binary builds, and GitHub release.
 - [x] **Model aliases** — short names for long model IDs in config
 - [x] **Retry with backoff** — automatic retry on rate limits and transient errors
 - [x] **Piped chain mode** — chain multiple LLM calls with `--chain`
-- [ ] **Plugin system** — loadable extensions for custom providers/transforms
+- [x] **Plugin system** — loadable extensions for custom providers/transforms
 - [ ] **Response diffing** — compare outputs across models for same prompt
 
 ## 📚 Documentation
