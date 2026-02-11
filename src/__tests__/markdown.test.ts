@@ -9,7 +9,6 @@ const DIM_OFF = "\x1b[22m";
 const ITALIC = "\x1b[3m";
 const ITALIC_OFF = "\x1b[23m";
 const UNDERLINE = "\x1b[4m";
-const UNDERLINE_OFF = "\x1b[24m";
 const STRIKETHROUGH = "\x1b[9m";
 const STRIKETHROUGH_OFF = "\x1b[29m";
 const CYAN = "\x1b[36m";
