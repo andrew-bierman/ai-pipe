@@ -264,4 +264,73 @@ describe("formatDiffJson", () => {
     expect(jsonStr).toContain("\n");
     expect(jsonStr).toContain("  ");
   });
+
+  test("includes sources when present", () => {
+    const results: DiffResult[] = [
+      {
+        model: "perplexity/sonar",
+        text: "Response with sources",
+        durationMs: 500,
+        sources: [
+          { url: "https://example.com", title: "Example" },
+          { url: "https://other.com" },
+        ],
+      },
+    ];
+
+    const jsonStr = formatDiffJson(results);
+    const parsed = JSON.parse(jsonStr);
+
+    expect(parsed[0].sources).toHaveLength(2);
+    expect(parsed[0].sources[0].url).toBe("https://example.com");
+    expect(parsed[0].sources[0].title).toBe("Example");
+    expect(parsed[0].sources[1].url).toBe("https://other.com");
+    expect(parsed[0].sources[1].title).toBeUndefined();
+  });
+
+  test("omits sources when not present", () => {
+    const results: DiffResult[] = [
+      {
+        model: "openai/gpt-4o",
+        text: "No sources",
+        durationMs: 500,
+      },
+    ];
+
+    const jsonStr = formatDiffJson(results);
+    const parsed = JSON.parse(jsonStr);
+
+    expect(parsed[0].sources).toBeUndefined();
+  });
+
+  test("includes reasoning when present", () => {
+    const results: DiffResult[] = [
+      {
+        model: "anthropic/claude-sonnet-4-5",
+        text: "Answer",
+        durationMs: 500,
+        reasoning: "Let me think...",
+      },
+    ];
+
+    const jsonStr = formatDiffJson(results);
+    const parsed = JSON.parse(jsonStr);
+
+    expect(parsed[0].reasoning).toBe("Let me think...");
+  });
+
+  test("omits reasoning when not present", () => {
+    const results: DiffResult[] = [
+      {
+        model: "openai/gpt-4o",
+        text: "No reasoning",
+        durationMs: 500,
+      },
+    ];
+
+    const jsonStr = formatDiffJson(results);
+    const parsed = JSON.parse(jsonStr);
+
+    expect(parsed[0].reasoning).toBeUndefined();
+  });
 });

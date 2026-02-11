@@ -222,14 +222,14 @@ export const JsonOutputSchema = z.object({
 export type JsonOutput = z.infer<typeof JsonOutputSchema>;
 
 /** A source from the AI SDK (discriminated union of 'url' and 'document' types). */
-type AnySource = {
+export type AnySource = {
   type: "source";
   sourceType: string;
   [key: string]: unknown;
 };
 
 /** Filter sources to URL-type and extract {url, title?}. */
-function extractSources(sources: AnySource[]): JsonOutput["sources"] {
+export function extractSources(sources: AnySource[]): JsonOutput["sources"] {
   const urlSources = sources.filter(
     (s): s is AnySource & { sourceType: "url"; url: string; title?: string } =>
       s.sourceType === "url" &&
@@ -243,7 +243,7 @@ function extractSources(sources: AnySource[]): JsonOutput["sources"] {
 }
 
 /** Build a full JsonOutput from a generateText result. */
-function buildJsonOutput(
+export function buildJsonOutput(
   result: {
     text: string;
     usage: JsonOutput["usage"];
@@ -272,7 +272,7 @@ function buildJsonOutput(
 }
 
 /** Format sources as a numbered list for plain text output. */
-function formatSourcesText(sources: AnySource[]): string {
+export function formatSourcesText(sources: AnySource[]): string {
   const urlSources = extractSources(sources);
   if (!urlSources || urlSources.length === 0) return "";
   const lines = urlSources.map(
