@@ -1,9 +1,11 @@
+import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { generateText, type ModelMessage, streamText } from "ai";
 import { program } from "commander";
 import { z } from "zod";
 import pkg from "../package.json";
+import { getCachedResponse, setCachedResponse } from "./cache.ts";
 import { generateCompletions } from "./completions.ts";
 import { type Config, listRoles, loadConfig, loadRole } from "./config.ts";
 import { APP } from "./constants.ts";
@@ -47,8 +49,9 @@ export interface CLIOptions {
   image?: string[];
   json: boolean;
   stream: boolean;
-  markdown: boolean;
-  cost: boolean;
+  markdown?: boolean;
+  cost?: boolean;
+  cache?: boolean;
   temperature?: number;
   maxOutputTokens?: number;
   config?: string;
@@ -68,6 +71,7 @@ export const CLIOptionsSchema = z.object({
   stream: z.boolean(),
   markdown: z.boolean().optional().default(false),
   cost: z.boolean().optional().default(false),
+  cache: z.boolean().optional().default(false),
   temperature: z
     .number()
     .min(APP.temperature.min)
@@ -190,7 +194,7 @@ export function resolveOptions(
   system: string | undefined;
   temperature: number | undefined;
   maxOutputTokens: number | undefined;
-  markdown: boolean;
+  markdown?: boolean;
 } {
   return {
     modelString: opts.model ?? config.model ?? APP.defaultModel,
@@ -198,7 +202,7 @@ export function resolveOptions(
     temperature: opts.temperature ?? config.temperature ?? undefined,
     maxOutputTokens:
       opts.maxOutputTokens ?? config.maxOutputTokens ?? undefined,
-    markdown: opts.markdown,
+    markdown: opts.markdown ?? false,
   };
 }
 
@@ -417,7 +421,19 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
       }
     } else {
       // Use regular prompt mode
+      const { provider, modelId } = parseModelString(modelString);
+
       if (opts.json || !opts.stream) {
+        // Check cache if enabled (non-session mode only)
+        if (opts.cache === true) {
+          const cached = await getCachedResponse(provider, modelId, prompt);
+          if (cached) {
+            process.stderr.write("⚡ Cached response (--cache)\n");
+            process.stdout.write(`${cached}\n`);
+            return;
+          }
+        }
+
         const result = await generateText({
           model,
           system,
@@ -425,6 +441,11 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
           temperature,
           maxOutputTokens,
         });
+
+        // Cache the response if enabled
+        if (opts.cache === true) {
+          await setCachedResponse(provider, modelId, prompt, result.text);
+        }
 
         if (opts.json) {
           const output: JsonOutput = {
@@ -441,6 +462,16 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
         // Display cost if requested
         displayCostIfEnabled(result.usage, modelString, opts.cost);
       } else {
+        // Check cache if enabled (non-session mode only, streaming)
+        if (opts.cache === true) {
+          const cached = await getCachedResponse(provider, modelId, prompt);
+          if (cached) {
+            process.stderr.write("⚡ Cached response (--cache)\n");
+            process.stdout.write(`${cached}\n`);
+            return;
+          }
+        }
+
         const result = streamText({
           model,
           system,
@@ -514,6 +545,7 @@ export function setupCLI() {
     .option("--no-stream", "Wait for full response, then print")
     .option("--markdown", "Render markdown output", false)
     .option("--cost", "Show estimated cost of the request", false)
+    .option("--cache", "Enable response caching for identical requests", false)
     .option(
       "-t, --temperature <n>",
       `Sampling temperature (${APP.temperature.min}-${APP.temperature.max})`,
