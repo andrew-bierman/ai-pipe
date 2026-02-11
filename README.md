@@ -171,6 +171,9 @@ ai-pipe --budget 0.05 "explain quantum computing"
 
 # Budget in chat mode tracks cumulative cost
 ai-pipe --chat --budget 1.00
+
+# Retry up to 3 times on rate limits or transient errors
+ai-pipe --retries 3 "explain recursion"
 ```
 
 > 📌 **Note:** If no `provider/` prefix is given, the model defaults to `openai`. If no `-m` flag is given, it defaults to `openai/gpt-4o`.
@@ -404,6 +407,7 @@ Options:
   --cost                       Show estimated token costs
   --markdown                   Render formatted markdown output
   -B, --budget <amount>        Max dollar budget per request (cumulative in chat)
+  --retries <n>                Retry on rate limit or transient errors (0=none)
   --tools <path>               Load tool definitions from JSON config
   --no-cache                   Disable response caching
   --no-update-check            Disable update version check

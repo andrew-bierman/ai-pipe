@@ -37,6 +37,7 @@ import {
   printProviders,
   resolveModel,
 } from "./provider.ts";
+import { withRetry } from "./retry.ts";
 import {
   deleteSession,
   exportSessionJson,
@@ -113,6 +114,7 @@ export interface CLIOptions {
   templates?: boolean;
   cache: boolean;
   updateCheck?: boolean;
+  retries?: number;
   tools?: string;
   mcp?: string;
   budget?: number;
@@ -145,6 +147,7 @@ export const CLIOptionsSchema = z.object({
   templates: z.boolean().optional(),
   cache: z.boolean().optional().default(true),
   updateCheck: z.boolean().optional().default(true),
+  retries: z.number().int().nonnegative().optional(),
   tools: z.string().optional(),
   mcp: z.string().optional(),
   budget: z.number().positive().optional(),
@@ -562,6 +565,8 @@ interface ExecutePromptParams {
   tools?: Record<string, unknown>;
   /** If provided, warn when cost exceeds this budget (in USD) */
   budget?: number;
+  /** Number of retries on transient/rate-limit errors (0 = no retries) */
+  retries?: number;
 }
 
 /**
@@ -586,6 +591,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
     cacheKey,
     tools,
     budget,
+    retries,
   } = params;
 
   // Check cache before making API call (only for non-session, non-streaming)
@@ -628,7 +634,12 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
       : { ...baseOptions, system, prompt: prompt ?? "" };
 
   if (json || !stream) {
-    const result = await generateText(callOptions);
+    const result =
+      retries !== undefined && retries > 0
+        ? await withRetry(() => generateText(callOptions), {
+            maxRetries: retries,
+          })
+        : await generateText(callOptions);
 
     // Store in cache if applicable (failures are non-fatal)
     if (cacheKey) {
@@ -670,41 +681,53 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
     displayCostIfEnabled({ usage: result.usage, modelString, showCost });
     checkBudget({ usage: result.usage, modelString, budget });
   } else {
-    const result = streamText(callOptions);
+    const consumeStream = async () => {
+      const result = streamText(callOptions);
 
-    // When markdown is enabled, progressively re-render as tokens arrive.
-    if (markdown) {
-      const renderer = new StreamingMarkdownRenderer();
-      for await (const chunk of result.textStream) {
-        renderer.append(chunk);
-      }
-      renderer.finish();
+      // When markdown is enabled, progressively re-render as tokens arrive.
+      if (markdown) {
+        const renderer = new StreamingMarkdownRenderer();
+        for await (const chunk of result.textStream) {
+          renderer.append(chunk);
+        }
+        renderer.finish();
 
-      // Save to session history if applicable
-      if (session) {
-        session.messages.push({
-          role: "assistant",
-          content: renderer.getBuffer(),
-        });
-        await saveHistory(session.name, session.messages);
+        // Save to session history if applicable
+        if (session) {
+          session.messages.push({
+            role: "assistant",
+            content: renderer.getBuffer(),
+          });
+          await saveHistory(session.name, session.messages);
+        }
+      } else {
+        let fullResponse = "";
+        for await (const chunk of result.textStream) {
+          process.stdout.write(chunk);
+          fullResponse += chunk;
+        }
+        process.stdout.write("\n");
+
+        // Save to session history if applicable
+        if (session) {
+          session.messages.push({ role: "assistant", content: fullResponse });
+          await saveHistory(session.name, session.messages);
+        }
       }
+
+      displayCostIfEnabled({
+        usage: await result.usage,
+        modelString,
+        showCost,
+      });
+      checkBudget({ usage: await result.usage, modelString, budget });
+    };
+
+    if (retries !== undefined && retries > 0) {
+      await withRetry(consumeStream, { maxRetries: retries });
     } else {
-      let fullResponse = "";
-      for await (const chunk of result.textStream) {
-        process.stdout.write(chunk);
-        fullResponse += chunk;
-      }
-      process.stdout.write("\n");
-
-      // Save to session history if applicable
-      if (session) {
-        session.messages.push({ role: "assistant", content: fullResponse });
-        await saveHistory(session.name, session.messages);
-      }
+      await consumeStream();
     }
-
-    displayCostIfEnabled({ usage: await result.usage, modelString, showCost });
-    checkBudget({ usage: await result.usage, modelString, budget });
   }
 }
 
@@ -953,6 +976,7 @@ async function runAction(
       cacheKey,
       tools,
       budget: opts.budget,
+      retries: opts.retries,
     });
   } catch (err: unknown) {
     console.error(`Error: ${formatError(err)}`);
@@ -1174,6 +1198,10 @@ export const mainCommand = defineCommand({
       type: "string",
       description: `Generate shell completions (${APP.supportedShells.join(", ")})`,
     },
+    retries: {
+      type: "string",
+      description: "Number of retries on rate limit or transient errors",
+    },
     tools: {
       type: "string",
       description: "Path to tools configuration file (JSON)",
@@ -1245,6 +1273,10 @@ export const mainCommand = defineCommand({
       template: args.template,
       templates: args.templates,
       completions: args.completions,
+      retries:
+        args.retries !== undefined
+          ? Number.parseInt(args.retries, 10)
+          : undefined,
       tools: args.tools,
       mcp: args.mcp,
       budget:
