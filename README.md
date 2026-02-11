@@ -31,6 +31,7 @@ A powerful CLI for calling LLMs from the terminal. Text in, text out. Built on t
 - 📄 **Prompt Templates** — reusable prompt snippets with `--template`
 - 📤 **Session Export/Import** — share conversations as JSON or Markdown
 - 📊 **Output Formats** — structured output in JSON, YAML, CSV, or text
+- 🔗 **Chain Mode** — chain multiple LLM calls sequentially with `--chain`
 
 ## 📦 Installation
 
@@ -392,6 +393,39 @@ cat backup.json | ai-pipe session import my-chat
 ai-pipe session delete my-chat
 ```
 
+## 🔗 Chain Mode
+
+Chain multiple LLM calls where the output of one becomes the input to the next. Create a chain config JSON file defining the steps:
+
+**`chain.json`**:
+
+```json
+[
+  { "prompt": "Translate to French: {{input}}" },
+  { "prompt": "Summarize in one sentence: {{input}}" },
+  { "model": "anthropic/claude-sonnet-4-5", "prompt": "Rate the quality of this translation 1-10: {{input}}" }
+]
+```
+
+Each step can optionally override the `model` and `system` prompt. The `{{input}}` placeholder is replaced with the output from the previous step (or the initial prompt for the first step).
+
+```bash
+# Run a chain
+ai-pipe --chain chain.json "Hello, how are you today?"
+
+# With verbose output (shows intermediate steps on stderr)
+ai-pipe --chain chain.json --verbose "Hello world"
+
+# Pipe into a chain
+cat article.md | ai-pipe --chain summarize-chain.json
+
+# Combine with other flags
+ai-pipe --chain chain.json --json "Hello world"
+ai-pipe --chain chain.json --markdown "Hello world"
+```
+
+> **Note:** Chain mode is always non-streaming. Each step needs the full output before the next step can begin.
+
 ## 🛠️ Command Options
 
 ```
@@ -431,6 +465,8 @@ Options:
   -B, --budget <amount>        Max dollar budget per request (cumulative in chat)
   --retries <n>                Retry on rate limit or transient errors (0=none)
   --tools <path>               Load tool definitions from JSON config
+  --chain <path>               Path to chain config JSON for multi-step LLM calls
+  -v, --verbose                Show intermediate chain outputs on stderr
   --no-cache                   Disable response caching
   --no-update-check            Disable update version check
   -V, --version                Print version
@@ -506,7 +542,7 @@ The release workflow handles `bun publish`, binary builds, and GitHub release.
 - [x] **Token budget** — set a max spend per session with `--budget`
 - [x] **Model aliases** — short names for long model IDs in config
 - [x] **Retry with backoff** — automatic retry on rate limits and transient errors
-- [ ] **Piped chain mode** — chain multiple LLM calls with `|` syntax
+- [x] **Piped chain mode** — chain multiple LLM calls with `--chain`
 - [ ] **Plugin system** — loadable extensions for custom providers/transforms
 - [ ] **Response diffing** — compare outputs across models for same prompt
 
