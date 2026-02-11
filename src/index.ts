@@ -1,4 +1,3 @@
-import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   generateText,
@@ -225,7 +224,8 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf-8").trimEnd();
 }
 
-const HISTORY_DIR = join(homedir(), ".ai-pipe", "history");
+// TODO: Bun.env.HOME is undefined on Windows — add fallback if Windows support needed
+const HISTORY_DIR = join(Bun.env.HOME ?? "", ".ai-pipe", "history");
 
 function getHistoryPath(session: string): string {
   return join(HISTORY_DIR, `${session}.json`);
@@ -256,9 +256,7 @@ export async function saveHistory(
   messages: ModelMessage[],
 ): Promise<void> {
   const path = getHistoryPath(session);
-  // Ensure directory exists using mkdir with recursive
-  const { mkdir } = await import("node:fs/promises");
-  await mkdir(HISTORY_DIR, { recursive: true });
+  // Bun.write() auto-creates parent directories, no mkdir needed
   await Bun.write(path, JSON.stringify(messages, null, 2));
 }
 

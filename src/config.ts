@@ -1,4 +1,3 @@
-import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { z } from "zod";
 import { APP } from "./constants.ts";
@@ -29,7 +28,8 @@ export type Config = z.infer<typeof ConfigSchema> & {
   apiKeys?: Record<string, string>;
 };
 
-const DEFAULT_CONFIG_DIR = join(homedir(), APP.configDirName);
+// TODO: Bun.env.HOME is undefined on Windows — add fallback if Windows support needed
+const DEFAULT_CONFIG_DIR = join(Bun.env.HOME ?? "", APP.configDirName);
 
 async function loadJsonFile<T>(
   path: string,
