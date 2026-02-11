@@ -60,18 +60,22 @@ async function runCLI(
 describe("CLI: help and version", () => {
   test("prints help with --help", async () => {
     const { stdout, exitCode } = await runCLI(["--help"]);
-    expect(stdout).toContain("Usage: ai-pipe");
+    // citty renders help as "USAGE ai-pipe [OPTIONS]"
+    expect(stdout).toContain("USAGE");
+    expect(stdout).toContain("ai-pipe");
     expect(exitCode).toBe(0);
   });
 
   test("prints help with -h", async () => {
     const { stdout, exitCode } = await runCLI(["-h"]);
-    expect(stdout).toContain("Usage: ai-pipe");
+    expect(stdout).toContain("USAGE");
+    expect(stdout).toContain("ai-pipe");
     expect(exitCode).toBe(0);
   });
 
   test("help contains all flags", async () => {
     const { stdout } = await runCLI(["--help"]);
+    // citty uses camelCase for multi-word flags (e.g. --maxOutputTokens)
     for (const flag of [
       "--model",
       "--system",
@@ -79,7 +83,7 @@ describe("CLI: help and version", () => {
       "--json",
       "--no-stream",
       "--temperature",
-      "--max-output-tokens",
+      "--maxOutputTokens",
       "--config",
       "--providers",
       "--completions",
@@ -90,12 +94,6 @@ describe("CLI: help and version", () => {
 
   test("prints version with --version", async () => {
     const { stdout, exitCode } = await runCLI(["--version"]);
-    expect(stdout.trim()).toBe(pkg.version);
-    expect(exitCode).toBe(0);
-  });
-
-  test("prints version with -V", async () => {
-    const { stdout, exitCode } = await runCLI(["-V"]);
     expect(stdout.trim()).toBe(pkg.version);
     expect(exitCode).toBe(0);
   });

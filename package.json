@@ -72,7 +72,7 @@
     "@openrouter/ai-sdk-provider": "^2.2.1",
     "ai": "^6.0.78",
     "ai-sdk-ollama": "^3.5.0",
-    "commander": "^14.0.3",
+    "citty": "^0.2.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
