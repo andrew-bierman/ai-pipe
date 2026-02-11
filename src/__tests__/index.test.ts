@@ -1291,6 +1291,79 @@ describe("buildPrompt edge cases", () => {
   });
 });
 
+// ── Budget option ─────────────────────────────────────────────────────────
+
+describe("budget option", () => {
+  test("budget is parsed correctly as a positive number", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      markdown: false,
+      budget: 0.05,
+    });
+    expect(result.budget).toBe(0.05);
+  });
+
+  test("budget is optional (undefined when not set)", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      markdown: false,
+    });
+    expect(result.budget).toBeUndefined();
+  });
+
+  test("budget accepts large values", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      markdown: false,
+      budget: 100,
+    });
+    expect(result.budget).toBe(100);
+  });
+
+  test("budget accepts small fractional values", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      markdown: false,
+      budget: 0.001,
+    });
+    expect(result.budget).toBe(0.001);
+  });
+
+  test("budget rejects zero", () => {
+    const result = CLIOptionsSchema.safeParse({
+      json: false,
+      stream: true,
+      markdown: false,
+      budget: 0,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("budget rejects negative values", () => {
+    const result = CLIOptionsSchema.safeParse({
+      json: false,
+      stream: true,
+      markdown: false,
+      budget: -1,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("budget rejects non-number values", () => {
+    const result = CLIOptionsSchema.safeParse({
+      json: false,
+      stream: true,
+      markdown: false,
+      budget: "five",
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
 // ── resolveOptions with aliases integration ──────────────────────────────
 
 describe("resolveOptions with aliases", () => {

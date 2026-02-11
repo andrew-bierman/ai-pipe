@@ -49,7 +49,7 @@ _${funcName}_completions() {
   COMPREPLY=()
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
-  opts="--model -m --system -s --role -r --roles --template -T --templates --file -f --image -i --json -j --no-stream --no-cache --temperature -t --max-output-tokens --config -c --cost --markdown --chat --session -C --providers --completions --tools --mcp --no-update-check --version -V --help -h"
+  opts="--model -m --system -s --role -r --roles --template -T --templates --file -f --image -i --json -j --no-stream --no-cache --temperature -t --max-output-tokens --config -c --cost --markdown --chat --session -C --budget -B --providers --completions --tools --mcp --no-update-check --version -V --help -h"
   providers="${providers}"
   subcommands="init config session"
   config_subcommands="set show reset path"
@@ -95,7 +95,7 @@ _${funcName}_completions() {
       COMPREPLY=( $(compgen -W "${shells}" -- "\${cur}") )
       return 0
       ;;
-    -C|--session|-s|--system|-r|--role|-T|--template|-t|--temperature|--max-output-tokens)
+    -C|--session|-s|--system|-r|--role|-T|--template|-t|--temperature|--max-output-tokens|-B|--budget)
       return 0
       ;;
   esac
@@ -162,6 +162,7 @@ _${funcName}() {
     '--markdown[Render response as formatted markdown]' \\
     '--chat[Start interactive chat mode]' \\
     '(-C --session)'{-C,--session}'[Session name for conversation continuity]:session:' \\
+    '(-B --budget)'{-B,--budget}'[Max dollar budget per request]:budget:' \\
     '--providers[List supported providers]' \\
     '--completions[Generate shell completions]:shell:(${shells})' \\
     '--tools[Path to tools configuration file (JSON)]:file:_files' \\
@@ -226,6 +227,7 @@ complete -c ${name} -l cost -d 'Show token usage and cost after response'
 complete -c ${name} -l markdown -d 'Render response as formatted markdown'
 complete -c ${name} -l chat -d 'Start interactive chat mode'
 complete -c ${name} -s C -l session -d 'Session name for conversation continuity' -x
+complete -c ${name} -s B -l budget -d 'Max dollar budget per request' -x
 complete -c ${name} -l providers -d 'List supported providers'
 complete -c ${name} -l completions -d 'Generate shell completions' -x -a '${shells}'
 complete -c ${name} -l tools -d 'Path to tools configuration file (JSON)' -r -F
@@ -263,6 +265,7 @@ complete -c ai -l cost -d 'Show token usage and cost after response'
 complete -c ai -l markdown -d 'Render response as formatted markdown'
 complete -c ai -l chat -d 'Start interactive chat mode'
 complete -c ai -s C -l session -d 'Session name for conversation continuity' -x
+complete -c ai -s B -l budget -d 'Max dollar budget per request' -x
 complete -c ai -l providers -d 'List supported providers'
 complete -c ai -l completions -d 'Generate shell completions' -x -a '${shells}'
 complete -c ai -l tools -d 'Path to tools configuration file (JSON)' -r -F
