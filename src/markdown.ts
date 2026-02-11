@@ -1,14 +1,19 @@
-// ANSI escape codes
-const RESET = "\x1b[0m";
-const BOLD = "\x1b[1m";
-const DIM = "\x1b[2m";
-const ITALIC = "\x1b[3m";
-const UNDERLINE = "\x1b[4m";
-const STRIKETHROUGH = "\x1b[9m";
-const CYAN = "\x1b[36m";
-const GREEN = "\x1b[32m";
-const YELLOW = "\x1b[33m";
-const MAGENTA = "\x1b[35m";
+/** ANSI escape codes for terminal styling */
+const ANSI = {
+  RESET: "\x1b[0m",
+  BOLD: "\x1b[1m",
+  DIM: "\x1b[2m",
+  ITALIC: "\x1b[3m",
+  UNDERLINE: "\x1b[4m",
+  STRIKETHROUGH: "\x1b[9m",
+  CYAN: "\x1b[36m",
+  GREEN: "\x1b[32m",
+  YELLOW: "\x1b[33m",
+  MAGENTA: "\x1b[35m",
+} as const;
+
+/** Width of horizontal rules in characters */
+const HR_WIDTH = 40;
 
 export function renderMarkdown(text: string): string {
   return Bun.markdown.render(
@@ -16,38 +21,42 @@ export function renderMarkdown(text: string): string {
     {
       heading: (children, { level }) => {
         const prefix = "#".repeat(level);
-        return `${BOLD}${MAGENTA}${prefix} ${children}${RESET}\n\n`;
+        return `${ANSI.BOLD}${ANSI.MAGENTA}${prefix} ${children}${ANSI.RESET}\n\n`;
       },
       paragraph: (children) => `${children}\n\n`,
-      strong: (children) => `${BOLD}${children}${RESET}`,
-      emphasis: (children) => `${ITALIC}${children}${RESET}`,
-      codespan: (children) => `${DIM}${CYAN}\`${children}\`${RESET}`,
+      strong: (children) => `${ANSI.BOLD}${children}${ANSI.RESET}`,
+      emphasis: (children) => `${ANSI.ITALIC}${children}${ANSI.RESET}`,
+      codespan: (children) =>
+        `${ANSI.DIM}${ANSI.CYAN}\`${children}\`${ANSI.RESET}`,
       code: (children, meta) => {
-        const lang = meta?.language ? `${DIM}${meta.language}${RESET}\n` : "";
-        return `${lang}${DIM}───${RESET}\n${GREEN}${children}${RESET}\n${DIM}───${RESET}\n\n`;
+        const lang = meta?.language
+          ? `${ANSI.DIM}${meta.language}${ANSI.RESET}\n`
+          : "";
+        return `${lang}${ANSI.DIM}───${ANSI.RESET}\n${ANSI.GREEN}${children}${ANSI.RESET}\n${ANSI.DIM}───${ANSI.RESET}\n\n`;
       },
       link: (children, { href }) =>
-        `${UNDERLINE}${CYAN}${children}${RESET} (${DIM}${href}${RESET})`,
+        `${ANSI.UNDERLINE}${ANSI.CYAN}${children}${ANSI.RESET} (${ANSI.DIM}${href}${ANSI.RESET})`,
       image: (children, { src }) =>
-        `${DIM}[image: ${children}]${RESET} (${src})`,
+        `${ANSI.DIM}[image: ${children}]${ANSI.RESET} (${src})`,
       blockquote: (children) => {
         const lines = children.trimEnd().split("\n");
-        return `${lines.map((l) => `${DIM}│${RESET} ${ITALIC}${l}${RESET}`).join("\n")}\n\n`;
+        return `${lines.map((l) => `${ANSI.DIM}│${ANSI.RESET} ${ANSI.ITALIC}${l}${ANSI.RESET}`).join("\n")}\n\n`;
       },
-      hr: () => `${DIM}${"─".repeat(40)}${RESET}\n\n`,
+      hr: () => `${ANSI.DIM}${"─".repeat(HR_WIDTH)}${ANSI.RESET}\n\n`,
       list: (children) => `${children}\n`,
       listItem: (children, meta) => {
         if (meta?.checked === true)
-          return `  ${GREEN}✓${RESET} ${children.trimEnd()}\n`;
+          return `  ${ANSI.GREEN}✓${ANSI.RESET} ${children.trimEnd()}\n`;
         if (meta?.checked === false)
-          return `  ${DIM}○${RESET} ${children.trimEnd()}\n`;
-        return `  ${YELLOW}•${RESET} ${children.trimEnd()}\n`;
+          return `  ${ANSI.DIM}○${ANSI.RESET} ${children.trimEnd()}\n`;
+        return `  ${ANSI.YELLOW}•${ANSI.RESET} ${children.trimEnd()}\n`;
       },
-      strikethrough: (children) => `${STRIKETHROUGH}${children}${RESET}`,
+      strikethrough: (children) =>
+        `${ANSI.STRIKETHROUGH}${children}${ANSI.RESET}`,
       table: (children) => `${children}\n`,
-      thead: (children) => `${BOLD}${children}${RESET}`,
+      thead: (children) => `${ANSI.BOLD}${children}${ANSI.RESET}`,
       tr: (children) => `${children}\n`,
-      th: (children) => `${BOLD}${children}${RESET}\t`,
+      th: (children) => `${ANSI.BOLD}${children}${ANSI.RESET}\t`,
       td: (children) => `${children}\t`,
     },
     { tables: true, strikethrough: true, tasklists: true },

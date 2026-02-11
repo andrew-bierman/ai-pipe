@@ -30,4 +30,4 @@ export const APP: AppConfig = AppSchema.parse({
   configFile: "config.json",
   apiKeysFile: "apiKeys.json",
   supportedShells: ["bash", "zsh", "fish"],
-});
+} as const satisfies Record<string, unknown>);

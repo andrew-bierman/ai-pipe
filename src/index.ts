@@ -1,6 +1,11 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { generateText, type ModelMessage, streamText } from "ai";
+import {
+  generateText,
+  type LanguageModel,
+  type ModelMessage,
+  streamText,
+} from "ai";
 import { program } from "commander";
 import { z } from "zod";
 import pkg from "../package.json";
@@ -12,6 +17,7 @@ import {
 import { generateCompletions } from "./completions.ts";
 import { type Config, listRoles, loadConfig, loadRole } from "./config.ts";
 import { APP } from "./constants.ts";
+import type { UsageInfo } from "./cost.ts";
 import { calculateCost, formatCost, parseModelString } from "./cost.ts";
 import { renderMarkdown } from "./markdown.ts";
 import {
@@ -24,7 +30,6 @@ import { checkForUpdates } from "./update.ts";
 
 // Session name sanitization: only allow alphanumeric, hyphens, underscores
 const SESSION_NAME_REGEX = /^[A-Za-z0-9_-]+$/;
-const SESSION_SCHEMA = z.string().regex(SESSION_NAME_REGEX);
 
 export function sanitizeSessionName(session: string): string {
   return session.replace(/[^A-Za-z0-9_-]/g, "_");
@@ -252,13 +257,169 @@ export async function saveHistory(
 ): Promise<void> {
   const path = getHistoryPath(session);
   // Ensure directory exists using mkdir with recursive
-  // Use fs.mkdir for directory creation with recursive option
   const { mkdir } = await import("node:fs/promises");
   await mkdir(HISTORY_DIR, { recursive: true });
   await Bun.write(path, JSON.stringify(messages, null, 2));
 }
 
-async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
+/** Parameters for the executePrompt helper */
+interface ExecutePromptParams {
+  model: LanguageModel;
+  modelString: string;
+  messages?: ModelMessage[];
+  prompt?: string;
+  system?: string;
+  temperature: number | undefined;
+  maxOutputTokens: number | undefined;
+  stream: boolean;
+  json: boolean;
+  markdown: boolean;
+  showCost: boolean;
+  /** If provided, saves assistant response to session history */
+  session?: {
+    name: string;
+    messages: ModelMessage[];
+  };
+  /** If provided, enables response caching (non-session, non-streaming only) */
+  cacheKey?: string | null;
+}
+
+/**
+ * Unified prompt execution for both session and non-session modes.
+ * Handles streaming vs non-streaming, JSON output, markdown rendering,
+ * cost display, caching, and optional session history persistence.
+ */
+async function executePrompt(params: ExecutePromptParams): Promise<void> {
+  const {
+    model,
+    modelString,
+    messages,
+    prompt,
+    system,
+    temperature,
+    maxOutputTokens,
+    stream,
+    json,
+    markdown,
+    showCost,
+    session,
+    cacheKey,
+  } = params;
+
+  // Check cache before making API call (only for non-session, non-streaming)
+  if (cacheKey) {
+    const cached = await getCachedResponse(cacheKey);
+    if (cached) {
+      if (json) {
+        const output: JsonOutput = {
+          text: cached.text,
+          model: cached.model,
+          usage: cached.usage,
+          finishReason: cached.finishReason,
+        };
+        process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+      } else {
+        const text = markdown ? renderMarkdown(cached.text) : `${cached.text}\n`;
+        process.stdout.write(text);
+      }
+      displayCostIfEnabled(cached.usage, modelString, showCost);
+      return;
+    }
+  }
+
+  // Build the common model call options with proper type narrowing
+  const baseOptions = { model, temperature, maxOutputTokens };
+  const callOptions =
+    messages !== undefined
+      ? { ...baseOptions, messages }
+      : { ...baseOptions, system, prompt: prompt ?? "" };
+
+  if (json || !stream) {
+    const result = await generateText(callOptions);
+
+    // Store in cache if applicable (failures are non-fatal)
+    if (cacheKey) {
+      try {
+        await setCachedResponse(cacheKey, {
+          text: result.text,
+          usage: result.usage,
+          finishReason: result.finishReason,
+          model: modelString,
+        });
+      } catch {
+        // Cache write failure is not critical; the model response still succeeded
+      }
+    }
+
+    // Save to session history if applicable
+    if (session) {
+      session.messages.push({ role: "assistant", content: result.text });
+      await saveHistory(session.name, session.messages);
+    }
+
+    if (json) {
+      const output: JsonOutput = {
+        text: result.text,
+        model: modelString,
+        usage: result.usage,
+        finishReason: result.finishReason,
+      };
+      process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+    } else {
+      // Note: when --markdown is used with streaming, output is silently
+      // buffered (see streaming path below) rather than displayed per-chunk.
+      const output = markdown ? renderMarkdown(result.text) : `${result.text}\n`;
+      process.stdout.write(output);
+    }
+
+    displayCostIfEnabled(result.usage, modelString, showCost);
+  } else {
+    const result = streamText(callOptions);
+
+    // When markdown is enabled, silently buffer the full response
+    // and render once complete (streaming chunks are not displayed).
+    if (markdown) {
+      let fullResponse = "";
+      for await (const chunk of result.textStream) {
+        fullResponse += chunk;
+      }
+      process.stdout.write(renderMarkdown(fullResponse));
+
+      // Save to session history if applicable
+      if (session) {
+        session.messages.push({ role: "assistant", content: fullResponse });
+        await saveHistory(session.name, session.messages);
+      }
+    } else {
+      let fullResponse = "";
+      for await (const chunk of result.textStream) {
+        process.stdout.write(chunk);
+        fullResponse += chunk;
+      }
+      process.stdout.write("\n");
+
+      // Save to session history if applicable
+      if (session) {
+        session.messages.push({ role: "assistant", content: fullResponse });
+        await saveHistory(session.name, session.messages);
+      }
+    }
+
+    displayCostIfEnabled(await result.usage, modelString, showCost);
+  }
+}
+
+/**
+ * Format an error for display, extracting the message from Error instances.
+ */
+function formatError(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+async function run(
+  promptArgs: string[],
+  rawOpts: Record<string, unknown>,
+): Promise<void> {
   const parsed = CLIOptionsSchema.safeParse(rawOpts);
   if (!parsed.success) {
     for (const issue of parsed.error.issues) {
@@ -319,7 +480,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
   try {
     fileContent = opts.file?.length ? await readFiles(opts.file) : null;
   } catch (err: unknown) {
-    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(`Error: ${formatError(err)}`);
     process.exit(1);
   }
 
@@ -327,7 +488,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
   try {
     images = opts.image?.length ? await readImages(opts.image) : [];
   } catch (err: unknown) {
-    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(`Error: ${formatError(err)}`);
     process.exit(1);
   }
 
@@ -368,175 +529,42 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
   // Add current user message to messages if using session
   // Only add system message if history is empty (first message in conversation)
   if (sessionName) {
-    if (system && messages.length === 0) {
-      messages.unshift({ role: "system", content: system });
+    if (systemPrompt && messages.length === 0) {
+      messages.unshift({ role: "system", content: systemPrompt });
     }
     messages.push({ role: "user", content: prompt });
   }
 
   try {
-    if (sessionName) {
-      // Use conversation history mode
-      if (opts.json || !opts.stream) {
-        const result = await generateText({
-          model,
-          messages,
-          temperature,
-          maxOutputTokens,
-        });
-
-        // Save to history
-        messages.push({ role: "assistant", content: result.text });
-        await saveHistory(sessionName, messages);
-
-        if (opts.json) {
-          const output: JsonOutput = {
-            text: result.text,
-            model: modelString,
-            usage: result.usage,
-            finishReason: result.finishReason,
-          };
-          process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
-        } else {
-          // Note: when --markdown is used with streaming, output is silently
-          // buffered (see streaming path below) rather than displayed per-chunk.
-          const output = markdown ? renderMarkdown(result.text) : `${result.text}\n`;
-          process.stdout.write(output);
-        }
-
-        // Display cost if requested
-        displayCostIfEnabled(result.usage, modelString, opts.cost);
-      } else {
-        const result = streamText({
-          model,
-          messages,
-          temperature,
-          maxOutputTokens,
-        });
-
-        // When markdown is enabled, silently buffer the full response
-        // and render once complete (streaming chunks are not displayed).
-        if (markdown) {
-          let fullResponse = "";
-          for await (const chunk of result.textStream) {
-            fullResponse += chunk;
-          }
-          process.stdout.write(renderMarkdown(fullResponse));
-        } else {
-          for await (const chunk of result.textStream) {
-            process.stdout.write(chunk);
-          }
-          process.stdout.write("\n");
-        }
-
-        // Save to history using the full accumulated text from the stream
-        messages.push({ role: "assistant", content: await result.text });
-        await saveHistory(sessionName, messages);
-
-        // Display cost if requested (usage is available after stream completes)
-        displayCostIfEnabled(await result.usage, modelString, opts.cost);
-      }
-    } else {
-      // Use regular prompt mode
-      const useCache = opts.cache && (opts.json || !opts.stream);
-      const cacheKey = useCache
-        ? buildCacheKey({
-            model: modelString,
-            system: systemPrompt,
-            prompt,
-            temperature,
-            maxOutputTokens,
-          })
-        : null;
-
-      // Check cache before making API call
-      if (cacheKey) {
-        const cached = await getCachedResponse(cacheKey);
-        if (cached) {
-          if (opts.json) {
-            const output: JsonOutput = {
-              text: cached.text,
-              model: cached.model,
-              usage: cached.usage,
-              finishReason: cached.finishReason,
-            };
-            process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
-          } else {
-            process.stdout.write(`${cached.text}\n`);
-          }
-          displayCostIfEnabled(cached.usage, modelString, opts.cost);
-          return;
-        }
-      }
-
-      if (opts.json || !opts.stream) {
-        const result = await generateText({
-          model,
+    // Build cache key for non-session mode when caching is enabled
+    const useCache = !sessionName && opts.cache && (opts.json || !opts.stream);
+    const cacheKey = useCache
+      ? buildCacheKey({
+          model: modelString,
           system: systemPrompt,
           prompt,
           temperature,
           maxOutputTokens,
-        });
+        })
+      : null;
 
-        // Store in cache (failures are non-fatal)
-        if (cacheKey) {
-          try {
-            await setCachedResponse(cacheKey, {
-              text: result.text,
-              usage: result.usage,
-              finishReason: result.finishReason,
-              model: modelString,
-            });
-          } catch {
-            // Cache write failure is not critical; the model response still succeeded
-          }
-        }
-
-        if (opts.json) {
-          const output: JsonOutput = {
-            text: result.text,
-            model: modelString,
-            usage: result.usage,
-            finishReason: result.finishReason,
-          };
-          process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
-        } else {
-          const output = markdown ? renderMarkdown(result.text) : `${result.text}\n`;
-          process.stdout.write(output);
-        }
-
-        // Display cost if requested
-        displayCostIfEnabled(result.usage, modelString, opts.cost);
-      } else {
-        const result = streamText({
-          model,
-          system: systemPrompt,
-          prompt,
-          temperature,
-          maxOutputTokens,
-        });
-
-        // When markdown is enabled, silently buffer the full response
-        // and render once complete (streaming chunks are not displayed).
-        if (markdown) {
-          let fullResponse = "";
-          for await (const chunk of result.textStream) {
-            fullResponse += chunk;
-          }
-          process.stdout.write(renderMarkdown(fullResponse));
-        } else {
-          for await (const chunk of result.textStream) {
-            process.stdout.write(chunk);
-          }
-          process.stdout.write("\n");
-        }
-
-        // Display cost if requested (usage is available after stream completes)
-        displayCostIfEnabled(await result.usage, modelString, opts.cost);
-      }
-    }
+    await executePrompt({
+      model,
+      modelString,
+      messages: sessionName ? messages : undefined,
+      prompt: sessionName ? undefined : prompt,
+      system: sessionName ? undefined : systemPrompt,
+      temperature,
+      maxOutputTokens,
+      stream: markdown ? false : opts.stream,
+      json: opts.json,
+      markdown,
+      showCost: opts.cost,
+      session: sessionName ? { name: sessionName, messages } : undefined,
+      cacheKey,
+    });
   } catch (err: unknown) {
-    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(`Error: ${formatError(err)}`);
     process.exit(1);
   }
 
@@ -561,7 +589,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
  * Display cost information if the --cost flag is set
  */
 function displayCostIfEnabled(
-  usage: { inputTokens?: number; outputTokens?: number } | undefined,
+  usage: UsageInfo | undefined,
   modelString: string,
   showCost: boolean,
 ): void {
@@ -573,7 +601,7 @@ function displayCostIfEnabled(
   console.error(`\n💰 Cost: ${formattedCost}`);
 }
 
-export function setupCLI() {
+export function setupCLI(): typeof program {
   program
     .name(APP.name)
     .description(APP.description)
