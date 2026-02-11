@@ -3,7 +3,7 @@ import { type LanguageModel, type ModelMessage, streamText } from "ai";
 
 import type { UsageInfo } from "./cost.ts";
 import { calculateCost, formatCost, parseModelString } from "./cost.ts";
-import { renderMarkdown } from "./markdown.ts";
+import { StreamingMarkdownRenderer } from "./streaming-markdown.ts";
 
 /** Commands that exit the chat session. */
 const EXIT_COMMANDS = new Set(["exit", "quit", "/bye"]);
@@ -123,11 +123,12 @@ export async function startChat(options: ChatOptions): Promise<void> {
         // Stream the response
         let fullResponse = "";
         if (markdown) {
-          // Buffer the full response for markdown rendering
+          const renderer = new StreamingMarkdownRenderer();
           for await (const chunk of result.textStream) {
-            fullResponse += chunk;
+            renderer.append(chunk);
           }
-          process.stdout.write(renderMarkdown(fullResponse));
+          renderer.finish();
+          fullResponse = renderer.getBuffer();
         } else {
           for await (const chunk of result.textStream) {
             process.stdout.write(chunk);
@@ -182,7 +183,6 @@ export async function startChat(options: ChatOptions): Promise<void> {
         messages.pop();
       }
 
-      process.stdout.write("\n");
       rl.prompt();
     });
 
