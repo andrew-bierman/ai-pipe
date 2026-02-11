@@ -29,6 +29,7 @@ A powerful CLI for calling LLMs from the terminal. Text in, text out. Built on t
 - 🔔 **Update Notifications** — automatic new version alerts
 - 🔧 **Tool Use** — function calling via `--tools`
 - 📄 **Prompt Templates** — reusable prompt snippets with `--template`
+- 📤 **Session Export/Import** — share conversations as JSON or Markdown
 
 ## 📦 Installation
 
@@ -337,6 +338,30 @@ Pipe into `jq` for further processing:
 ai-pipe --json "list 3 colors" | jq -r '.text'
 ```
 
+## 💬 Session Management
+
+Export, import, and manage conversation sessions:
+
+```bash
+# List all saved sessions
+ai-pipe session list
+
+# Export a session as JSON (prints to stdout)
+ai-pipe session export my-chat > my-chat.json
+
+# Export as Markdown
+ai-pipe session export my-chat --format md > my-chat.md
+
+# Import a session from a file
+ai-pipe session import my-chat backup.json
+
+# Import a session from stdin
+cat backup.json | ai-pipe session import my-chat
+
+# Delete a session
+ai-pipe session delete my-chat
+```
+
 ## 🛠️ Command Options
 
 ```
@@ -348,6 +373,10 @@ Commands:
   config set <key> <value>     Set a config value
   config reset                 Reset config to defaults
   config path                  Print config directory path
+  session list                 List all saved sessions
+  session export <name>        Export a session (--format json|md)
+  session import <name> [file] Import a session from file or stdin
+  session delete <name>        Delete a session
 
 Options:
   -m, --model <model>          Model in provider/model-id format
@@ -441,7 +470,7 @@ The release workflow handles `bun publish`, binary builds, and GitHub release.
 - [x] **Prompt templates** — reusable prompt snippets in `~/.ai-pipe/templates/`
 - [ ] **Output formats** — CSV, YAML, TOML structured output modes
 - [ ] **Piped chain mode** — chain multiple LLM calls with `|` syntax
-- [ ] **Session export/import** — share conversations as JSON/Markdown
+- [x] **Session export/import** — share conversations as JSON/Markdown
 - [ ] **Token budget** — set a max spend per session with `--budget`
 - [x] **Model aliases** — short names for long model IDs in config
 

@@ -37,6 +37,13 @@ import {
   printProviders,
   resolveModel,
 } from "./provider.ts";
+import {
+  deleteSession,
+  exportSessionJson,
+  exportSessionMarkdown,
+  importSession,
+  listSessions,
+} from "./session.ts";
 import { StreamingMarkdownRenderer } from "./streaming-markdown.ts";
 import { applyTemplate, listTemplates, loadTemplate } from "./templates.ts";
 import { loadToolsConfig } from "./tools.ts";
@@ -346,6 +353,126 @@ async function readStdin(): Promise<string> {
     chunks.push(Buffer.from(chunk));
   }
   return Buffer.concat(chunks).toString("utf-8").trimEnd();
+}
+
+/**
+ * Handle the `session` subcommand and its sub-actions.
+ *
+ * Routes to: list, export, import, delete.
+ * Prints usage information if no valid sub-action is provided.
+ *
+ * @param args - The remaining arguments after "session".
+ */
+async function handleSessionCommand(args: string[]): Promise<void> {
+  const subcommand = args[0];
+
+  if (subcommand === "list") {
+    const sessions = await listSessions();
+    if (sessions.length === 0) {
+      console.log("No saved sessions.");
+    } else {
+      console.log("Saved sessions:");
+      for (const name of sessions) {
+        console.log(`  - ${name}`);
+      }
+    }
+    return;
+  }
+
+  if (subcommand === "export") {
+    const name = args[1];
+    if (!name) {
+      console.error(
+        "Error: Session name required. Usage: ai-pipe session export <name> [--format json|md]",
+      );
+      process.exit(1);
+    }
+    // Check for --format flag
+    let format = "json";
+    const formatIdx = args.indexOf("--format");
+    if (formatIdx !== -1 && args[formatIdx + 1] !== undefined) {
+      format = args[formatIdx + 1] as string;
+    }
+    if (format !== "json" && format !== "md") {
+      console.error(
+        `Error: Unsupported format "${format}". Use "json" or "md".`,
+      );
+      process.exit(1);
+    }
+    const output =
+      format === "md"
+        ? await exportSessionMarkdown(name)
+        : await exportSessionJson(name);
+    process.stdout.write(output);
+    return;
+  }
+
+  if (subcommand === "import") {
+    const name = args[1];
+    if (!name) {
+      console.error(
+        "Error: Session name required. Usage: ai-pipe session import <name> <file>",
+      );
+      process.exit(1);
+    }
+    // Read from file argument or stdin
+    let content: string;
+    const filePath = args[2];
+    if (filePath) {
+      const file = Bun.file(filePath);
+      if (!(await file.exists())) {
+        console.error(`Error: File not found: ${filePath}`);
+        process.exit(1);
+      }
+      content = await file.text();
+    } else if (!process.stdin.isTTY) {
+      content = await readStdin();
+    } else {
+      console.error(
+        "Error: Provide a file path or pipe content via stdin. Usage: ai-pipe session import <name> <file>",
+      );
+      process.exit(1);
+    }
+    try {
+      await importSession(name, content);
+      console.log(`Session "${name}" imported successfully.`);
+    } catch (err: unknown) {
+      console.error(
+        `Error: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (subcommand === "delete") {
+    const name = args[1];
+    if (!name) {
+      console.error(
+        "Error: Session name required. Usage: ai-pipe session delete <name>",
+      );
+      process.exit(1);
+    }
+    try {
+      await deleteSession(name);
+      console.log(`Session "${name}" deleted.`);
+    } catch (err: unknown) {
+      console.error(
+        `Error: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      process.exit(1);
+    }
+    return;
+  }
+
+  // Unknown or missing subcommand — print usage
+  console.log(`Usage: ai-pipe session <command>
+
+Commands:
+  list                     List all saved sessions
+  export <name> [--format] Export a session (json or md, default: json)
+  import <name> [file]     Import a session from file or stdin
+  delete <name>            Delete a session`);
 }
 
 const HOME_DIR = Bun.env.HOME ?? Bun.env.USERPROFILE ?? "";
@@ -1041,6 +1168,10 @@ export const mainCommand = defineCommand({
     }
     if (firstArg === "config") {
       await handleConfigCommand(promptArgs.slice(1));
+      return;
+    }
+    if (firstArg === "session") {
+      await handleSessionCommand(promptArgs.slice(1));
       return;
     }
 
