@@ -5,6 +5,7 @@ import { z } from "zod";
 import { APP } from "./constants.ts";
 
 const CACHE_DIR = join(homedir(), APP.configDirName, "cache");
+/** Cache TTL is currently fixed at 1 hour. */
 const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 /** Schema for cached response data stored on disk */
@@ -37,11 +38,14 @@ export interface CacheKeyParams {
  */
 export function buildCacheKey(params: CacheKeyParams): string {
   const hasher = new Bun.CryptoHasher("sha256");
-  hasher.update(params.model);
-  hasher.update(params.system ?? "");
-  hasher.update(params.prompt);
-  hasher.update(String(params.temperature ?? ""));
-  hasher.update(String(params.maxOutputTokens ?? ""));
+  const keyPayload = {
+    model: params.model,
+    system: params.system ?? null,
+    prompt: params.prompt,
+    temperature: params.temperature ?? null,
+    maxOutputTokens: params.maxOutputTokens ?? null,
+  };
+  hasher.update(JSON.stringify(keyPayload));
   return hasher.digest("hex");
 }
 

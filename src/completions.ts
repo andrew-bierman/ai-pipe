@@ -30,7 +30,7 @@ _${funcName}_completions() {
   COMPREPLY=()
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
-  opts="--model --system --role --roles --file --json --no-stream --temperature --max-output-tokens --config --providers --completions --version --help"
+  opts="--model --system --role --roles --file --json --no-stream --no-cache --temperature --max-output-tokens --config --providers --completions --version --help"
   providers="${providers}"
 
   case "\${prev}" in
@@ -83,6 +83,7 @@ _${funcName}() {
     '*'{-f,--file}'[Include file contents]:file:_files' \\
     '(-j --json)'{-j,--json}'[Output full JSON response object]' \\
     '--no-stream[Wait for full response, then print]' \\
+    '--no-cache[Disable response caching]' \\
     '(-t --temperature)'{-t,--temperature}'[Sampling temperature (${APP.temperature.min}-${APP.temperature.max})]:temp:' \\
     '--max-output-tokens[Maximum tokens to generate]:tokens:' \\
     '(-c --config)'{-c,--config}'[Path to config directory]:dir:_directories' \\
@@ -112,6 +113,7 @@ complete -c ${name} -s R -l roles -d 'List available roles'
 complete -c ${name} -s f -l file -d 'Include file contents in prompt (repeatable)' -r -F
 complete -c ${name} -s j -l json -d 'Output full JSON response object'
 complete -c ${name} -l no-stream -d 'Wait for full response, then print'
+complete -c ${name} -l no-cache -d 'Disable response caching'
 complete -c ${name} -s t -l temperature -d 'Sampling temperature (${APP.temperature.min}-${APP.temperature.max})' -x
 complete -c ${name} -l max-output-tokens -d 'Maximum tokens to generate' -x
 complete -c ${name} -s c -l config -d 'Path to config directory' -x -a '(__fish_complete_directories)'

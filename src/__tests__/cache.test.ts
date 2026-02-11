@@ -1,6 +1,4 @@
-import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { afterAll, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import {
   buildCacheKey,
@@ -11,20 +9,12 @@ import {
   getCachedResponse,
   setCachedResponse,
 } from "../cache.ts";
+import { APP } from "../constants.ts";
 
-// Use a temp directory for testing so we don't pollute the real cache
-const TEST_CACHE_DIR = join(tmpdir(), `ai-pipe-cache-test-${Date.now()}`);
-
-// We need to override the CACHE_DIR in cache.ts for tests.
-// Since cache.ts uses a module-level constant, we'll test the exported functions
-// by writing directly to the expected paths. For getCachedResponse / setCachedResponse,
-// we'll use the actual functions and mock the cache dir by setting up a custom
-// approach: we test buildCacheKey independently, and for the file I/O functions
-// we call them directly (they use ~/.ai-pipe/cache/).
-//
-// To keep tests isolated, we'll test buildCacheKey purely, and for the
-// roundtrip / TTL / clearCache tests we'll use the real cache functions
-// pointed at the actual cache directory (cleaned up after).
+// NOTE: These tests use the real cache directory (~/.ai-pipe/cache/) because
+// cache.ts uses a module-level constant for CACHE_DIR that is not injectable.
+// Making it injectable would be a larger refactor. All tests that write to the
+// cache directory clean up after themselves in afterAll hooks.
 
 // ── buildCacheKey ─────────────────────────────────────────────────────
 
@@ -156,7 +146,7 @@ describe("setCachedResponse + getCachedResponse roundtrip", () => {
     const { homedir } = await import("node:os");
     const { join } = await import("node:path");
     const { unlink } = await import("node:fs/promises");
-    const filePath = join(homedir(), ".ai-pipe", "cache", `${testKey}.json`);
+    const filePath = join(homedir(), APP.configDirName, "cache", `${testKey}.json`);
     try {
       await unlink(filePath);
     } catch {
@@ -194,7 +184,7 @@ describe("TTL expiration", () => {
     const { homedir } = await import("node:os");
     const { join } = await import("node:path");
     const { unlink } = await import("node:fs/promises");
-    const filePath = join(homedir(), ".ai-pipe", "cache", `${testKey}.json`);
+    const filePath = join(homedir(), APP.configDirName, "cache", `${testKey}.json`);
     try {
       await unlink(filePath);
     } catch {

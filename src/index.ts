@@ -458,20 +458,24 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
       if (opts.json || !opts.stream) {
         const result = await generateText({
           model,
-          system,
+          system: systemPrompt,
           prompt,
           temperature,
           maxOutputTokens,
         });
 
-        // Store in cache
+        // Store in cache (failures are non-fatal)
         if (cacheKey) {
-          await setCachedResponse(cacheKey, {
-            text: result.text,
-            usage: result.usage,
-            finishReason: result.finishReason,
-            model: modelString,
-          });
+          try {
+            await setCachedResponse(cacheKey, {
+              text: result.text,
+              usage: result.usage,
+              finishReason: result.finishReason,
+              model: modelString,
+            });
+          } catch {
+            // Cache write failure is not critical; the model response still succeeded
+          }
         }
 
         if (opts.json) {
@@ -491,7 +495,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
       } else {
         const result = streamText({
           model,
-          system,
+          system: systemPrompt,
           prompt,
           temperature,
           maxOutputTokens,
