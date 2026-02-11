@@ -26,6 +26,7 @@ import {
   printProviders,
   resolveModel,
 } from "./provider.ts";
+import { loadToolsConfig } from "./tools.ts";
 import { checkForUpdates } from "./update.ts";
 
 // Session name sanitization: only allow alphanumeric, hyphens, underscores
@@ -89,6 +90,7 @@ export interface CLIOptions {
   roles?: boolean;
   cache: boolean;
   updateCheck?: boolean;
+  tools?: string;
 }
 
 /** Zod schema for validating and coercing CLI options from Commander. */
@@ -115,6 +117,7 @@ export const CLIOptionsSchema = z.object({
   roles: z.boolean().optional(),
   cache: z.boolean().optional().default(true),
   updateCheck: z.boolean().optional().default(true),
+  tools: z.string().optional(),
 });
 
 /**
@@ -384,6 +387,8 @@ interface ExecutePromptParams {
   };
   /** If provided, enables response caching (non-session, non-streaming only) */
   cacheKey?: string | null;
+  /** If provided, tools available for the model to call */
+  tools?: Record<string, unknown>;
 }
 
 /**
@@ -406,6 +411,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
     showCost,
     session,
     cacheKey,
+    tools,
   } = params;
 
   // Check cache before making API call (only for non-session, non-streaming)
@@ -430,7 +436,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
   }
 
   // Build the common model call options with proper type narrowing
-  const baseOptions = { model, temperature, maxOutputTokens };
+  const baseOptions = { model, temperature, maxOutputTokens, ...(tools ? { tools } : {}) };
   const callOptions =
     messages !== undefined
       ? { ...baseOptions, messages }
@@ -621,6 +627,18 @@ async function run(
 
   const model = resolveModel(modelString);
 
+  // Load tools from config file if --tools flag is provided
+  const toolConfigs = await loadToolsConfig(opts.tools);
+  const tools: Record<string, unknown> | undefined =
+    toolConfigs.length > 0
+      ? Object.fromEntries(
+          toolConfigs.map((t) => [
+            t.name,
+            { description: t.description, parameters: t.parameters },
+          ]),
+        )
+      : undefined;
+
   // Load conversation history if session is provided
   // Sanitize session name to prevent directory traversal
   const sessionName = opts.session ? sanitizeSessionName(opts.session) : null;
@@ -664,6 +682,7 @@ async function run(
       showCost: opts.cost,
       session: sessionName ? { name: sessionName, messages } : undefined,
       cacheKey,
+      tools,
     });
   } catch (err: unknown) {
     console.error(`Error: ${formatError(err)}`);
@@ -770,6 +789,7 @@ export function setupCLI(): typeof program {
       "--completions <shell>",
       `Generate shell completions (${APP.supportedShells.join(", ")})`,
     )
+    .option("--tools <path>", "Path to tools configuration file (JSON)")
     .option("--no-update-check", "Disable update notifications")
     .action(run);
 
