@@ -30,7 +30,7 @@ _${funcName}_completions() {
   COMPREPLY=()
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
-  opts="--model --system --role --roles --file --json --no-stream --no-cache --temperature --max-output-tokens --config --providers --completions --version --help"
+  opts="--model --system --role --roles --file --json --no-stream --no-cache --temperature --max-output-tokens --config --providers --completions --no-update-check --version --help"
   providers="${providers}"
 
   case "\${prev}" in
@@ -89,6 +89,7 @@ _${funcName}() {
     '(-c --config)'{-c,--config}'[Path to config directory]:dir:_directories' \\
     '--providers[List supported providers]' \\
     '--completions[Generate shell completions]:shell:(${shells})' \\
+    '--no-update-check[Disable update notifications]' \\
     '(-V --version)'{-V,--version}'[Print version]' \\
     '(-h --help)'{-h,--help}'[Print help]' \\
     '*:prompt:' \\
@@ -119,6 +120,7 @@ complete -c ${name} -l max-output-tokens -d 'Maximum tokens to generate' -x
 complete -c ${name} -s c -l config -d 'Path to config directory' -x -a '(__fish_complete_directories)'
 complete -c ${name} -l providers -d 'List supported providers'
 complete -c ${name} -l completions -d 'Generate shell completions' -x -a '${shells}'
+complete -c ${name} -l no-update-check -d 'Disable update notifications'
 complete -c ${name} -s V -l version -d 'Print version'
 complete -c ${name} -s h -l help -d 'Print help'`;
 }
