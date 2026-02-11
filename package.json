@@ -2,30 +2,6 @@
   "name": "ai-pipe",
   "version": "1.0.8",
   "description": "A lean CLI for calling LLMs from the terminal. Text in, text out.",
-  "module": "src/index.ts",
-  "type": "module",
-  "bin": {
-    "ai-pipe": "src/index.ts",
-    "ai": "src/index.ts"
-  },
-  "files": [
-    "src",
-    "README.md",
-    "LICENSE"
-  ],
-  "scripts": {
-    "start": "bun src/index.ts",
-    "test": "bun test",
-    "build": "bun build src/index.ts --compile --outfile dist/ai-pipe",
-    "build:linux": "bun build src/index.ts --compile --target=bun-linux-x64 --outfile dist/ai-pipe-linux-x64",
-    "build:linux-arm": "bun build src/index.ts --compile --target=bun-linux-arm64 --outfile dist/ai-pipe-linux-arm64",
-    "build:mac": "bun build src/index.ts --compile --target=bun-darwin-arm64 --outfile dist/ai-pipe-darwin-arm64",
-    "build:mac-x64": "bun build src/index.ts --compile --target=bun-darwin-x64 --outfile dist/ai-pipe-darwin-x64",
-    "build:all": "bun run build:mac && bun run build:mac-x64 && bun run build:linux && bun run build:linux-arm",
-    "typecheck": "tsc --noEmit",
-    "lint": "bunx biome check --write .",
-    "lint:check": "bunx biome check ."
-  },
   "keywords": [
     "ai",
     "cli",
@@ -41,16 +17,40 @@
     "generative-ai",
     "shell"
   ],
-  "author": "Andrew Bierman",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/andrew-bierman/ai-pipe.git"
-  },
   "homepage": "https://github.com/andrew-bierman/ai-pipe#readme",
   "bugs": {
     "url": "https://github.com/andrew-bierman/ai-pipe/issues"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrew-bierman/ai-pipe.git"
+  },
   "license": "GPL-3.0-only",
+  "author": "Andrew Bierman",
+  "type": "module",
+  "module": "src/index.ts",
+  "bin": {
+    "ai": "src/index.ts",
+    "ai-pipe": "src/index.ts"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "bun build src/index.ts --compile --outfile dist/ai-pipe",
+    "build:all": "bun run build:mac && bun run build:mac-x64 && bun run build:linux && bun run build:linux-arm",
+    "build:linux": "bun build src/index.ts --compile --target=bun-linux-x64 --outfile dist/ai-pipe-linux-x64",
+    "build:linux-arm": "bun build src/index.ts --compile --target=bun-linux-arm64 --outfile dist/ai-pipe-linux-arm64",
+    "build:mac": "bun build src/index.ts --compile --target=bun-darwin-arm64 --outfile dist/ai-pipe-darwin-arm64",
+    "build:mac-x64": "bun build src/index.ts --compile --target=bun-darwin-x64 --outfile dist/ai-pipe-darwin-x64",
+    "lint": "bunx biome check --write .",
+    "lint:check": "bunx biome check .",
+    "start": "bun src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "@ai-sdk/amazon-bedrock": "^4.0.55",
     "@ai-sdk/anthropic": "^3.0.41",
@@ -77,14 +77,15 @@
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
     "@types/bun": "latest",
-    "lefthook": "^2.1.0"
+    "lefthook": "^2.1.0",
+    "sort-package-json": "^3.6.1"
   },
+  "peerDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "packageManager": "bun@1.3.8",
   "engines": {
     "bun": "^1.3.8",
     "node": ">=22.0.0"
-  },
-  "packageManager": "bun@1.3.8",
-  "peerDependencies": {
-    "typescript": "^5.9.3"
   }
 }
