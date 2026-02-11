@@ -59,9 +59,32 @@ bun install
 bun link
 ```
 
+## 🚀 Quick Start
+
+The fastest way to get started is with the interactive setup wizard:
+
+```bash
+ai-pipe init
+```
+
+This walks you through:
+1. Selecting your AI providers (OpenAI, Anthropic, Google, etc.)
+2. Entering API keys (securely masked)
+3. Choosing a default model
+4. Setting a default temperature
+
+Your config is saved to `~/.ai-pipe/`. Then try:
+
+```bash
+ai-pipe "What is TypeScript?"
+ai-pipe -m anthropic/claude-sonnet-4-5 "Write a haiku"
+cat README.md | ai-pipe "Summarize this"
+ai-pipe config show
+```
+
 ## 🔑 Setup
 
-Set an API key for at least one provider:
+Set an API key for at least one provider (or use `ai-pipe init` for guided setup):
 
 ```bash
 # OpenAI
@@ -202,6 +225,29 @@ ai-pipe -c ./my-config-dir "hello"
 
 > 🔧 **Note:** CLI flags always override config values.
 
+### Config Commands
+
+Manage your configuration from the command line:
+
+```bash
+# Show current config (API keys are masked)
+ai-pipe config show
+
+# Set config values
+ai-pipe config set model anthropic/claude-sonnet-4-5
+ai-pipe config set temperature 0.7
+ai-pipe config set providers.anthropic.temperature 0.5
+
+# Set API keys (saved to apiKeys.json, not config.json)
+ai-pipe config set openai sk-your-api-key
+
+# Reset config to defaults
+ai-pipe config reset
+
+# Print config directory path
+ai-pipe config path
+```
+
 ### Shell Completions
 
 ```bash
@@ -241,7 +287,14 @@ ai-pipe --json "list 3 colors" | jq -r '.text'
 ## 🛠️ Command Options
 
 ```
-Usage: ai-pipe [options] [prompt...]
+Usage: ai-pipe [command|options] [prompt...]
+
+Commands:
+  init                         Interactive setup wizard
+  config show                  Show current configuration
+  config set <key> <value>     Set a config value
+  config reset                 Reset config to defaults
+  config path                  Print config directory path
 
 Options:
   -m, --model <model>          Model in provider/model-id format
