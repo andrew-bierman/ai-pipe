@@ -27,6 +27,7 @@ import { APP } from "./constants.ts";
 import type { UsageInfo } from "./cost.ts";
 import { calculateCost, formatCost, parseModelString } from "./cost.ts";
 import { renderMarkdown } from "./markdown.ts";
+import { loadMCPConfig, MCPManager } from "./mcp.ts";
 import { StreamingMarkdownRenderer } from "./streaming-markdown.ts";
 import {
   PROVIDER_ENV_VARS,
@@ -100,6 +101,7 @@ export interface CLIOptions {
   cache: boolean;
   updateCheck?: boolean;
   tools?: string;
+  mcp?: string;
 }
 
 /** Zod schema for validating and coercing CLI options from Commander. */
@@ -128,6 +130,7 @@ export const CLIOptionsSchema = z.object({
   cache: z.boolean().optional().default(true),
   updateCheck: z.boolean().optional().default(true),
   tools: z.string().optional(),
+  mcp: z.string().optional(),
 });
 
 /**
@@ -688,7 +691,7 @@ async function run(
 
   // Load tools from config file if --tools flag is provided
   const toolConfigs = await loadToolsConfig(opts.tools);
-  const tools: Record<string, unknown> | undefined =
+  const staticTools: Record<string, unknown> =
     toolConfigs.length > 0
       ? Object.fromEntries(
           toolConfigs.map((t) => [
@@ -696,7 +699,27 @@ async function run(
             { description: t.description, parameters: t.parameters },
           ]),
         )
-      : undefined;
+      : {};
+
+  // Load MCP tools if --mcp flag is provided
+  let mcpManager: MCPManager | undefined;
+  let mcpTools: Record<string, unknown> = {};
+  if (opts.mcp) {
+    try {
+      const mcpConfig = await loadMCPConfig(opts.mcp);
+      mcpManager = new MCPManager();
+      await mcpManager.connect(mcpConfig);
+      mcpTools = mcpManager.getTools();
+    } catch (err: unknown) {
+      console.error(`Error loading MCP config: ${formatError(err)}`);
+      process.exit(1);
+    }
+  }
+
+  // Merge static tools and MCP tools
+  const allTools = { ...staticTools, ...mcpTools };
+  const tools: Record<string, unknown> | undefined =
+    Object.keys(allTools).length > 0 ? allTools : undefined;
 
   // Load conversation history if session is provided
   // Sanitize session name to prevent directory traversal
@@ -746,6 +769,11 @@ async function run(
   } catch (err: unknown) {
     console.error(`Error: ${formatError(err)}`);
     process.exit(1);
+  } finally {
+    // Clean up MCP server connections on exit
+    if (mcpManager) {
+      await mcpManager.close();
+    }
   }
 
   // Check for updates (bounded wait, printed to stderr)
@@ -850,6 +878,7 @@ export function setupCLI(): typeof program {
       `Generate shell completions (${APP.supportedShells.join(", ")})`,
     )
     .option("--tools <path>", "Path to tools configuration file (JSON)")
+    .option("--mcp <path>", "Path to MCP server configuration file (JSON)")
     .option("--no-update-check", "Disable update notifications")
     .action(run);
 
