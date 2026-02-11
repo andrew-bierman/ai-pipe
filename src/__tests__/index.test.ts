@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { Config } from "../config.ts";
 import {
   buildPrompt,
+  type BuildPromptOptions,
   type CLIOptions,
   CLIOptionsSchema,
   HistoryMessageSchema,
@@ -22,71 +23,71 @@ import {
 
 describe("buildPrompt", () => {
   test("returns arg prompt when only args provided", () => {
-    expect(buildPrompt("explain monads", null)).toBe("explain monads");
+    expect(buildPrompt({ prompt: "explain monads" })).toBe("explain monads");
   });
 
   test("returns stdin when only stdin provided", () => {
-    expect(buildPrompt(null, null, "hello world")).toBe("hello world");
+    expect(buildPrompt({ prompt: null, stdinContent: "hello world" })).toBe("hello world");
   });
 
   test("combines arg prompt and stdin with double newline", () => {
-    const result = buildPrompt("review this code", null, "const x = 1;");
+    const result = buildPrompt({ prompt: "review this code", stdinContent: "const x = 1;" });
     expect(result).toBe("review this code\n\nconst x = 1;");
   });
 
   test("returns empty string when neither provided", () => {
-    expect(buildPrompt(null, null)).toBe("");
+    expect(buildPrompt({ prompt: null })).toBe("");
   });
 
   test("arg prompt comes first in combined output", () => {
-    const result = buildPrompt("summarize", null, "long document text");
+    const result = buildPrompt({ prompt: "summarize", stdinContent: "long document text" });
     expect(result).not.toBeNull();
     expect(result?.startsWith("summarize")).toBe(true);
     expect(result?.endsWith("long document text")).toBe(true);
   });
 
   test("preserves multiline stdin content", () => {
-    const result = buildPrompt("review", null, "line1\nline2\nline3");
+    const result = buildPrompt({ prompt: "review", stdinContent: "line1\nline2\nline3" });
     expect(result).toBe("review\n\nline1\nline2\nline3");
   });
 
   test("preserves multiline arg prompt", () => {
-    const result = buildPrompt("do this\nand that", null);
+    const result = buildPrompt({ prompt: "do this\nand that" });
     expect(result).toBe("do this\nand that");
   });
 
   test("includes file content between arg and stdin", () => {
-    const result = buildPrompt(
-      "review",
-      "# file.ts\n```\ncode\n```",
-      "stdin data",
-    );
+    const result = buildPrompt({
+      prompt: "review",
+      fileContent: "# file.ts\n```\ncode\n```",
+      stdinContent: "stdin data",
+    });
     expect(result).toBe("review\n\n# file.ts\n```\ncode\n```\n\nstdin data");
   });
 
   test("returns file content only", () => {
-    const result = buildPrompt(null, "# f.txt\n```\nhello\n```");
+    const result = buildPrompt({ prompt: null, fileContent: "# f.txt\n```\nhello\n```" });
     expect(result).toBe("# f.txt\n```\nhello\n```");
   });
 
   test("combines arg and file content without stdin", () => {
-    const result = buildPrompt("summarize", "# f.txt\n```\ncontent\n```");
+    const result = buildPrompt({ prompt: "summarize", fileContent: "# f.txt\n```\ncontent\n```" });
     expect(result).toBe("summarize\n\n# f.txt\n```\ncontent\n```");
   });
 
   test("combines file content and stdin without arg", () => {
-    const result = buildPrompt(null, "# f.txt\n```\ncontent\n```", "stdin");
+    const result = buildPrompt({ prompt: null, fileContent: "# f.txt\n```\ncontent\n```", stdinContent: "stdin" });
     expect(result).toBe("# f.txt\n```\ncontent\n```\n\nstdin");
   });
 
   test("returns empty string when all three are null", () => {
-    expect(buildPrompt(null, null, null)).toBe("");
+    expect(buildPrompt({ prompt: null, fileContent: null, stdinContent: null })).toBe("");
   });
 
   test("file content default param preserves two-arg behavior", () => {
-    expect(buildPrompt("hello", null)).toBe("hello");
-    expect(buildPrompt(null, null, "stdin")).toBe("stdin");
-    expect(buildPrompt("a", null, "b")).toBe("a\n\nb");
+    expect(buildPrompt({ prompt: "hello" })).toBe("hello");
+    expect(buildPrompt({ prompt: null, stdinContent: "stdin" })).toBe("stdin");
+    expect(buildPrompt({ prompt: "a", stdinContent: "b" })).toBe("a\n\nb");
   });
 });
 
@@ -1048,28 +1049,28 @@ describe("resolveOptions additional", () => {
 
 describe("buildPrompt edge cases", () => {
   test("empty string arg is treated as falsy", () => {
-    const result = buildPrompt("", null, null);
+    const result = buildPrompt({ prompt: "", fileContent: null, stdinContent: null });
     expect(result).toBe("");
   });
 
   test("empty string stdin is treated as falsy", () => {
-    const result = buildPrompt(null, null, "");
+    const result = buildPrompt({ prompt: null, fileContent: null, stdinContent: "" });
     expect(result).toBe("");
   });
 
   test("whitespace-only arg is kept", () => {
-    const result = buildPrompt("  ", null, null);
+    const result = buildPrompt({ prompt: "  ", fileContent: null, stdinContent: null });
     expect(result).toBe("  ");
   });
 
   test("handles very long prompt", () => {
     const longPrompt = "a".repeat(100000);
-    const result = buildPrompt(longPrompt, null, null);
+    const result = buildPrompt({ prompt: longPrompt, fileContent: null, stdinContent: null });
     expect(result.length).toBe(100000);
   });
 
   test("handles unicode content", () => {
-    const result = buildPrompt("Hello \u2603", null, "\u00e9l\u00e8ve");
+    const result = buildPrompt({ prompt: "Hello \u2603", fileContent: null, stdinContent: "\u00e9l\u00e8ve" });
     expect(result).toContain("\u2603");
     expect(result).toContain("\u00e9l\u00e8ve");
   });

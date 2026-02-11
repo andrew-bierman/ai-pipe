@@ -139,15 +139,24 @@ export async function loadAsDataUrl(
 }
 
 /**
+ * Options for the loadOrExit helper function.
+ */
+interface LoadOrExitOptions<T> {
+  label: string;
+  fn: (path: string) => Promise<T>;
+  paths: string[];
+}
+
+/**
  * Helper to reduce duplication between readFiles and readImages.
  * Validates file exists, then applies the processing function.
  * Throws with label-prefixed error message on failure.
  */
-async function loadOrExit<T>(
-  label: string,
-  fn: (path: string) => Promise<T>,
-  paths: string[],
-): Promise<T[]> {
+async function loadOrExit<T>({
+  label,
+  fn,
+  paths,
+}: LoadOrExitOptions<T>): Promise<T[]> {
   const results: T[] = [];
   for (const path of paths) {
     const file = Bun.file(path);
@@ -160,37 +169,43 @@ async function loadOrExit<T>(
 }
 
 export async function readFiles(paths: string[]): Promise<string> {
-  const parts = await loadOrExit(
-    "File",
-    async (path: string) => {
+  const parts = await loadOrExit({
+    label: "File",
+    fn: async (path: string) => {
       const file = Bun.file(path);
       return `# ${path}\n\`\`\`\n${await file.text()}\n\`\`\``;
     },
     paths,
-  );
+  });
   return parts.join("\n\n");
 }
 
 export async function readImages(paths: string[]): Promise<{ url: string }[]> {
-  return loadOrExit(
-    "Image",
-    async (path: string) => {
+  return loadOrExit({
+    label: "Image",
+    fn: async (path: string) => {
       const file = Bun.file(path);
       const mimeType = file.type || "image/png";
       const dataUrl = await loadAsDataUrl(path, mimeType);
       return { url: dataUrl };
     },
     paths,
-  );
+  });
 }
 
-export function buildPrompt(
-  argPrompt: string | null,
-  fileContent: string | null = null,
-  stdinContent: string | null = null,
-): string {
+export interface BuildPromptOptions {
+  prompt: string | null;
+  fileContent?: string | null;
+  stdinContent?: string | null;
+}
+
+export function buildPrompt({
+  prompt,
+  fileContent = null,
+  stdinContent = null,
+}: BuildPromptOptions): string {
   const parts: string[] = [];
-  if (argPrompt) parts.push(argPrompt);
+  if (prompt) parts.push(prompt);
   if (fileContent) parts.push(fileContent);
   if (stdinContent) parts.push(stdinContent);
   return parts.join("\n\n");
@@ -324,7 +339,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
         const text = markdown ? renderMarkdown(cached.text) : `${cached.text}\n`;
         process.stdout.write(text);
       }
-      displayCostIfEnabled(cached.usage, modelString, showCost);
+      displayCostIfEnabled({ usage: cached.usage, modelString, showCost });
       return;
     }
   }
@@ -374,7 +389,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
       process.stdout.write(output);
     }
 
-    displayCostIfEnabled(result.usage, modelString, showCost);
+    displayCostIfEnabled({ usage: result.usage, modelString, showCost });
   } else {
     const result = streamText(callOptions);
 
@@ -407,7 +422,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
       }
     }
 
-    displayCostIfEnabled(await result.usage, modelString, showCost);
+    displayCostIfEnabled({ usage: await result.usage, modelString, showCost });
   }
 }
 
@@ -494,7 +509,7 @@ async function run(
     process.exit(1);
   }
 
-  const prompt = buildPrompt(argPrompt, fileContent, stdinContent);
+  const prompt = buildPrompt({ prompt: argPrompt, fileContent, stdinContent });
   if (!prompt && images.length === 0) {
     program.help();
     return;
@@ -587,18 +602,24 @@ async function run(
   }
 }
 
+interface DisplayCostOptions {
+  usage: UsageInfo | undefined;
+  modelString: string;
+  showCost: boolean;
+}
+
 /**
  * Display cost information if the --cost flag is set
  */
-function displayCostIfEnabled(
-  usage: UsageInfo | undefined,
-  modelString: string,
-  showCost: boolean,
-): void {
+function displayCostIfEnabled({
+  usage,
+  modelString,
+  showCost,
+}: DisplayCostOptions): void {
   if (!showCost || !usage) return;
 
   const { provider, modelId } = parseModelString(modelString);
-  const costInfo = calculateCost(provider, modelId, usage);
+  const costInfo = calculateCost({ provider, modelId, usage });
   const formattedCost = formatCost(costInfo);
   console.error(`\n💰 Cost: ${formattedCost}`);
 }
