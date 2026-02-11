@@ -15,6 +15,7 @@ import {
   printProviders,
   resolveModel,
 } from "./provider.ts";
+import { loadToolsConfig } from "./tools.ts";
 
 // Session name sanitization: only allow alphanumeric, hyphens, underscores
 const SESSION_NAME_REGEX = /^[A-Za-z0-9_-]+$/;
@@ -56,6 +57,7 @@ export interface CLIOptions {
   completions?: string;
   session?: string;
   roles?: boolean;
+  tools?: string;
 }
 
 export const CLIOptionsSchema = z.object({
@@ -79,6 +81,7 @@ export const CLIOptionsSchema = z.object({
   completions: z.string().optional(),
   session: z.string().optional(),
   roles: z.boolean().optional(),
+  tools: z.string().optional(),
 });
 
 export const JsonOutputSchema = z.object({
@@ -531,6 +534,7 @@ export function setupCLI() {
       "--completions <shell>",
       `Generate shell completions (${APP.supportedShells.join(", ")})`,
     )
+    .option("--tools <path>", "Path to tools configuration file (JSON)")
     .action(run);
 
   return program;
