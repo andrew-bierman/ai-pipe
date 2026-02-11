@@ -69,6 +69,7 @@
     "@ai-sdk/perplexity": "^3.0.18",
     "@ai-sdk/togetherai": "^2.0.31",
     "@ai-sdk/xai": "^3.0.50",
+    "@clack/prompts": "^1.0.0",
     "@openrouter/ai-sdk-provider": "^2.2.1",
     "ai": "^6.0.78",
     "ai-sdk-ollama": "^3.5.0",

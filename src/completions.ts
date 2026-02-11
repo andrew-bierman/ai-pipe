@@ -45,12 +45,23 @@ function bash(): string {
   return `# ${name} bash completions
 # Add to ~/.bashrc: eval "$(${name} --completions bash)"
 _${funcName}_completions() {
-  local cur prev opts providers
+  local cur prev opts providers subcommands config_subcommands
   COMPREPLY=()
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
   opts="--model -m --system -s --role -r --roles --file -f --image -i --json -j --no-stream --no-cache --temperature -t --max-output-tokens --config -c --cost --markdown --chat --session -C --providers --completions --tools --mcp --no-update-check --version -V --help -h"
   providers="${providers}"
+  subcommands="init config"
+  config_subcommands="set show reset path"
+
+  # Handle config subcommands
+  if [[ "\${COMP_WORDS[1]}" == "config" ]]; then
+    if [[ \${COMP_CWORD} -eq 2 ]]; then
+      COMPREPLY=( $(compgen -W "\${config_subcommands}" -- "\${cur}") )
+      return 0
+    fi
+    return 0
+  fi
 
   case "\${prev}" in
     -m|--model)
@@ -83,6 +94,12 @@ _${funcName}_completions() {
     COMPREPLY=( $(compgen -W "\${opts}" -- "\${cur}") )
     return 0
   fi
+
+  # Complete subcommands as first argument
+  if [[ \${COMP_CWORD} -eq 1 ]]; then
+    COMPREPLY=( $(compgen -W "\${subcommands}" -- "\${cur}") )
+    return 0
+  fi
 }
 complete -F _${funcName}_completions ${name}
 complete -F _${funcName}_completions ai`;
@@ -92,8 +109,19 @@ function zsh(): string {
   return `# ${name} zsh completions
 # Add to ~/.zshrc: eval "$(${name} --completions zsh)"
 _${funcName}() {
-  local -a providers
+  local -a providers subcommands config_subcommands
   providers=(${SUPPORTED_PROVIDERS.map((p) => `'${p}/'`).join(" ")})
+  subcommands=('init:Run interactive setup wizard' 'config:Manage configuration')
+  config_subcommands=('set:Set a config value' 'show:Show current config' 'reset:Reset config to defaults' 'path:Print config directory path')
+
+  # Handle config subcommands
+  if [[ "\${words[2]}" == "config" ]]; then
+    if [[ \${CURRENT} -eq 3 ]]; then
+      _describe -t commands 'config command' config_subcommands
+      return 0
+    fi
+    return 0
+  fi
 
   _arguments -s \\
     '(-m --model)'{-m,--model}'[Model in provider/model-id format]:model:->models' \\
@@ -119,12 +147,16 @@ _${funcName}() {
     '--no-update-check[Disable update notifications]' \\
     '(-V --version)'{-V,--version}'[Print version]' \\
     '(-h --help)'{-h,--help}'[Print help]' \\
+    '1:command:->subcmd' \\
     '*:prompt:' \\
     && return 0
 
   case "$state" in
     models)
       _describe -t providers 'provider' providers -S ''
+      ;;
+    subcmd)
+      _describe -t commands 'command' subcommands
       ;;
   esac
 }
@@ -135,6 +167,18 @@ compdef _${funcName} ai`;
 function fish(): string {
   return `# ${name} fish completions
 # Add to ~/.config/fish/completions/${name}.fish
+
+# Subcommands
+complete -c ${name} -n '__fish_use_subcommand' -a 'init' -d 'Run interactive setup wizard'
+complete -c ${name} -n '__fish_use_subcommand' -a 'config' -d 'Manage configuration'
+
+# Config subcommands
+complete -c ${name} -n '__fish_seen_subcommand_from config' -a 'set' -d 'Set a config value'
+complete -c ${name} -n '__fish_seen_subcommand_from config' -a 'show' -d 'Show current config'
+complete -c ${name} -n '__fish_seen_subcommand_from config' -a 'reset' -d 'Reset config to defaults'
+complete -c ${name} -n '__fish_seen_subcommand_from config' -a 'path' -d 'Print config directory path'
+
+# Global options
 complete -c ${name} -s m -l model -d 'Model in provider/model-id format' -x -a '${SUPPORTED_PROVIDERS.map((p) => `${p}/`).join(" ")}'
 complete -c ${name} -s s -l system -d 'System prompt' -x
 complete -c ${name} -s r -l role -d 'Role name from roles directory' -x
@@ -160,6 +204,12 @@ complete -c ${name} -s V -l version -d 'Print version'
 complete -c ${name} -s h -l help -d 'Print help'
 
 # ai alias completions
+complete -c ai -n '__fish_use_subcommand' -a 'init' -d 'Run interactive setup wizard'
+complete -c ai -n '__fish_use_subcommand' -a 'config' -d 'Manage configuration'
+complete -c ai -n '__fish_seen_subcommand_from config' -a 'set' -d 'Set a config value'
+complete -c ai -n '__fish_seen_subcommand_from config' -a 'show' -d 'Show current config'
+complete -c ai -n '__fish_seen_subcommand_from config' -a 'reset' -d 'Reset config to defaults'
+complete -c ai -n '__fish_seen_subcommand_from config' -a 'path' -d 'Print config directory path'
 complete -c ai -s m -l model -d 'Model in provider/model-id format' -x -a '${SUPPORTED_PROVIDERS.map((p) => `${p}/`).join(" ")}'
 complete -c ai -s s -l system -d 'System prompt' -x
 complete -c ai -s r -l role -d 'Role name from roles directory' -x

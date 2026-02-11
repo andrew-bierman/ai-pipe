@@ -23,9 +23,11 @@ import {
   loadConfig,
   loadRole,
 } from "./config.ts";
+import { handleConfigCommand } from "./config-commands.ts";
 import { APP } from "./constants.ts";
 import type { UsageInfo } from "./cost.ts";
 import { calculateCost, formatCost, parseModelString } from "./cost.ts";
+import { runInit } from "./init.ts";
 import { renderMarkdown } from "./markdown.ts";
 import { loadMCPConfig, MCPManager } from "./mcp.ts";
 import {
@@ -974,6 +976,17 @@ export const mainCommand = defineCommand({
   async run({ args, rawArgs }) {
     // Collect positional args (prompt words) from citty's _ array
     const promptArgs = args._ || [];
+
+    // Detect subcommands before normal flag processing
+    const firstArg = promptArgs[0];
+    if (firstArg === "init") {
+      await runInit();
+      return;
+    }
+    if (firstArg === "config") {
+      await handleConfigCommand(promptArgs.slice(1));
+      return;
+    }
 
     // Parse repeatable flags manually (citty does not support repeatable options)
     const files = parseRepeatableFlag(rawArgs, "-f", "--file");
