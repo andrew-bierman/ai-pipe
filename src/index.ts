@@ -20,6 +20,7 @@ import {
   printProviders,
   resolveModel,
 } from "./provider.ts";
+import { checkForUpdates } from "./update.ts";
 
 // Session name sanitization: only allow alphanumeric, hyphens, underscores
 const SESSION_NAME_REGEX = /^[A-Za-z0-9_-]+$/;
@@ -62,6 +63,7 @@ export interface CLIOptions {
   session?: string;
   roles?: boolean;
   cache: boolean;
+  updateCheck?: boolean;
 }
 
 export const CLIOptionsSchema = z.object({
@@ -86,6 +88,7 @@ export const CLIOptionsSchema = z.object({
   session: z.string().optional(),
   roles: z.boolean().optional(),
   cache: z.boolean().optional().default(true),
+  updateCheck: z.boolean().optional().default(true),
 });
 
 export const JsonOutputSchema = z.object({
@@ -514,6 +517,14 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
     console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
   }
+
+  // Check for updates (non-blocking, printed to stderr)
+  if (opts.updateCheck !== false) {
+    const updateMessage = await checkForUpdates();
+    if (updateMessage) {
+      process.stderr.write(updateMessage);
+    }
+  }
 }
 
 /**
@@ -584,6 +595,7 @@ export function setupCLI() {
       "--completions <shell>",
       `Generate shell completions (${APP.supportedShells.join(", ")})`,
     )
+    .option("--no-update-check", "Disable update notifications")
     .action(run);
 
   return program;
