@@ -28,6 +28,7 @@ A powerful CLI for calling LLMs from the terminal. Text in, text out. Built on t
 - 💾 **Response Caching** — skip duplicate API calls with built-in cache
 - 🔔 **Update Notifications** — automatic new version alerts
 - 🔧 **Tool Use** — function calling via `--tools`
+- 📄 **Prompt Templates** — reusable prompt snippets with `--template`
 
 ## 📦 Installation
 
@@ -261,6 +262,29 @@ eval "$(ai-pipe --completions zsh)"
 ai-pipe --completions fish > ~/.config/fish/completions/ai-pipe.fish
 ```
 
+### Prompt Templates
+
+Save reusable prompt snippets in `~/.ai-pipe/templates/` as `.md` files. Templates can contain `{{input}}` placeholders that get replaced with your prompt text.
+
+```bash
+# Create a template
+mkdir -p ~/.ai-pipe/templates
+echo "Review the following code for bugs, security issues, and best practices:
+
+{{input}}
+
+Provide specific, actionable feedback." > ~/.ai-pipe/templates/review.md
+
+# Use a template
+ai-pipe -T review -f main.go
+
+# Use a template with piped input
+cat src/app.ts | ai-pipe -T review
+
+# List available templates
+ai-pipe --templates
+```
+
 ## 📊 JSON Output
 
 Use `--json` to get structured output:
@@ -310,6 +334,8 @@ Options:
   -i, --image <path>           Attach image for vision models (repeatable)
   -r, --role <name>            Use a saved system prompt from ~/.ai-pipe/roles/
   --roles                      List available roles
+  -T, --template <name>        Use a prompt template from ~/.ai-pipe/templates/
+  --templates                  List available templates
   -C, --session [name]         Continue conversation or start named session
   --cost                       Show estimated token costs
   --markdown                   Render formatted markdown output
@@ -383,7 +409,7 @@ The release workflow handles `bun publish`, binary builds, and GitHub release.
 - [x] **Streaming markdown** — progressive markdown rendering during streaming
 - [x] **Config commands** — `ai-pipe init` wizard, `config set/show/reset/path`
 - [x] **citty migration** — replaced Commander.js with citty (UnJS)
-- [ ] **Prompt templates** — reusable prompt snippets in `~/.ai-pipe/templates/`
+- [x] **Prompt templates** — reusable prompt snippets in `~/.ai-pipe/templates/`
 - [ ] **Output formats** — CSV, YAML, TOML structured output modes
 - [ ] **Piped chain mode** — chain multiple LLM calls with `|` syntax
 - [ ] **Session export/import** — share conversations as JSON/Markdown
