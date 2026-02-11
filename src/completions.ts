@@ -49,7 +49,7 @@ _${funcName}_completions() {
   COMPREPLY=()
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
-  opts="--model -m --system -s --role -r --roles --file -f --image -i --json -j --no-stream --no-cache --temperature -t --max-output-tokens --config -c --cost --markdown --chat --session -C --providers --completions --no-update-check --version -V --help -h"
+  opts="--model -m --system -s --role -r --roles --file -f --image -i --json -j --no-stream --no-cache --temperature -t --max-output-tokens --config -c --cost --markdown --chat --session -C --providers --completions --tools --mcp --no-update-check --version -V --help -h"
   providers="${providers}"
 
   case "\${prev}" in
@@ -62,7 +62,7 @@ _${funcName}_completions() {
       compopt -o nospace
       return 0
       ;;
-    -f|--file|-i|--image)
+    -f|--file|-i|--image|--tools|--mcp)
       COMPREPLY=( $(compgen -f -- "\${cur}") )
       return 0
       ;;
@@ -114,6 +114,8 @@ _${funcName}() {
     '(-C --session)'{-C,--session}'[Session name for conversation continuity]:session:' \\
     '--providers[List supported providers]' \\
     '--completions[Generate shell completions]:shell:(${shells})' \\
+    '--tools[Path to tools configuration file (JSON)]:file:_files' \\
+    '--mcp[Path to MCP server configuration file (JSON)]:file:_files' \\
     '--no-update-check[Disable update notifications]' \\
     '(-V --version)'{-V,--version}'[Print version]' \\
     '(-h --help)'{-h,--help}'[Print help]' \\
@@ -151,6 +153,8 @@ complete -c ${name} -l chat -d 'Start interactive chat mode'
 complete -c ${name} -s C -l session -d 'Session name for conversation continuity' -x
 complete -c ${name} -l providers -d 'List supported providers'
 complete -c ${name} -l completions -d 'Generate shell completions' -x -a '${shells}'
+complete -c ${name} -l tools -d 'Path to tools configuration file (JSON)' -r -F
+complete -c ${name} -l mcp -d 'Path to MCP server configuration file (JSON)' -r -F
 complete -c ${name} -l no-update-check -d 'Disable update notifications'
 complete -c ${name} -s V -l version -d 'Print version'
 complete -c ${name} -s h -l help -d 'Print help'
@@ -173,6 +177,8 @@ complete -c ai -l chat -d 'Start interactive chat mode'
 complete -c ai -s C -l session -d 'Session name for conversation continuity' -x
 complete -c ai -l providers -d 'List supported providers'
 complete -c ai -l completions -d 'Generate shell completions' -x -a '${shells}'
+complete -c ai -l tools -d 'Path to tools configuration file (JSON)' -r -F
+complete -c ai -l mcp -d 'Path to MCP server configuration file (JSON)' -r -F
 complete -c ai -s V -l version -d 'Print version'
 complete -c ai -s h -l help -d 'Print help'`;
 }
