@@ -202,15 +202,15 @@ describe("MCPManager", () => {
     expect(manager.serverCount).toBe(0);
   });
 
-  test("getTools returns empty record when no servers connected", () => {
+  test("getTools returns empty record when no servers connected", async () => {
     const manager = new MCPManager();
-    const tools = manager.getTools();
+    const tools = await manager.getTools();
     expect(Object.keys(tools)).toHaveLength(0);
   });
 
-  test("getToolSummary returns empty array when no servers connected", () => {
+  test("getToolSummary returns empty array when no servers connected", async () => {
     const manager = new MCPManager();
-    const summary = manager.getToolSummary();
+    const summary = await manager.getToolSummary();
     expect(summary).toEqual([]);
   });
 

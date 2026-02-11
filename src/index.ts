@@ -28,13 +28,13 @@ import type { UsageInfo } from "./cost.ts";
 import { calculateCost, formatCost, parseModelString } from "./cost.ts";
 import { renderMarkdown } from "./markdown.ts";
 import { loadMCPConfig, MCPManager } from "./mcp.ts";
-import { StreamingMarkdownRenderer } from "./streaming-markdown.ts";
 import {
   PROVIDER_ENV_VARS,
   ProviderIdSchema,
   printProviders,
   resolveModel,
 } from "./provider.ts";
+import { StreamingMarkdownRenderer } from "./streaming-markdown.ts";
 import { loadToolsConfig } from "./tools.ts";
 import { checkForUpdates } from "./update.ts";
 
@@ -540,7 +540,10 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
 
       // Save to session history if applicable
       if (session) {
-        session.messages.push({ role: "assistant", content: renderer.getBuffer() });
+        session.messages.push({
+          role: "assistant",
+          content: renderer.getBuffer(),
+        });
         await saveHistory(session.name, session.messages);
       }
     } else {
@@ -709,7 +712,7 @@ async function run(
       const mcpConfig = await loadMCPConfig(opts.mcp);
       mcpManager = new MCPManager();
       await mcpManager.connect(mcpConfig);
-      mcpTools = mcpManager.getTools();
+      mcpTools = await mcpManager.getTools();
     } catch (err: unknown) {
       console.error(`Error loading MCP config: ${formatError(err)}`);
       process.exit(1);
