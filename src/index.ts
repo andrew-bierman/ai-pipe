@@ -203,12 +203,83 @@ export const JsonOutputSchema = z.object({
         reasoningTokens: z.number().optional(),
       })
       .optional(),
+    raw: z.record(z.string(), z.unknown()).optional(),
   }),
   finishReason: z.string(),
+  sources: z
+    .array(
+      z.object({
+        url: z.string(),
+        title: z.string().optional(),
+      }),
+    )
+    .optional(),
+  reasoning: z.string().nullish(),
+  providerMetadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 /** The structured JSON output type for `--json` mode. */
 export type JsonOutput = z.infer<typeof JsonOutputSchema>;
+
+/** A source from the AI SDK (discriminated union of 'url' and 'document' types). */
+type AnySource = {
+  type: "source";
+  sourceType: string;
+  [key: string]: unknown;
+};
+
+/** Filter sources to URL-type and extract {url, title?}. */
+function extractSources(sources: AnySource[]): JsonOutput["sources"] {
+  const urlSources = sources.filter(
+    (s): s is AnySource & { sourceType: "url"; url: string; title?: string } =>
+      s.sourceType === "url" &&
+      typeof (s as Record<string, unknown>).url === "string",
+  );
+  if (urlSources.length === 0) return undefined;
+  return urlSources.map((s) => ({
+    url: s.url,
+    ...(s.title ? { title: s.title } : {}),
+  }));
+}
+
+/** Build a full JsonOutput from a generateText result. */
+function buildJsonOutput(
+  result: {
+    text: string;
+    usage: JsonOutput["usage"];
+    finishReason: string;
+    sources?: AnySource[];
+    reasoningText?: string | undefined | null;
+    providerMetadata?: Record<string, unknown> | undefined;
+  },
+  opts: { modelString: string; text?: string },
+): JsonOutput {
+  const output: JsonOutput = {
+    text: opts.text ?? result.text,
+    model: opts.modelString,
+    usage: result.usage,
+    finishReason: result.finishReason,
+  };
+  const sources = extractSources(result.sources ?? []);
+  if (sources) output.sources = sources;
+  if (result.reasoningText) output.reasoning = result.reasoningText;
+  if (
+    result.providerMetadata &&
+    Object.keys(result.providerMetadata).length > 0
+  )
+    output.providerMetadata = result.providerMetadata;
+  return output;
+}
+
+/** Format sources as a numbered list for plain text output. */
+function formatSourcesText(sources: AnySource[]): string {
+  const urlSources = extractSources(sources);
+  if (!urlSources || urlSources.length === 0) return "";
+  const lines = urlSources.map(
+    (s, i) => `[${i + 1}] ${s.title ? `${s.title} — ` : ""}${s.url}`,
+  );
+  return `\n\nSources:\n${lines.join("\n")}`;
+}
 
 /**
  * Load a file's content as a Data URL (base64 encoded).
@@ -705,28 +776,23 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
     }
 
     if (format) {
-      const outputData: JsonOutput = {
+      const outputData = buildJsonOutput(result, {
+        modelString,
         text: responseText,
-        model: modelString,
-        usage: result.usage,
-        finishReason: result.finishReason,
-      };
+      });
       const output = formatOutput(outputData, format);
       process.stdout.write(`${output}\n`);
     } else if (json) {
-      const output: JsonOutput = {
+      const output = buildJsonOutput(result, {
+        modelString,
         text: responseText,
-        model: modelString,
-        usage: result.usage,
-        finishReason: result.finishReason,
-      };
+      });
       process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
     } else {
-      // Note: when --markdown is used with streaming, output is silently
-      // buffered (see streaming path below) rather than displayed per-chunk.
+      const sourcesText = formatSourcesText(result.sources ?? []);
       const output = markdown
-        ? renderMarkdown(responseText)
-        : `${responseText}\n`;
+        ? renderMarkdown(responseText + sourcesText)
+        : `${responseText}${sourcesText}\n`;
       process.stdout.write(output);
     }
 
@@ -763,7 +829,11 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
           process.stdout.write(chunk);
           fullResponse += chunk;
         }
-        process.stdout.write("\n");
+
+        // Append sources after stream completes
+        const streamSources = await result.sources;
+        const sourcesText = formatSourcesText(streamSources ?? []);
+        process.stdout.write(`${sourcesText}\n`);
 
         // Apply afterResponse plugin transform to collected response
         const streamedText = afterResponseTransform

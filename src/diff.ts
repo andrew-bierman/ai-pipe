@@ -9,6 +9,8 @@ export interface DiffResult {
   usage?: UsageInfo;
   cost?: string;
   durationMs: number;
+  sources?: Array<{ url: string; title?: string }>;
+  reasoning?: string;
 }
 
 export interface DiffOptions {
@@ -44,12 +46,27 @@ export async function runDiff(options: DiffOptions): Promise<DiffResult[]> {
         ? formatCost(calculateCost({ provider, modelId, usage: result.usage }))
         : undefined;
 
+      const sources =
+        result.sources?.length > 0
+          ? result.sources
+              .filter(
+                (s): s is Extract<typeof s, { sourceType: "url" }> =>
+                  s.sourceType === "url",
+              )
+              .map((s) => ({
+                url: s.url,
+                ...(s.title ? { title: s.title } : {}),
+              }))
+          : undefined;
+
       return {
         model: modelString,
         text: result.text,
         usage: result.usage,
         cost,
         durationMs,
+        sources,
+        reasoning: result.reasoningText ?? undefined,
       };
     }),
   );
@@ -101,6 +118,8 @@ export function formatDiffJson(results: DiffResult[]): string {
       usage: r.usage,
       cost: r.cost,
       durationMs: Math.round(r.durationMs),
+      ...(r.sources ? { sources: r.sources } : {}),
+      ...(r.reasoning ? { reasoning: r.reasoning } : {}),
     })),
     null,
     2,
