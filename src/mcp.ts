@@ -1,7 +1,6 @@
-import { Client } from "@modelcontextprotocol/sdk/client";
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { jsonSchema, type Tool } from "ai";
+import { createMCPClient, type MCPClient } from "@ai-sdk/mcp";
+import { Experimental_StdioMCPTransport } from "@ai-sdk/mcp/mcp-stdio";
+import type { Tool } from "ai";
 import { z } from "zod";
 
 /** Schema for a single stdio-based MCP server configuration. */
@@ -40,16 +39,10 @@ function isStdioConfig(
   return "command" in config;
 }
 
-/** Metadata for a connected MCP server and its discovered tools. */
+/** Metadata for a connected MCP server client. */
 interface ConnectedServer {
   name: string;
-  client: Client;
-  transport: StdioClientTransport | SSEClientTransport;
-  tools: Array<{
-    name: string;
-    description?: string;
-    inputSchema: Record<string, unknown>;
-  }>;
+  client: MCPClient;
 }
 
 /**
@@ -71,46 +64,10 @@ export async function loadMCPConfig(configPath: string): Promise<MCPConfig> {
 }
 
 /**
- * Convert an MCP tool definition to the AI SDK tool format.
- *
- * The returned tool includes an `execute` function that routes the call
- * back to the originating MCP server.
- */
-function convertMCPToolToAISDKTool(
-  mcpTool: {
-    name: string;
-    description?: string;
-    inputSchema: Record<string, unknown>;
-  },
-  client: Client,
-): Tool {
-  return {
-    description: mcpTool.description,
-    inputSchema: jsonSchema(
-      mcpTool.inputSchema as import("json-schema").JSONSchema7,
-    ),
-    execute: async (args: unknown) => {
-      const result = await client.callTool({
-        name: mcpTool.name,
-        arguments: args as Record<string, unknown>,
-      });
-
-      // Extract text content from the MCP result
-      if ("content" in result && Array.isArray(result.content)) {
-        const textParts = result.content
-          .filter((c: { type: string }) => c.type === "text")
-          .map((c: { type: string; text?: string }) => c.text ?? "");
-        return textParts.join("\n");
-      }
-
-      // Fallback: return the raw result as stringified JSON
-      return JSON.stringify(result);
-    },
-  } as Tool;
-}
-
-/**
  * Manages MCP server connections, tool discovery, and tool call routing.
+ *
+ * Uses @ai-sdk/mcp's createMCPClient which handles connection, tool discovery,
+ * and automatic conversion of MCP tools to AI SDK format.
  *
  * Usage:
  * 1. Create an instance with `new MCPManager()`
@@ -146,41 +103,32 @@ export class MCPManager {
   }
 
   /**
-   * Connect to a single MCP server and discover its tools.
+   * Connect to a single MCP server using @ai-sdk/mcp's createMCPClient.
    */
   private async connectServer(
     name: string,
     config: ServerConfig,
   ): Promise<ConnectedServer> {
-    const client = new Client(
-      { name: "ai-pipe", version: "1.0.0" },
-      { capabilities: {} },
-    );
-
-    let transport: StdioClientTransport | SSEClientTransport;
+    let client: MCPClient;
 
     if (isStdioConfig(config)) {
-      transport = new StdioClientTransport({
+      const transport = new Experimental_StdioMCPTransport({
         command: config.command,
         args: config.args,
         env: config.env,
         stderr: "pipe",
       });
+      client = await createMCPClient({ transport });
     } else {
-      transport = new SSEClientTransport(new URL(config.url));
+      client = await createMCPClient({
+        transport: {
+          type: "sse",
+          url: config.url,
+        },
+      });
     }
 
-    await client.connect(transport);
-
-    // Discover tools from the server
-    const toolsResult = await client.listTools();
-    const tools = toolsResult.tools.map((t) => ({
-      name: t.name,
-      description: t.description,
-      inputSchema: t.inputSchema as Record<string, unknown>,
-    }));
-
-    return { name, client, transport, tools };
+    return { name, client };
   }
 
   /**
@@ -191,13 +139,14 @@ export class MCPManager {
    *
    * @returns A record of AI SDK tools keyed by prefixed tool name.
    */
-  getTools(): Record<string, Tool> {
+  async getTools(): Promise<Record<string, Tool>> {
     const tools: Record<string, Tool> = {};
 
     for (const server of this.servers) {
-      for (const mcpTool of server.tools) {
-        const prefixedName = `${server.name}__${mcpTool.name}`;
-        tools[prefixedName] = convertMCPToolToAISDKTool(mcpTool, server.client);
+      const serverTools = await server.client.tools();
+      for (const [toolName, toolDef] of Object.entries(serverTools)) {
+        const prefixedName = `${server.name}__${toolName}`;
+        tools[prefixedName] = toolDef as Tool;
       }
     }
 
@@ -214,11 +163,12 @@ export class MCPManager {
   /**
    * Get a summary of all discovered tools for logging purposes.
    */
-  getToolSummary(): Array<{ server: string; tool: string }> {
+  async getToolSummary(): Promise<Array<{ server: string; tool: string }>> {
     const summary: Array<{ server: string; tool: string }> = [];
     for (const server of this.servers) {
-      for (const mcpTool of server.tools) {
-        summary.push({ server: server.name, tool: mcpTool.name });
+      const serverTools = await server.client.tools();
+      for (const toolName of Object.keys(serverTools)) {
+        summary.push({ server: server.name, tool: toolName });
       }
     }
     return summary;
@@ -230,7 +180,7 @@ export class MCPManager {
   async close(): Promise<void> {
     for (const server of this.servers) {
       try {
-        await server.transport.close();
+        await server.client.close();
       } catch {
         // Silently ignore close errors during cleanup
       }
