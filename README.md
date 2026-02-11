@@ -20,6 +20,14 @@ A powerful CLI for calling LLMs from the terminal. Text in, text out. Built on t
 - ⚙️ **Config Directory** — set defaults in `~/.ai-pipe/`
 - 🐚 **Shell Completions** — bash, zsh, fish
 - 📦 **Standalone Binary** — compile to a single executable with `bun build --compile`
+- 💬 **Conversation History** — continue sessions with `-C`/`--session`
+- 🖼️ **Image Input** — attach images for vision models with `--image`
+- 🎭 **Roles** — saved system prompts in `~/.ai-pipe/roles/`
+- 📊 **Cost Tracking** — show estimated token costs with `--cost`
+- 📝 **Markdown Rendering** — formatted terminal output with `--markdown`
+- 💾 **Response Caching** — skip duplicate API calls with built-in cache
+- 🔔 **Update Notifications** — automatic new version alerts
+- 🔧 **Tool Use** — function calling via `--tools`
 
 ## 📦 Installation
 
@@ -246,6 +254,15 @@ Options:
   -c, --config <path>          Path to config directory
   --providers                  List supported providers and their API key status
   --completions <shell>        Generate shell completions (bash, zsh, fish)
+  -i, --image <path>           Attach image for vision models (repeatable)
+  -r, --role <name>            Use a saved system prompt from ~/.ai-pipe/roles/
+  --roles                      List available roles
+  -C, --session [name]         Continue conversation or start named session
+  --cost                       Show estimated token costs
+  --markdown                   Render formatted markdown output
+  --tools <path>               Load tool definitions from JSON config
+  --no-cache                   Disable response caching
+  --no-update-check            Disable update version check
   -V, --version                Print version
   -h, --help                   Print help
 ```
@@ -275,7 +292,7 @@ Binaries are output to `dist/`.
 bun install
 
 # Run tests
-bun test              # 227 tests across 7 files
+bun test              # 542 tests across 12 files
 
 # Type checking
 bun run typecheck     # TypeScript type checking
@@ -304,15 +321,19 @@ The release workflow handles `bun publish`, binary builds, and GitHub release.
 - [x] **Roles** — saved system prompts in `~/.ai-pipe/roles/` (e.g. `ai-pipe --role reviewer`)
 - [x] **Markdown rendering** — syntax-highlighted, formatted output in the terminal
 - [x] **Cost tracking** — show estimated token costs per request
-- [ ] **Response caching** — skip duplicate API calls for identical prompts
-- [ ] **Update notifications** — check for new versions and prompt to upgrade
-- [ ] **Tool use** — function calling and MCP support
+- [x] **Response caching** — skip duplicate API calls for identical prompts
+- [x] **Update notifications** — check for new versions and prompt to upgrade
+- [x] **Tool use** — function calling and MCP support
+- [ ] **Interactive chat mode** — back-and-forth conversation in the CLI
+- [ ] **MCP support** — Model Context Protocol for tool integration
+- [ ] **Provider-specific defaults** — per-provider temperature/maxTokens in config
+- [ ] **Streaming markdown** — progressive markdown rendering during streaming
 
 ## 📚 Documentation
 
 - [API Reference](docs/api.md)
 - [Provider Configuration](docs/providers.md)
-- [Examples](examples/)
+- [Examples](docs/examples.md)
 - [Contributing Guide](CONTRIBUTING.md)
 
 ## 🤝 Contributing
