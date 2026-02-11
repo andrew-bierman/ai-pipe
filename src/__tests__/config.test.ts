@@ -352,6 +352,59 @@ describe("loadRole", () => {
 
     rmSync(rolesTmpDir, { recursive: true });
   });
+
+  test("returns null for empty role name", async () => {
+    const rolesTmpDir = makeTmpDir();
+    mkdirSync(join(rolesTmpDir, "roles"), { recursive: true });
+    const result = await loadRole("", rolesTmpDir);
+    expect(result).toBeNull();
+
+    rmSync(rolesTmpDir, { recursive: true });
+  });
+
+  test("prevents path traversal with deeply nested ../", async () => {
+    const rolesTmpDir = makeTmpDir();
+    const result = await loadRole(
+      "../../../../../../../etc/passwd",
+      rolesTmpDir,
+    );
+    expect(result).toBeNull();
+    rmSync(rolesTmpDir, { recursive: true });
+  });
+
+  test("handles role name with special characters", async () => {
+    const rolesTmpDir = makeTmpDir();
+    mkdirSync(join(rolesTmpDir, "roles"), { recursive: true });
+    // A role name with dots and special chars (sanitized by basename)
+    const result = await loadRole("some.role.name", rolesTmpDir);
+    expect(result).toBeNull();
+    rmSync(rolesTmpDir, { recursive: true });
+  });
+
+  test("handles role file with unicode content", async () => {
+    const rolesTmpDir = join(tmpDir, `ai-roles-unicode-${uid()}`);
+    mkdirSync(join(rolesTmpDir, "roles"), { recursive: true });
+    const roleName = `unicode-${uid()}`;
+    const roleContent = "You are a helpful assistant. \u2603 \u00e9l\u00e8ve.";
+    await Bun.write(join(rolesTmpDir, "roles", `${roleName}.md`), roleContent);
+    const result = await loadRole(roleName, rolesTmpDir);
+    expect(result).toBe(roleContent);
+    rmSync(rolesTmpDir, { recursive: true });
+  });
+
+  test("handles role with .MD extension (case insensitive strip)", async () => {
+    const rolesTmpDir = join(tmpDir, `ai-roles-case-${uid()}`);
+    mkdirSync(join(rolesTmpDir, "roles"), { recursive: true });
+    const roleName = "CaseTest";
+    await Bun.write(
+      join(rolesTmpDir, "roles", `${roleName}.md`),
+      "Case test content",
+    );
+    // Pass with uppercase .MD extension
+    const result = await loadRole(`${roleName}.MD`, rolesTmpDir);
+    expect(result).toBe("Case test content");
+    rmSync(rolesTmpDir, { recursive: true });
+  });
 });
 
 describe("listRoles", () => {
@@ -410,5 +463,74 @@ describe("listRoles", () => {
     expect(aIndex).toBeLessThan(zIndex);
 
     rmSync(rolesTmpDir, { recursive: true });
+  });
+
+  test("returns empty array for nonexistent config directory", async () => {
+    const result = await listRoles("/nonexistent/path/to/config");
+    expect(result).toEqual([]);
+  });
+
+  test("returns unique role names (no duplicates)", async () => {
+    const rolesTmpDir = join(tmpDir, `ai-unique-roles-${uid()}`);
+    mkdirSync(join(rolesTmpDir, "roles"), { recursive: true });
+
+    const roleName = `unique-role-${uid()}`;
+    await Bun.write(join(rolesTmpDir, "roles", `${roleName}.md`), "Content");
+
+    const result = await listRoles(rolesTmpDir);
+    const count = result.filter((r) => r === roleName).length;
+    expect(count).toBe(1);
+
+    rmSync(rolesTmpDir, { recursive: true });
+  });
+
+  test("handles empty roles directory (exists but no files)", async () => {
+    const rolesTmpDir = join(tmpDir, `ai-empty-roles-dir-${uid()}`);
+    mkdirSync(join(rolesTmpDir, "roles"), { recursive: true });
+
+    const result = await listRoles(rolesTmpDir);
+    expect(result).toEqual([]);
+
+    rmSync(rolesTmpDir, { recursive: true });
+  });
+
+  test("uses default directory when none specified", async () => {
+    const result = await listRoles(undefined);
+    expect(Array.isArray(result)).toBe(true);
+  });
+});
+
+// ── ConfigSchema additional edge cases ───────────────────────────────────
+
+describe("ConfigSchema edge cases", () => {
+  test("accepts model as empty string", () => {
+    const result = ConfigSchema.parse({ model: "" });
+    expect(result.model).toBe("");
+  });
+
+  test("accepts system as empty string", () => {
+    const result = ConfigSchema.parse({ system: "" });
+    expect(result.system).toBe("");
+  });
+
+  test("accepts very large maxOutputTokens", () => {
+    const result = ConfigSchema.parse({ maxOutputTokens: 1000000 });
+    expect(result.maxOutputTokens).toBe(1000000);
+  });
+
+  test("rejects null", () => {
+    expect(() => ConfigSchema.parse(null)).toThrow();
+  });
+
+  test("rejects string", () => {
+    expect(() => ConfigSchema.parse("invalid")).toThrow();
+  });
+
+  test("rejects number", () => {
+    expect(() => ConfigSchema.parse(42)).toThrow();
+  });
+
+  test("rejects array", () => {
+    expect(() => ConfigSchema.parse([1, 2, 3])).toThrow();
   });
 });
