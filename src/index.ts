@@ -529,8 +529,8 @@ async function run(
   // Add current user message to messages if using session
   // Only add system message if history is empty (first message in conversation)
   if (sessionName) {
-    if (system && messages.length === 0) {
-      messages.unshift({ role: "system", content: system });
+    if (systemPrompt && messages.length === 0) {
+      messages.unshift({ role: "system", content: systemPrompt });
     }
     messages.push({ role: "user", content: prompt });
   }
@@ -556,7 +556,7 @@ async function run(
       system: sessionName ? undefined : systemPrompt,
       temperature,
       maxOutputTokens,
-      stream: opts.stream,
+      stream: markdown ? false : opts.stream,
       json: opts.json,
       markdown,
       showCost: opts.cost,
