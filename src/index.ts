@@ -26,6 +26,7 @@ import { APP } from "./constants.ts";
 import type { UsageInfo } from "./cost.ts";
 import { calculateCost, formatCost, parseModelString } from "./cost.ts";
 import { renderMarkdown } from "./markdown.ts";
+import { StreamingMarkdownRenderer } from "./streaming-markdown.ts";
 import {
   PROVIDER_ENV_VARS,
   ProviderIdSchema,
@@ -523,18 +524,17 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
   } else {
     const result = streamText(callOptions);
 
-    // When markdown is enabled, silently buffer the full response
-    // and render once complete (streaming chunks are not displayed).
+    // When markdown is enabled, progressively re-render as tokens arrive.
     if (markdown) {
-      let fullResponse = "";
+      const renderer = new StreamingMarkdownRenderer();
       for await (const chunk of result.textStream) {
-        fullResponse += chunk;
+        renderer.append(chunk);
       }
-      process.stdout.write(renderMarkdown(fullResponse));
+      renderer.finish();
 
       // Save to session history if applicable
       if (session) {
-        session.messages.push({ role: "assistant", content: fullResponse });
+        session.messages.push({ role: "assistant", content: renderer.getBuffer() });
         await saveHistory(session.name, session.messages);
       }
     } else {
@@ -717,7 +717,7 @@ async function run(
       system: sessionName ? undefined : systemPrompt,
       temperature,
       maxOutputTokens,
-      stream: markdown ? false : opts.stream,
+      stream: opts.stream,
       json: opts.json,
       markdown,
       showCost: opts.cost,
