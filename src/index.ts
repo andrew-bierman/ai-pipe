@@ -38,6 +38,7 @@ import {
   resolveModel,
 } from "./provider.ts";
 import { StreamingMarkdownRenderer } from "./streaming-markdown.ts";
+import { applyTemplate, listTemplates, loadTemplate } from "./templates.ts";
 import { loadToolsConfig } from "./tools.ts";
 import { checkForUpdates } from "./update.ts";
 
@@ -101,6 +102,8 @@ export interface CLIOptions {
   completions?: string;
   session?: string;
   roles?: boolean;
+  template?: string;
+  templates?: boolean;
   cache: boolean;
   updateCheck?: boolean;
   tools?: string;
@@ -130,6 +133,8 @@ export const CLIOptionsSchema = z.object({
   completions: z.string().optional(),
   session: z.string().optional(),
   roles: z.boolean().optional(),
+  template: z.string().optional(),
+  templates: z.boolean().optional(),
   cache: z.boolean().optional().default(true),
   updateCheck: z.boolean().optional().default(true),
   tools: z.string().optional(),
@@ -617,6 +622,24 @@ async function runAction(
     return;
   }
 
+  // List available templates
+  if (opts.templates) {
+    const templates = await listTemplates();
+    const templatesDir = `~/${APP.configDirName}/templates/`;
+    if (templates.length === 0) {
+      console.log(
+        `No templates found. Create template files in ${templatesDir}`,
+      );
+      console.log(`Example: ${templatesDir}review.md`);
+    } else {
+      console.log("Available templates:");
+      for (const template of templates) {
+        console.log(`  - ${template}`);
+      }
+    }
+    return;
+  }
+
   const config = await loadConfig(opts.config);
 
   // Inject config API keys into process.env (env vars take precedence)
@@ -652,7 +675,24 @@ async function runAction(
     process.exit(1);
   }
 
-  const prompt = buildPrompt({ prompt: argPrompt, fileContent, stdinContent });
+  let prompt = buildPrompt({ prompt: argPrompt, fileContent, stdinContent });
+
+  // Apply template if --template is set
+  if (opts.template) {
+    const templateContent = await loadTemplate(opts.template);
+    if (templateContent) {
+      prompt = applyTemplate(templateContent, { input: prompt });
+    } else {
+      const templateFilename = opts.template.endsWith(".md")
+        ? opts.template
+        : `${opts.template}.md`;
+      console.error(
+        `Error: Template "${opts.template}" not found. Create it at ~/${APP.configDirName}/templates/${templateFilename} or run "ai-pipe --templates" to see available templates.`,
+      );
+      process.exit(1);
+    }
+  }
+
   if (!opts.chat && !prompt && images.length === 0) {
     await showUsage(mainCommand);
     process.exit(0);
@@ -960,6 +1000,16 @@ export const mainCommand = defineCommand({
       description: `List available roles from ~/${APP.configDirName}/roles/`,
       default: false,
     },
+    template: {
+      type: "string",
+      alias: "T",
+      description: `Use a template from ~/${APP.configDirName}/templates/`,
+    },
+    templates: {
+      type: "boolean",
+      description: `List available templates from ~/${APP.configDirName}/templates/`,
+      default: false,
+    },
     completions: {
       type: "string",
       description: `Generate shell completions (${APP.supportedShells.join(", ")})`,
@@ -1023,6 +1073,8 @@ export const mainCommand = defineCommand({
       session: args.session,
       providers: args.providers,
       roles: args.roles,
+      template: args.template,
+      templates: args.templates,
       completions: args.completions,
       tools: args.tools,
       mcp: args.mcp,

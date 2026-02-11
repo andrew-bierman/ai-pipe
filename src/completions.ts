@@ -49,7 +49,7 @@ _${funcName}_completions() {
   COMPREPLY=()
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
-  opts="--model -m --system -s --role -r --roles --file -f --image -i --json -j --no-stream --no-cache --temperature -t --max-output-tokens --config -c --cost --markdown --chat --session -C --providers --completions --tools --mcp --no-update-check --version -V --help -h"
+  opts="--model -m --system -s --role -r --roles --template -T --templates --file -f --image -i --json -j --no-stream --no-cache --temperature -t --max-output-tokens --config -c --cost --markdown --chat --session -C --providers --completions --tools --mcp --no-update-check --version -V --help -h"
   providers="${providers}"
   subcommands="init config"
   config_subcommands="set show reset path"
@@ -85,7 +85,7 @@ _${funcName}_completions() {
       COMPREPLY=( $(compgen -W "${shells}" -- "\${cur}") )
       return 0
       ;;
-    -C|--session|-s|--system|-r|--role|-t|--temperature|--max-output-tokens)
+    -C|--session|-s|--system|-r|--role|-T|--template|-t|--temperature|--max-output-tokens)
       return 0
       ;;
   esac
@@ -128,6 +128,8 @@ _${funcName}() {
     '(-s --system)'{-s,--system}'[System prompt]:prompt:' \\
     '(-r --role)'{-r,--role}'[Role name from roles directory]:role:' \\
     '--roles[List available roles]' \\
+    '(-T --template)'{-T,--template}'[Template name from templates directory]:template:' \\
+    '--templates[List available templates]' \\
     '*'{-f,--file}'[Include file contents]:file:_files' \\
     '*'{-i,--image}'[Include image file (repeatable)]:file:_files' \\
     '(-j --json)'{-j,--json}'[Output full JSON response object]' \\
@@ -183,6 +185,8 @@ complete -c ${name} -s m -l model -d 'Model in provider/model-id format' -x -a '
 complete -c ${name} -s s -l system -d 'System prompt' -x
 complete -c ${name} -s r -l role -d 'Role name from roles directory' -x
 complete -c ${name} -l roles -d 'List available roles'
+complete -c ${name} -s T -l template -d 'Template name from templates directory' -x
+complete -c ${name} -l templates -d 'List available templates'
 complete -c ${name} -s f -l file -d 'Include file contents in prompt (repeatable)' -r -F
 complete -c ${name} -s i -l image -d 'Include image file (repeatable)' -r -F
 complete -c ${name} -s j -l json -d 'Output full JSON response object'
@@ -214,6 +218,8 @@ complete -c ai -s m -l model -d 'Model in provider/model-id format' -x -a '${SUP
 complete -c ai -s s -l system -d 'System prompt' -x
 complete -c ai -s r -l role -d 'Role name from roles directory' -x
 complete -c ai -l roles -d 'List available roles'
+complete -c ai -s T -l template -d 'Template name from templates directory' -x
+complete -c ai -l templates -d 'List available templates'
 complete -c ai -s f -l file -d 'Include file contents in prompt (repeatable)' -r -F
 complete -c ai -s i -l image -d 'Include image file (repeatable)' -r -F
 complete -c ai -s j -l json -d 'Output full JSON response object'
