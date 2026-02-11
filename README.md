@@ -33,6 +33,7 @@ A powerful CLI for calling LLMs from the terminal. Text in, text out. Built on t
 - 📊 **Output Formats** — structured output in JSON, YAML, CSV, or text
 - 🔗 **Chain Mode** — chain multiple LLM calls sequentially with `--chain`
 - 🔌 **Plugin System** — loadable extensions for custom transforms via `--plugins`
+- 🔀 **Response Diffing** — compare outputs from multiple models side-by-side
 
 ## 📦 Installation
 
@@ -178,6 +179,23 @@ ai-pipe --chat --budget 1.00
 # Retry up to 3 times on rate limits or transient errors
 ai-pipe --retries 3 "explain recursion"
 ```
+
+### Response Diffing
+
+Compare outputs from multiple models for the same prompt:
+
+```bash
+# Compare two models
+ai-pipe --diff "openai/gpt-4o,anthropic/claude-sonnet-4-5" "write a haiku about coding"
+
+# Compare with cost tracking
+ai-pipe --diff "openai/gpt-4o,google/gemini-2.5-flash,anthropic/claude-sonnet-4-5" --cost "explain monads"
+
+# JSON output for programmatic comparison
+ai-pipe --diff "openai/gpt-4o,anthropic/claude-sonnet-4-5" --json "what is rust?"
+```
+
+Models are queried in parallel for speed. Each result shows the model name, response time, token usage, and optionally cost.
 
 > 📌 **Note:** If no `provider/` prefix is given, the model defaults to `openai`. If no `-m` flag is given, it defaults to `openai/gpt-4o`.
 
@@ -525,6 +543,7 @@ Options:
   --markdown                   Render formatted markdown output
   -B, --budget <amount>        Max dollar budget per request (cumulative in chat)
   --retries <n>                Retry on rate limit or transient errors (0=none)
+  -D, --diff <models>           Compare models (comma-separated)
   --tools <path>               Load tool definitions from JSON config
   --chain <path>               Path to chain config JSON for multi-step LLM calls
   -v, --verbose                Show intermediate chain outputs on stderr
@@ -606,7 +625,7 @@ The release workflow handles `bun publish`, binary builds, and GitHub release.
 - [x] **Retry with backoff** — automatic retry on rate limits and transient errors
 - [x] **Piped chain mode** — chain multiple LLM calls with `--chain`
 - [x] **Plugin system** — loadable extensions for custom providers/transforms
-- [ ] **Response diffing** — compare outputs across models for same prompt
+- [x] **Response diffing** — compare outputs across models for same prompt
 
 ## 📚 Documentation
 

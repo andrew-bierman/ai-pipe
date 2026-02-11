@@ -49,7 +49,7 @@ _${funcName}_completions() {
   COMPREPLY=()
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
-  opts="--model -m --system -s --role -r --roles --template -T --templates --file -f --image -i --json -j --format -F --no-stream --no-cache --temperature -t --max-output-tokens --config -c --cost --markdown --chat --session -C --budget -B --retries --providers --completions --tools --mcp --chain --verbose -v --plugins -P --no-update-check --version -V --help -h"
+  opts="--model -m --system -s --role -r --roles --template -T --templates --file -f --image -i --json -j --format -F --no-stream --no-cache --temperature -t --max-output-tokens --config -c --cost --markdown --chat --session -C --budget -B --retries --diff -D --providers --completions --tools --mcp --chain --verbose -v --plugins -P --no-update-check --version -V --help -h"
   providers="${providers}"
   subcommands="init config session"
   config_subcommands="set show reset path"
@@ -99,7 +99,7 @@ _${funcName}_completions() {
       COMPREPLY=( $(compgen -W "json yaml csv text" -- "\${cur}") )
       return 0
       ;;
-    -C|--session|-s|--system|-r|--role|-T|--template|-t|--temperature|--max-output-tokens|-B|--budget|--retries)
+    -C|--session|-s|--system|-r|--role|-T|--template|-t|--temperature|--max-output-tokens|-B|--budget|--retries|-D|--diff)
       return 0
       ;;
   esac
@@ -176,6 +176,7 @@ _${funcName}() {
     '--chain[Path to chain config JSON file]:file:_files' \\
     '(-v --verbose)'{-v,--verbose}'[Show intermediate chain outputs on stderr]' \\
     '(-P --plugins)'{-P,--plugins}'[Path to plugins configuration file (JSON)]:file:_files' \\
+    '(-D --diff)'{-D,--diff}'[Compare models (comma-separated)]:models:' \\
     '--no-update-check[Disable update notifications]' \\
     '(-V --version)'{-V,--version}'[Print version]' \\
     '(-h --help)'{-h,--help}'[Print help]' \\
@@ -246,6 +247,7 @@ complete -c ${name} -l mcp -d 'Path to MCP server configuration file (JSON)' -r 
 complete -c ${name} -l chain -d 'Path to chain config JSON file' -r -F
 complete -c ${name} -s v -l verbose -d 'Show intermediate chain outputs on stderr'
 complete -c ${name} -s P -l plugins -d 'Path to plugins configuration file (JSON)' -r -F
+complete -c ${name} -s D -l diff -d 'Compare models (comma-separated)' -x
 complete -c ${name} -l no-update-check -d 'Disable update notifications'
 complete -c ${name} -s V -l version -d 'Print version'
 complete -c ${name} -s h -l help -d 'Print help'
@@ -289,6 +291,7 @@ complete -c ai -l mcp -d 'Path to MCP server configuration file (JSON)' -r -F
 complete -c ai -l chain -d 'Path to chain config JSON file' -r -F
 complete -c ai -s v -l verbose -d 'Show intermediate chain outputs on stderr'
 complete -c ai -s P -l plugins -d 'Path to plugins configuration file (JSON)' -r -F
+complete -c ai -s D -l diff -d 'Compare models (comma-separated)' -x
 complete -c ai -s V -l version -d 'Print version'
 complete -c ai -s h -l help -d 'Print help'`;
 }
