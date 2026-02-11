@@ -20,6 +20,8 @@ export interface ChatOptions {
   maxOutputTokens?: number;
   markdown: boolean;
   showCost: boolean;
+  /** If provided, warn when cumulative cost exceeds this budget (in USD) */
+  budget?: number;
 }
 
 /** The accumulated cost totals across the chat session. */
@@ -47,6 +49,7 @@ export async function startChat(options: ChatOptions): Promise<void> {
     maxOutputTokens,
     markdown,
     showCost,
+    budget,
   } = options;
 
   const messages: ModelMessage[] = [];
@@ -136,22 +139,40 @@ export async function startChat(options: ChatOptions): Promise<void> {
         // Add assistant response to history
         messages.push({ role: "assistant", content: fullResponse });
 
-        // Display cost if enabled
-        if (showCost) {
-          const usage: UsageInfo | undefined = await result.usage;
-          if (usage) {
-            const { provider, modelId } = parseModelString(modelString);
-            const costInfo = calculateCost({ provider, modelId, usage });
+        // Always compute usage for budget tracking even if showCost is false
+        const usage: UsageInfo | undefined = await result.usage;
+        if (usage) {
+          const { provider, modelId } = parseModelString(modelString);
+          const costInfo = calculateCost({ provider, modelId, usage });
 
-            runningCost.totalInputTokens += costInfo.inputTokens;
-            runningCost.totalOutputTokens += costInfo.outputTokens;
-            runningCost.totalCost += costInfo.totalCost;
+          runningCost.totalInputTokens += costInfo.inputTokens;
+          runningCost.totalOutputTokens += costInfo.outputTokens;
+          runningCost.totalCost += costInfo.totalCost;
 
+          // Display cost if enabled
+          if (showCost) {
             const turnCost = formatCost(costInfo);
             console.error(`\nTurn cost: ${turnCost}`);
             console.error(
               `Session total: $${runningCost.totalCost.toFixed(4)} (${runningCost.totalInputTokens.toLocaleString()} in, ${runningCost.totalOutputTokens.toLocaleString()} out)`,
             );
+          }
+
+          // Check budget
+          if (budget !== undefined && runningCost.totalCost > budget) {
+            console.error(
+              `\n⚠️  Budget exceeded: $${runningCost.totalCost.toFixed(4)} (budget: $${budget.toFixed(4)})`,
+            );
+            const answer = await new Promise<string>((res) => {
+              rl.question("Continue chatting? (y/n) ", (ans: string) =>
+                res(ans.trim().toLowerCase()),
+              );
+            });
+            if (answer !== "y" && answer !== "yes") {
+              console.error("Stopping due to budget.");
+              rl.close();
+              return;
+            }
           }
         }
       } catch (err: unknown) {

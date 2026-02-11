@@ -115,6 +115,7 @@ export interface CLIOptions {
   updateCheck?: boolean;
   tools?: string;
   mcp?: string;
+  budget?: number;
 }
 
 /** Zod schema for validating and coercing CLI options from citty. */
@@ -146,6 +147,7 @@ export const CLIOptionsSchema = z.object({
   updateCheck: z.boolean().optional().default(true),
   tools: z.string().optional(),
   mcp: z.string().optional(),
+  budget: z.number().positive().optional(),
 });
 
 /**
@@ -558,6 +560,8 @@ interface ExecutePromptParams {
   cacheKey?: string | null;
   /** If provided, tools available for the model to call */
   tools?: Record<string, unknown>;
+  /** If provided, warn when cost exceeds this budget (in USD) */
+  budget?: number;
 }
 
 /**
@@ -581,6 +585,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
     session,
     cacheKey,
     tools,
+    budget,
   } = params;
 
   // Check cache before making API call (only for non-session, non-streaming)
@@ -602,6 +607,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
         process.stdout.write(text);
       }
       displayCostIfEnabled({ usage: cached.usage, modelString, showCost });
+      checkBudget({ usage: cached.usage, modelString, budget });
       return;
     }
   }
@@ -662,6 +668,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
     }
 
     displayCostIfEnabled({ usage: result.usage, modelString, showCost });
+    checkBudget({ usage: result.usage, modelString, budget });
   } else {
     const result = streamText(callOptions);
 
@@ -697,6 +704,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
     }
 
     displayCostIfEnabled({ usage: await result.usage, modelString, showCost });
+    checkBudget({ usage: await result.usage, modelString, budget });
   }
 }
 
@@ -863,6 +871,7 @@ async function runAction(
       maxOutputTokens,
       markdown,
       showCost: opts.cost,
+      budget: opts.budget,
     });
     return;
   }
@@ -943,6 +952,7 @@ async function runAction(
       session: sessionName ? { name: sessionName, messages } : undefined,
       cacheKey,
       tools,
+      budget: opts.budget,
     });
   } catch (err: unknown) {
     console.error(`Error: ${formatError(err)}`);
@@ -991,6 +1001,29 @@ function displayCostIfEnabled({
   const costInfo = calculateCost({ provider, modelId, usage });
   const formattedCost = formatCost(costInfo);
   console.error(`\n💰 Cost: ${formattedCost}`);
+}
+
+/**
+ * Check if the cost of a request exceeds the budget, and print a warning if so.
+ */
+function checkBudget({
+  usage,
+  modelString,
+  budget,
+}: {
+  usage: UsageInfo | undefined;
+  modelString: string;
+  budget: number | undefined;
+}): void {
+  if (budget === undefined || !usage) return;
+
+  const { provider, modelId } = parseModelString(modelString);
+  const costInfo = calculateCost({ provider, modelId, usage });
+  if (costInfo.totalCost > budget) {
+    console.error(
+      `⚠️  Budget exceeded: $${costInfo.totalCost.toFixed(4)} (budget: $${budget.toFixed(4)})`,
+    );
+  }
 }
 
 /**
@@ -1149,6 +1182,11 @@ export const mainCommand = defineCommand({
       type: "string",
       description: "Path to MCP server configuration file (JSON)",
     },
+    budget: {
+      type: "string",
+      alias: "B",
+      description: "Max dollar budget per request (e.g., 0.05)",
+    },
     updateCheck: {
       type: "boolean",
       description: "Check for updates after execution",
@@ -1209,6 +1247,8 @@ export const mainCommand = defineCommand({
       completions: args.completions,
       tools: args.tools,
       mcp: args.mcp,
+      budget:
+        args.budget !== undefined ? Number.parseFloat(args.budget) : undefined,
       updateCheck: args.updateCheck,
     };
 

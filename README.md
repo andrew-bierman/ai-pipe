@@ -165,6 +165,12 @@ ai-pipe -t 1.5 "write a creative story"
 
 # Limit output length
 ai-pipe --max-output-tokens 100 "explain quantum computing"
+
+# Set a budget of $0.05 per request
+ai-pipe --budget 0.05 "explain quantum computing"
+
+# Budget in chat mode tracks cumulative cost
+ai-pipe --chat --budget 1.00
 ```
 
 > 📌 **Note:** If no `provider/` prefix is given, the model defaults to `openai`. If no `-m` flag is given, it defaults to `openai/gpt-4o`.
@@ -397,6 +403,7 @@ Options:
   -C, --session [name]         Continue conversation or start named session
   --cost                       Show estimated token costs
   --markdown                   Render formatted markdown output
+  -B, --budget <amount>        Max dollar budget per request (cumulative in chat)
   --tools <path>               Load tool definitions from JSON config
   --no-cache                   Disable response caching
   --no-update-check            Disable update version check
@@ -471,7 +478,7 @@ The release workflow handles `bun publish`, binary builds, and GitHub release.
 - [ ] **Output formats** — CSV, YAML, TOML structured output modes
 - [ ] **Piped chain mode** — chain multiple LLM calls with `|` syntax
 - [x] **Session export/import** — share conversations as JSON/Markdown
-- [ ] **Token budget** — set a max spend per session with `--budget`
+- [x] **Token budget** — set a max spend per session with `--budget`
 - [x] **Model aliases** — short names for long model IDs in config
 
 ## 📚 Documentation
