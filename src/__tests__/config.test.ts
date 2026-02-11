@@ -9,6 +9,7 @@ import {
   loadConfig,
   loadRole,
   ProviderConfigSchema,
+  resolveAlias,
 } from "../config.ts";
 
 const tmpDir = tmpdir();
@@ -756,5 +757,175 @@ describe("loadConfig with providers", () => {
     expect(config.model).toBe("anthropic/claude-sonnet-4-5");
     expect(config.temperature).toBe(0.7);
     expect(config.providers).toBeUndefined();
+  });
+});
+
+// ── Model Aliases ─────────────────────────────────────────────────────
+
+describe("ConfigSchema with aliases", () => {
+  test("accepts config with aliases field", () => {
+    const result = ConfigSchema.parse({
+      model: "claude",
+      aliases: {
+        claude: "anthropic/claude-sonnet-4-5",
+        gpt: "openai/gpt-4o",
+      },
+    });
+    expect(result.aliases).toBeDefined();
+    expect(result.aliases?.claude).toBe("anthropic/claude-sonnet-4-5");
+    expect(result.aliases?.gpt).toBe("openai/gpt-4o");
+  });
+
+  test("accepts config without aliases key (backward compatible)", () => {
+    const result = ConfigSchema.parse({
+      model: "openai/gpt-4o",
+      temperature: 0.7,
+    });
+    expect(result.aliases).toBeUndefined();
+  });
+
+  test("accepts empty aliases object", () => {
+    const result = ConfigSchema.parse({ aliases: {} });
+    expect(result.aliases).toEqual({});
+  });
+
+  test("alias values can be any valid model string", () => {
+    const result = ConfigSchema.parse({
+      aliases: {
+        short: "provider/some-long-model-id-v2.5",
+        local: "ollama/llama3",
+        bedrock: "bedrock/anthropic.claude-sonnet-4-2025-02-19",
+      },
+    });
+    expect(result.aliases?.short).toBe("provider/some-long-model-id-v2.5");
+    expect(result.aliases?.local).toBe("ollama/llama3");
+    expect(result.aliases?.bedrock).toBe(
+      "bedrock/anthropic.claude-sonnet-4-2025-02-19",
+    );
+  });
+
+  test("rejects non-string alias values", () => {
+    expect(() =>
+      ConfigSchema.parse({
+        aliases: { claude: 123 },
+      }),
+    ).toThrow();
+  });
+
+  test("rejects non-string alias keys with non-string values", () => {
+    expect(() =>
+      ConfigSchema.parse({
+        aliases: { claude: true },
+      }),
+    ).toThrow();
+  });
+});
+
+describe("resolveAlias", () => {
+  test("returns the target when alias matches", () => {
+    const config = {
+      aliases: {
+        claude: "anthropic/claude-sonnet-4-5",
+        gpt: "openai/gpt-4o",
+      },
+    };
+    expect(resolveAlias(config, "claude")).toBe("anthropic/claude-sonnet-4-5");
+    expect(resolveAlias(config, "gpt")).toBe("openai/gpt-4o");
+  });
+
+  test("returns the input unchanged when no alias matches", () => {
+    const config = {
+      aliases: {
+        claude: "anthropic/claude-sonnet-4-5",
+      },
+    };
+    expect(resolveAlias(config, "openai/gpt-4o")).toBe("openai/gpt-4o");
+    expect(resolveAlias(config, "unknown-model")).toBe("unknown-model");
+  });
+
+  test("returns input when config has no aliases", () => {
+    const config = {};
+    expect(resolveAlias(config, "claude")).toBe("claude");
+    expect(resolveAlias(config, "openai/gpt-4o")).toBe("openai/gpt-4o");
+  });
+
+  test("returns input when aliases is undefined", () => {
+    const config = { aliases: undefined };
+    expect(resolveAlias(config, "claude")).toBe("claude");
+  });
+
+  test("returns input when aliases is empty object", () => {
+    const config = { aliases: {} };
+    expect(resolveAlias(config, "claude")).toBe("claude");
+  });
+
+  test("alias keys are case-sensitive", () => {
+    const config = {
+      aliases: {
+        claude: "anthropic/claude-sonnet-4-5",
+      },
+    };
+    expect(resolveAlias(config, "Claude")).toBe("Claude");
+    expect(resolveAlias(config, "CLAUDE")).toBe("CLAUDE");
+  });
+
+  test("does not recursively resolve aliases", () => {
+    const config = {
+      aliases: {
+        a: "b",
+        b: "openai/gpt-4o",
+      },
+    };
+    // "a" resolves to "b", not to "openai/gpt-4o"
+    expect(resolveAlias(config, "a")).toBe("b");
+  });
+
+  test("handles alias with special characters in value", () => {
+    const config = {
+      aliases: {
+        bedrock: "bedrock/anthropic.claude-sonnet-4-2025-02-19",
+      },
+    };
+    expect(resolveAlias(config, "bedrock")).toBe(
+      "bedrock/anthropic.claude-sonnet-4-2025-02-19",
+    );
+  });
+});
+
+describe("loadConfig with aliases", () => {
+  test("loads config.json with aliases section", async () => {
+    const dir = makeTmpDir();
+    await Bun.write(
+      join(dir, "config.json"),
+      JSON.stringify({
+        model: "claude",
+        aliases: {
+          claude: "anthropic/claude-sonnet-4-5",
+          gpt: "openai/gpt-4o",
+          gemini: "google/gemini-2.5-flash",
+        },
+      }),
+    );
+
+    const config = await loadConfig(dir);
+    expect(config.model).toBe("claude");
+    expect(config.aliases?.claude).toBe("anthropic/claude-sonnet-4-5");
+    expect(config.aliases?.gpt).toBe("openai/gpt-4o");
+    expect(config.aliases?.gemini).toBe("google/gemini-2.5-flash");
+  });
+
+  test("loads config without aliases key (backward compatible)", async () => {
+    const dir = makeTmpDir();
+    await Bun.write(
+      join(dir, "config.json"),
+      JSON.stringify({
+        model: "anthropic/claude-sonnet-4-5",
+        temperature: 0.7,
+      }),
+    );
+
+    const config = await loadConfig(dir);
+    expect(config.model).toBe("anthropic/claude-sonnet-4-5");
+    expect(config.aliases).toBeUndefined();
   });
 });

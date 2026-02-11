@@ -53,6 +53,7 @@ export const ConfigSchema = z.object({
     .optional(),
   maxOutputTokens: z.number().int().positive().optional(),
   providers: z.record(z.string(), ProviderConfigSchema).optional(),
+  aliases: z.record(z.string(), z.string()).optional(),
 });
 
 /**
@@ -63,6 +64,7 @@ export const ConfigSchema = z.object({
  */
 export type Config = z.infer<typeof ConfigSchema> & {
   apiKeys?: Record<string, string>;
+  aliases?: Record<string, string>;
 };
 
 /**
@@ -81,6 +83,20 @@ export function getProviderDefaults(
   providerId: string,
 ): ProviderConfig {
   return config.providers?.[providerId] ?? {};
+}
+
+/**
+ * Resolve a model alias to its full model string.
+ *
+ * Looks up `modelString` in the config's `aliases` map. If found, returns
+ * the target model string. Otherwise returns the input unchanged.
+ *
+ * @param config - The loaded application config.
+ * @param modelString - The model string (possibly an alias) to resolve.
+ * @returns The resolved model string.
+ */
+export function resolveAlias(config: Config, modelString: string): string {
+  return config.aliases?.[modelString] ?? modelString;
 }
 
 const HOME_DIR = Bun.env.HOME ?? Bun.env.USERPROFILE ?? "";

@@ -22,6 +22,7 @@ import {
   listRoles,
   loadConfig,
   loadRole,
+  resolveAlias,
 } from "./config.ts";
 import { handleConfigCommand } from "./config-commands.ts";
 import { APP } from "./constants.ts";
@@ -655,6 +656,11 @@ async function runAction(
   if (!opts.chat && !prompt && images.length === 0) {
     await showUsage(mainCommand);
     process.exit(0);
+  }
+
+  // Resolve model aliases before resolveOptions
+  if (opts.model) {
+    opts.model = resolveAlias(config, opts.model);
   }
 
   const { modelString, system, temperature, maxOutputTokens, markdown } =

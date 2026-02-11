@@ -156,8 +156,16 @@ export async function configShow(): Promise<void> {
   console.log(`  Config directory: ${CONFIG_DIR}`);
   console.log("");
 
-  // Show config.json values
-  const configEntries = flattenObject(config);
+  // Separate aliases from other settings to display in their own section
+  const { aliases: configAliases, ...configWithoutAliases } = config as Record<
+    string,
+    unknown
+  > & { aliases?: Record<string, unknown> };
+
+  // Show config.json values (excluding aliases)
+  const configEntries = flattenObject(
+    configWithoutAliases as Record<string, unknown>,
+  );
   if (configEntries.length > 0) {
     console.log("  Settings (config.json):");
     const maxKeyLen = Math.max(...configEntries.map(([k]) => k.length));
@@ -166,6 +174,21 @@ export async function configShow(): Promise<void> {
     }
   } else {
     console.log("  Settings (config.json): (empty)");
+  }
+
+  // Show aliases in their own section
+  if (
+    configAliases &&
+    typeof configAliases === "object" &&
+    Object.keys(configAliases).length > 0
+  ) {
+    console.log("");
+    console.log("  Model Aliases:");
+    const aliasEntries = Object.entries(configAliases);
+    const maxAliasLen = Math.max(...aliasEntries.map(([k]) => k.length));
+    for (const [alias, target] of aliasEntries) {
+      console.log(`    ${alias.padEnd(maxAliasLen)}  -> ${String(target)}`);
+    }
   }
 
   console.log("");

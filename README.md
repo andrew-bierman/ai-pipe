@@ -225,6 +225,35 @@ ai-pipe -c ./my-config-dir "hello"
 
 > 🔧 **Note:** CLI flags always override config values.
 
+### Model Aliases
+
+Define short names for long model IDs in your config:
+
+**`~/.ai-pipe/config.json`**:
+
+```json
+{
+  "model": "claude",
+  "aliases": {
+    "claude": "anthropic/claude-sonnet-4-5",
+    "gpt": "openai/gpt-4o",
+    "gemini": "google/gemini-2.5-flash",
+    "llama": "groq/llama-3.3-70b-versatile",
+    "deepseek": "deepseek/deepseek-chat"
+  }
+}
+```
+
+Then use the short name with `-m`:
+
+```bash
+ai-pipe -m claude "write a haiku"    # expands to anthropic/claude-sonnet-4-5
+ai-pipe -m gpt "explain monads"       # expands to openai/gpt-4o
+ai-pipe -m gemini "summarize this"    # expands to google/gemini-2.5-flash
+```
+
+The `model` field in config also resolves aliases, so setting `"model": "claude"` uses `anthropic/claude-sonnet-4-5` as the default.
+
 ### Config Commands
 
 Manage your configuration from the command line:
@@ -388,7 +417,7 @@ The release workflow handles `bun publish`, binary builds, and GitHub release.
 - [ ] **Piped chain mode** — chain multiple LLM calls with `|` syntax
 - [ ] **Session export/import** — share conversations as JSON/Markdown
 - [ ] **Token budget** — set a max spend per session with `--budget`
-- [ ] **Model aliases** — short names for long model IDs in config
+- [x] **Model aliases** — short names for long model IDs in config
 
 ## 📚 Documentation
 
