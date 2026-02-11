@@ -249,6 +249,91 @@ describe("PROVIDER_ENV_VARS", () => {
   }
 });
 
+// ── ModelStringSchema edge cases ──────────────────────────────────────
+
+describe("ModelStringSchema edge cases", () => {
+  test("rejects null", () => {
+    const result = ModelStringSchema.safeParse(null);
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects undefined", () => {
+    const result = ModelStringSchema.safeParse(undefined);
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects number", () => {
+    const result = ModelStringSchema.safeParse(123);
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects boolean", () => {
+    const result = ModelStringSchema.safeParse(true);
+    expect(result.success).toBe(false);
+  });
+
+  test("accepts single character model name", () => {
+    const result = ModelStringSchema.parse("x");
+    expect(result.provider).toBe("openai");
+    expect(result.modelId).toBe("x");
+  });
+
+  test("handles whitespace in model string", () => {
+    const result = ModelStringSchema.parse(" openai / gpt-4o ");
+    expect(result.provider).toBe(" openai ");
+    expect(result.modelId).toBe(" gpt-4o ");
+  });
+
+  test("handles very long model string", () => {
+    const longModel = `provider/${"a".repeat(1000)}`;
+    const result = ModelStringSchema.parse(longModel);
+    expect(result.provider).toBe("provider");
+    expect(result.modelId.length).toBe(1000);
+  });
+});
+
+// ── ProviderIdSchema edge cases ──────────────────────────────────────────
+
+describe("ProviderIdSchema edge cases", () => {
+  test("rejects null", () => {
+    expect(ProviderIdSchema.safeParse(null).success).toBe(false);
+  });
+
+  test("rejects number", () => {
+    expect(ProviderIdSchema.safeParse(42).success).toBe(false);
+  });
+
+  test("rejects provider with trailing space", () => {
+    expect(ProviderIdSchema.safeParse("openai ").success).toBe(false);
+  });
+
+  test("rejects provider with leading space", () => {
+    expect(ProviderIdSchema.safeParse(" openai").success).toBe(false);
+  });
+});
+
+// ── parseModel edge cases ────────────────────────────────────────────────
+
+describe("parseModel edge cases", () => {
+  test("handles slash at start", () => {
+    const result = parseModel("/model");
+    expect(result.provider).toBe("");
+    expect(result.modelId).toBe("model");
+  });
+
+  test("handles slash at end", () => {
+    const result = parseModel("openai/");
+    expect(result.provider).toBe("openai");
+    expect(result.modelId).toBe("");
+  });
+
+  test("handles just a slash", () => {
+    const result = parseModel("/");
+    expect(result.provider).toBe("");
+    expect(result.modelId).toBe("");
+  });
+});
+
 // ── registry ───────────────────────────────────────────────────────────
 
 describe("registry", () => {

@@ -102,5 +102,112 @@ describe("generateCompletions", () => {
       const result = generateCompletions("fish");
       expect(result).toContain("~/.config/fish/completions/ai-pipe.fish");
     });
+
+    test("includes short flags", () => {
+      const result = generateCompletions("fish");
+      expect(result).toContain("-s m");
+      expect(result).toContain("-s s");
+      expect(result).toContain("-s r");
+      expect(result).toContain("-s R");
+      expect(result).toContain("-s f");
+      expect(result).toContain("-s j");
+      expect(result).toContain("-s t");
+      expect(result).toContain("-s c");
+      expect(result).toContain("-s V");
+      expect(result).toContain("-s h");
+    });
+  });
+
+  // ── cross-shell consistency ─────────────────────────────────────
+
+  describe("cross-shell consistency", () => {
+    test("all shells include the app name", () => {
+      for (const shell of ["bash", "zsh", "fish"]) {
+        const result = generateCompletions(shell);
+        expect(result).toContain("ai-pipe");
+      }
+    });
+
+    test("all shells are non-empty strings", () => {
+      for (const shell of ["bash", "zsh", "fish"]) {
+        const result = generateCompletions(shell);
+        expect(result.length).toBeGreaterThan(0);
+      }
+    });
+
+    test("all shells include comment at the start", () => {
+      for (const shell of ["bash", "zsh", "fish"]) {
+        const result = generateCompletions(shell);
+        expect(result.startsWith("#")).toBe(true);
+      }
+    });
+
+    test("bash includes shell-specific COMPREPLY", () => {
+      const result = generateCompletions("bash");
+      expect(result).toContain("COMPREPLY");
+      expect(result).toContain("compgen");
+    });
+
+    test("zsh includes shell-specific _arguments", () => {
+      const result = generateCompletions("zsh");
+      expect(result).toContain("_arguments");
+      expect(result).toContain("_describe");
+    });
+
+    test("fish uses complete -c syntax", () => {
+      const result = generateCompletions("fish");
+      expect(result).toContain("complete -c");
+    });
+  });
+
+  // ── zsh additional ──────────────────────────────────────────────
+
+  describe("zsh additional", () => {
+    test("includes all flags in zsh format", () => {
+      const result = generateCompletions("zsh");
+      expect(result).toContain("--model");
+      expect(result).toContain("--system");
+      expect(result).toContain("--role");
+      expect(result).toContain("--roles");
+      expect(result).toContain("--json");
+      expect(result).toContain("--no-stream");
+      expect(result).toContain("--temperature");
+      expect(result).toContain("--max-output-tokens");
+      expect(result).toContain("--config");
+      expect(result).toContain("--providers");
+      expect(result).toContain("--completions");
+      expect(result).toContain("--version");
+      expect(result).toContain("--help");
+    });
+
+    test("includes temperature range in description", () => {
+      const result = generateCompletions("zsh");
+      expect(result).toContain("0-2");
+    });
+  });
+
+  // ── bash additional ──────────────────────────────────────────────
+
+  describe("bash additional", () => {
+    test("includes case statement for completions", () => {
+      const result = generateCompletions("bash");
+      expect(result).toContain("case");
+      expect(result).toContain("esac");
+    });
+
+    test("includes file completion for --file flag", () => {
+      const result = generateCompletions("bash");
+      expect(result).toContain("compgen -f");
+    });
+
+    test("includes directory completion for --config flag", () => {
+      const result = generateCompletions("bash");
+      expect(result).toContain("compgen -d");
+    });
+
+    test("includes shell completions for --completions flag", () => {
+      const result = generateCompletions("bash");
+      expect(result).toContain("bash zsh fish");
+    });
   });
 });
