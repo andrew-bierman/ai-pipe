@@ -5,7 +5,7 @@ import {
   type ModelMessage,
   streamText,
 } from "ai";
-import { program } from "commander";
+import { defineCommand, runMain, showUsage } from "citty";
 import { z } from "zod";
 
 import pkg from "../package.json";
@@ -79,7 +79,7 @@ export type HistoryMessage = z.infer<typeof HistoryMessageSchema>;
 /** Zod schema for validating a full conversation history (array of messages). */
 export const HistorySchema = z.array(HistoryMessageSchema);
 
-/** CLI option values as parsed by Commander and validated by CLIOptionsSchema. */
+/** CLI option values as parsed by citty and validated by CLIOptionsSchema. */
 export interface CLIOptions {
   model?: string;
   system?: string;
@@ -104,7 +104,7 @@ export interface CLIOptions {
   mcp?: string;
 }
 
-/** Zod schema for validating and coercing CLI options from Commander. */
+/** Zod schema for validating and coercing CLI options from citty. */
 export const CLIOptionsSchema = z.object({
   model: z.string().optional(),
   system: z.string().optional(),
@@ -293,7 +293,7 @@ export function buildPrompt({
  * "anthropic/claude-sonnet-4-5") and used to look up provider-specific overrides from
  * the config's `providers` section.
  *
- * @param opts - CLI options as parsed by Commander.
+ * @param opts - CLI options as parsed by citty.
  * @param config - Loaded configuration from config files.
  * @returns The merged options with all values resolved.
  */
@@ -572,7 +572,7 @@ function formatError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-async function run(
+async function runAction(
   promptArgs: string[],
   rawOpts: Record<string, unknown>,
 ): Promise<void> {
@@ -651,8 +651,8 @@ async function run(
 
   const prompt = buildPrompt({ prompt: argPrompt, fileContent, stdinContent });
   if (!opts.chat && !prompt && images.length === 0) {
-    program.help();
-    return;
+    await showUsage(mainCommand);
+    process.exit(0);
   }
 
   const { modelString, system, temperature, maxOutputTokens, markdown } =
@@ -819,76 +819,202 @@ function displayCostIfEnabled({
 }
 
 /**
- * Configure and return the Commander program instance with all CLI options.
+ * Parse repeatable flags (-f/--file and -i/--image) from raw argv.
  *
- * This is the main entry point for the CLI. It registers all flags, options,
- * and the `run()` action handler. Call `.parse()` on the returned program
- * to execute.
+ * citty does not support repeatable options natively, so we manually
+ * extract all occurrences of the specified flags from process.argv.
  *
- * @returns The configured Commander program instance.
+ * @param rawArgs - The raw argv array (typically process.argv.slice(2)).
+ * @param shortFlag - The short form, e.g. "-f".
+ * @param longFlag - The long form, e.g. "--file".
+ * @returns An array of collected values, or undefined if none found.
  */
-export function setupCLI(): typeof program {
-  program
-    .name(APP.name)
-    .description(APP.description)
-    .version(pkg.version)
-    .argument("[prompt...]", "Prompt text. Multiple words are joined.")
-    .option("-m, --model <model>", "Model in provider/model-id format")
-    .option("-s, --system <prompt>", "System prompt")
-    .option(
-      "-r, --role <name>",
-      `Use a role from ~/${APP.configDirName}/roles/`,
-    )
-    .option(
-      "-f, --file <path>",
-      "Include file contents in prompt (repeatable)",
-      (val: string, acc: string[]) => {
-        acc.push(val);
-        return acc;
-      },
-      [] as string[],
-    )
-    .option(
-      "-i, --image <path>",
-      "Include image in prompt for vision models (repeatable)",
-      (val: string, acc: string[]) => {
-        acc.push(val);
-        return acc;
-      },
-      [] as string[],
-    )
-    .option("-j, --json", "Output full JSON response object", false)
-    .option("--no-stream", "Wait for full response, then print")
-    .option("--no-cache", "Disable response caching")
-    .option("--markdown", "Render markdown output", false)
-    .option("--cost", "Show estimated cost of the request", false)
-    .option("--chat", "Start interactive chat mode", false)
-    .option(
-      "-t, --temperature <n>",
-      `Sampling temperature (${APP.temperature.min}-${APP.temperature.max})`,
-      parseFloat,
-    )
-    .option("--max-output-tokens <n>", "Maximum tokens to generate", parseInt)
-    .option("-c, --config <path>", "Path to config directory")
-    .option("-C, --session <name>", "Session name for conversation history")
-    .option("--providers", "List supported providers and their API key status")
-    .option(
-      "--roles",
-      `List available roles from ~/${APP.configDirName}/roles/`,
-    )
-    .option(
-      "--completions <shell>",
-      `Generate shell completions (${APP.supportedShells.join(", ")})`,
-    )
-    .option("--tools <path>", "Path to tools configuration file (JSON)")
-    .option("--mcp <path>", "Path to MCP server configuration file (JSON)")
-    .option("--no-update-check", "Disable update notifications")
-    .action(run);
-
-  return program;
+function parseRepeatableFlag(
+  rawArgs: string[],
+  shortFlag: string,
+  longFlag: string,
+): string[] | undefined {
+  const values: string[] = [];
+  for (let i = 0; i < rawArgs.length; i++) {
+    const arg = rawArgs[i] as string | undefined;
+    if (arg === undefined) continue;
+    if (arg === shortFlag || arg === longFlag) {
+      const next = rawArgs[i + 1];
+      if (next !== undefined && !next.startsWith("-")) {
+        values.push(next);
+        i++; // skip the value
+      }
+    } else if (arg.startsWith(`${longFlag}=`)) {
+      values.push(arg.slice(longFlag.length + 1));
+    }
+  }
+  return values.length > 0 ? values : undefined;
 }
+
+/**
+ * citty command definition for the CLI.
+ *
+ * All options are defined as citty args. Repeatable flags (-f, -i) are
+ * handled separately via parseRepeatableFlag() since citty does not
+ * support repeatable options natively.
+ */
+export const mainCommand = defineCommand({
+  meta: {
+    name: APP.name,
+    version: pkg.version,
+    description: APP.description,
+  },
+  args: {
+    model: {
+      type: "string",
+      alias: "m",
+      description: "Model in provider/model-id format",
+    },
+    system: {
+      type: "string",
+      alias: "s",
+      description: "System prompt",
+    },
+    role: {
+      type: "string",
+      alias: "r",
+      description: `Use a role from ~/${APP.configDirName}/roles/`,
+    },
+    file: {
+      type: "string",
+      alias: "f",
+      description: "Include file contents in prompt (repeatable)",
+    },
+    image: {
+      type: "string",
+      alias: "i",
+      description: "Include image in prompt for vision models (repeatable)",
+    },
+    json: {
+      type: "boolean",
+      alias: "j",
+      description: "Output full JSON response object",
+      default: false,
+    },
+    stream: {
+      type: "boolean",
+      description: "Stream output as it arrives",
+      negativeDescription: "Wait for full response, then print",
+      default: true,
+    },
+    cache: {
+      type: "boolean",
+      description: "Enable response caching",
+      negativeDescription: "Disable response caching",
+      default: true,
+    },
+    markdown: {
+      type: "boolean",
+      description: "Render markdown output",
+      default: false,
+    },
+    cost: {
+      type: "boolean",
+      description: "Show estimated cost of the request",
+      default: false,
+    },
+    chat: {
+      type: "boolean",
+      description: "Start interactive chat mode",
+      default: false,
+    },
+    temperature: {
+      type: "string",
+      alias: "t",
+      description: `Sampling temperature (${APP.temperature.min}-${APP.temperature.max})`,
+    },
+    maxOutputTokens: {
+      type: "string",
+      description: "Maximum tokens to generate",
+    },
+    config: {
+      type: "string",
+      alias: "c",
+      description: "Path to config directory",
+    },
+    session: {
+      type: "string",
+      alias: "C",
+      description: "Session name for conversation history",
+    },
+    providers: {
+      type: "boolean",
+      description: "List supported providers and their API key status",
+      default: false,
+    },
+    roles: {
+      type: "boolean",
+      description: `List available roles from ~/${APP.configDirName}/roles/`,
+      default: false,
+    },
+    completions: {
+      type: "string",
+      description: `Generate shell completions (${APP.supportedShells.join(", ")})`,
+    },
+    tools: {
+      type: "string",
+      description: "Path to tools configuration file (JSON)",
+    },
+    mcp: {
+      type: "string",
+      description: "Path to MCP server configuration file (JSON)",
+    },
+    updateCheck: {
+      type: "boolean",
+      description: "Check for updates after execution",
+      negativeDescription: "Disable update notifications",
+      default: true,
+    },
+  },
+  async run({ args, rawArgs }) {
+    // Collect positional args (prompt words) from citty's _ array
+    const promptArgs = args._ || [];
+
+    // Parse repeatable flags manually (citty does not support repeatable options)
+    const files = parseRepeatableFlag(rawArgs, "-f", "--file");
+    const images = parseRepeatableFlag(rawArgs, "-i", "--image");
+
+    // Map citty's parsed args to the CLIOptions shape
+    const rawOpts: Record<string, unknown> = {
+      model: args.model,
+      system: args.system,
+      role: args.role,
+      file: files,
+      image: images,
+      json: args.json,
+      stream: args.stream,
+      cache: args.cache,
+      markdown: args.markdown,
+      cost: args.cost,
+      chat: args.chat,
+      temperature:
+        args.temperature !== undefined
+          ? Number.parseFloat(args.temperature)
+          : undefined,
+      maxOutputTokens:
+        args.maxOutputTokens !== undefined
+          ? Number.parseInt(args.maxOutputTokens, 10)
+          : undefined,
+      config: args.config,
+      session: args.session,
+      providers: args.providers,
+      roles: args.roles,
+      completions: args.completions,
+      tools: args.tools,
+      mcp: args.mcp,
+      updateCheck: args.updateCheck,
+    };
+
+    await runAction(promptArgs, rawOpts);
+  },
+});
 
 // Only run CLI when executed directly (Bun), not when imported
 if (import.meta.main) {
-  setupCLI().parse();
+  runMain(mainCommand);
 }
