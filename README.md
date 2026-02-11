@@ -345,7 +345,7 @@ Binaries are output to `dist/`.
 bun install
 
 # Run tests
-bun test              # 542 tests across 12 files
+bun test              # 646 tests across 17 files
 
 # Type checking
 bun run typecheck     # TypeScript type checking
@@ -377,10 +377,18 @@ The release workflow handles `bun publish`, binary builds, and GitHub release.
 - [x] **Response caching** — skip duplicate API calls for identical prompts
 - [x] **Update notifications** — check for new versions and prompt to upgrade
 - [x] **Tool use** — function calling and MCP support
-- [ ] **Interactive chat mode** — back-and-forth conversation in the CLI
-- [ ] **MCP support** — Model Context Protocol for tool integration
-- [ ] **Provider-specific defaults** — per-provider temperature/maxTokens in config
-- [ ] **Streaming markdown** — progressive markdown rendering during streaming
+- [x] **Interactive chat mode** — back-and-forth conversation with `--chat`
+- [x] **MCP support** — Model Context Protocol via `@ai-sdk/mcp`
+- [x] **Provider-specific defaults** — per-provider temperature/maxTokens in config
+- [x] **Streaming markdown** — progressive markdown rendering during streaming
+- [x] **Config commands** — `ai-pipe init` wizard, `config set/show/reset/path`
+- [x] **citty migration** — replaced Commander.js with citty (UnJS)
+- [ ] **Prompt templates** — reusable prompt snippets in `~/.ai-pipe/templates/`
+- [ ] **Output formats** — CSV, YAML, TOML structured output modes
+- [ ] **Piped chain mode** — chain multiple LLM calls with `|` syntax
+- [ ] **Session export/import** — share conversations as JSON/Markdown
+- [ ] **Token budget** — set a max spend per session with `--budget`
+- [ ] **Model aliases** — short names for long model IDs in config
 
 ## 📚 Documentation
 
