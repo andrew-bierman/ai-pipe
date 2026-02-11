@@ -388,7 +388,8 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
           };
           process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
         } else {
-          process.stdout.write(`${result.text}\n`);
+          const output = markdown ? renderMarkdown(result.text) : `${result.text}\n`;
+          process.stdout.write(output);
         }
 
         // Display cost if requested
@@ -406,7 +407,11 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
           process.stdout.write(chunk);
           fullResponse += chunk;
         }
-        process.stdout.write("\n");
+        if (markdown) {
+          process.stdout.write(`\r\x1b[2K${renderMarkdown(fullResponse)}`);
+        } else {
+          process.stdout.write("\n");
+        }
 
         // Save to history
         messages.push({ role: "assistant", content: fullResponse });
@@ -435,7 +440,8 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
           };
           process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
         } else {
-          process.stdout.write(`${result.text}\n`);
+          const output = markdown ? renderMarkdown(result.text) : `${result.text}\n`;
+          process.stdout.write(output);
         }
 
         // Display cost if requested
@@ -449,10 +455,16 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
           maxOutputTokens,
         });
 
+        let fullResponse = "";
         for await (const chunk of result.textStream) {
           process.stdout.write(chunk);
+          fullResponse += chunk;
         }
-        process.stdout.write("\n");
+        if (markdown) {
+          process.stdout.write(`\r\x1b[2K${renderMarkdown(fullResponse)}`);
+        } else {
+          process.stdout.write("\n");
+        }
 
         // Display cost if requested (usage is available after stream completes)
         displayCostIfEnabled(await result.usage, modelString, opts.cost);
