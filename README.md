@@ -299,11 +299,11 @@ The release workflow handles `bun publish`, binary builds, and GitHub release.
 - [x] **17 providers** — OpenAI, Anthropic, Google, and 14 more
 - [x] **npm publishing** — `npm install -g ai-pipe` / `bun install -g ai-pipe`
 - [x] **File attachments** — include file contents in prompts with `-f`
-- [ ] **Conversation history** — continue previous conversations with `-C`, named sessions with `--session`
-- [ ] **Image input** — attach images for vision models with `--image`
-- [ ] **Roles** — saved system prompts in `~/.ai-pipe/roles/` (e.g. `ai-pipe --role reviewer`)
-- [ ] **Markdown rendering** — syntax-highlighted, formatted output in the terminal
-- [ ] **Cost tracking** — show estimated token costs per request
+- [x] **Conversation history** — continue previous conversations with `-C`, named sessions with `--session`
+- [x] **Image input** — attach images for vision models with `--image`
+- [x] **Roles** — saved system prompts in `~/.ai-pipe/roles/` (e.g. `ai-pipe --role reviewer`)
+- [x] **Markdown rendering** — syntax-highlighted, formatted output in the terminal
+- [x] **Cost tracking** — show estimated token costs per request
 - [ ] **Response caching** — skip duplicate API calls for identical prompts
 - [ ] **Update notifications** — check for new versions and prompt to upgrade
 - [ ] **Tool use** — function calling and MCP support
