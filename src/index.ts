@@ -4,6 +4,11 @@ import { generateText, type ModelMessage, streamText } from "ai";
 import { program } from "commander";
 import { z } from "zod";
 import pkg from "../package.json";
+import {
+  buildCacheKey,
+  getCachedResponse,
+  setCachedResponse,
+} from "./cache.ts";
 import { generateCompletions } from "./completions.ts";
 import { type Config, listRoles, loadConfig, loadRole } from "./config.ts";
 import { APP } from "./constants.ts";
@@ -56,6 +61,7 @@ export interface CLIOptions {
   completions?: string;
   session?: string;
   roles?: boolean;
+  cache: boolean;
 }
 
 export const CLIOptionsSchema = z.object({
@@ -79,6 +85,7 @@ export const CLIOptionsSchema = z.object({
   completions: z.string().optional(),
   session: z.string().optional(),
   roles: z.boolean().optional(),
+  cache: z.boolean().optional().default(true),
 });
 
 export const JsonOutputSchema = z.object({
@@ -417,6 +424,37 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
       }
     } else {
       // Use regular prompt mode
+      const useCache = opts.cache && (opts.json || !opts.stream);
+      const cacheKey = useCache
+        ? buildCacheKey({
+            model: modelString,
+            system: systemPrompt,
+            prompt,
+            temperature,
+            maxOutputTokens,
+          })
+        : null;
+
+      // Check cache before making API call
+      if (cacheKey) {
+        const cached = await getCachedResponse(cacheKey);
+        if (cached) {
+          if (opts.json) {
+            const output: JsonOutput = {
+              text: cached.text,
+              model: cached.model,
+              usage: cached.usage,
+              finishReason: cached.finishReason,
+            };
+            process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+          } else {
+            process.stdout.write(`${cached.text}\n`);
+          }
+          displayCostIfEnabled(cached.usage, modelString, opts.cost);
+          return;
+        }
+      }
+
       if (opts.json || !opts.stream) {
         const result = await generateText({
           model,
@@ -425,6 +463,16 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
           temperature,
           maxOutputTokens,
         });
+
+        // Store in cache
+        if (cacheKey) {
+          await setCachedResponse(cacheKey, {
+            text: result.text,
+            usage: result.usage,
+            finishReason: result.finishReason,
+            model: modelString,
+          });
+        }
 
         if (opts.json) {
           const output: JsonOutput = {
@@ -512,6 +560,7 @@ export function setupCLI() {
     )
     .option("-j, --json", "Output full JSON response object", false)
     .option("--no-stream", "Wait for full response, then print")
+    .option("--no-cache", "Disable response caching")
     .option("--markdown", "Render markdown output", false)
     .option("--cost", "Show estimated cost of the request", false)
     .option(
