@@ -280,7 +280,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
     const rolesDir = `~/${APP.configDirName}/roles/`;
     if (roles.length === 0) {
       console.log(`No roles found. Create role files in ${rolesDir}`);
-      console.log(`Example: ${rolesDir}reviewer.txt`);
+      console.log(`Example: ${rolesDir}reviewer.md`);
     } else {
       console.log("Available roles:");
       for (const role of roles) {
