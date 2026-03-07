@@ -142,6 +142,13 @@ describe("parseModel", () => {
       "meta-llama/Llama-3.3-70b-Instruct",
       "huggingface/meta-llama/Llama-3.3-70b-Instruct",
     ],
+    ["cerebras/llama3.1-8b", "cerebras", "llama3.1-8b", "cerebras/llama3.1-8b"],
+    [
+      "gateway/openai/gpt-4o",
+      "gateway",
+      "openai/gpt-4o",
+      "gateway/openai/gpt-4o",
+    ],
   ];
 
   for (const [input, provider, modelId, fullId] of cases) {
@@ -174,8 +181,8 @@ describe("parseModel", () => {
 // ── SUPPORTED_PROVIDERS ────────────────────────────────────────────────
 
 describe("SUPPORTED_PROVIDERS", () => {
-  test("has exactly 18 providers", () => {
-    expect(SUPPORTED_PROVIDERS).toHaveLength(18);
+  test("has exactly 20 providers", () => {
+    expect(SUPPORTED_PROVIDERS).toHaveLength(20);
   });
 
   test("includes all expected providers", () => {
@@ -198,6 +205,8 @@ describe("SUPPORTED_PROVIDERS", () => {
       "vertex",
       "ollama",
       "huggingface",
+      "cerebras",
+      "gateway",
     ];
     for (const p of expected) {
       expect(SUPPORTED_PROVIDERS).toContain(p);
@@ -240,6 +249,8 @@ describe("PROVIDER_ENV_VARS", () => {
     ollama: ["OLLAMA_HOST"],
     huggingface: ["HF_TOKEN"],
     deepinfra: ["DEEPINFRA_API_KEY"],
+    cerebras: ["CEREBRAS_API_KEY"],
+    gateway: ["AI_GATEWAY_API_KEY"],
   };
 
   for (const [provider, envVars] of Object.entries(expected)) {

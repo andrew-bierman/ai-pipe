@@ -36,6 +36,8 @@ const PROVIDER_LABELS: Record<ProviderId, string> = {
   ollama: "Ollama (Local)",
   huggingface: "Hugging Face",
   deepinfra: "DeepInfra",
+  cerebras: "Cerebras",
+  gateway: "Vercel AI Gateway",
 };
 
 /**
@@ -143,6 +145,21 @@ const POPULAR_MODELS: Record<string, { value: string; label: string }[]> = {
     {
       value: "deepinfra/meta-llama/Llama-3.3-70B-Instruct",
       label: "Llama 3.3 70B",
+    },
+  ],
+  cerebras: [
+    { value: "cerebras/llama3.1-8b", label: "Llama 3.1 8B (fast)" },
+    { value: "cerebras/llama-3.3-70b", label: "Llama 3.3 70B" },
+  ],
+  gateway: [
+    { value: "gateway/openai/gpt-4o", label: "GPT-4o via Gateway" },
+    {
+      value: "gateway/anthropic/claude-3.5-sonnet",
+      label: "Claude 3.5 Sonnet via Gateway",
+    },
+    {
+      value: "gateway/google/gemini-2.5-flash",
+      label: "Gemini 2.5 Flash via Gateway",
     },
   ],
 };

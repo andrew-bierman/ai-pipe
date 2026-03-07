@@ -1,10 +1,12 @@
 import { bedrock } from "@ai-sdk/amazon-bedrock";
 import { anthropic } from "@ai-sdk/anthropic";
 import { azure } from "@ai-sdk/azure";
+import { cerebras } from "@ai-sdk/cerebras";
 import { cohere } from "@ai-sdk/cohere";
 import { deepinfra } from "@ai-sdk/deepinfra";
 import { deepseek } from "@ai-sdk/deepseek";
 import { fireworks } from "@ai-sdk/fireworks";
+import { gateway } from "@ai-sdk/gateway";
 import { google } from "@ai-sdk/google";
 import { vertex } from "@ai-sdk/google-vertex";
 import { groq } from "@ai-sdk/groq";
@@ -51,6 +53,8 @@ export const registry = createProviderRegistry(
     ollama,
     huggingface,
     deepinfra,
+    cerebras,
+    gateway,
   },
   { separator: "/" },
 );
@@ -75,6 +79,8 @@ export const SUPPORTED_PROVIDERS = Object.freeze([
   "ollama",
   "huggingface",
   "deepinfra",
+  "cerebras",
+  "gateway",
 ] as const);
 
 /** Zod schema for validating a provider ID against the supported providers list. */
@@ -109,6 +115,8 @@ export const PROVIDER_ENV_VARS: Record<ProviderId, readonly string[]> = {
   ollama: ["OLLAMA_HOST"],
   huggingface: ["HF_TOKEN"],
   deepinfra: ["DEEPINFRA_API_KEY"],
+  cerebras: ["CEREBRAS_API_KEY"],
+  gateway: ["AI_GATEWAY_API_KEY"],
 } as const satisfies Record<ProviderId, readonly string[]>;
 
 /**
