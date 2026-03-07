@@ -30,7 +30,7 @@ _${funcName}_completions() {
   COMPREPLY=()
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
-  opts="--model --system --role --roles --file --json --no-stream --temperature --max-output-tokens --config --providers --completions --version --help"
+  opts="--model --system --role --roles --file --image --json --no-stream --temperature --max-output-tokens --config --markdown --cost --session --tools --providers --completions --version --help"
   providers="${providers}"
 
   case "\${prev}" in
@@ -47,6 +47,17 @@ _${funcName}_completions() {
       COMPREPLY=( $(compgen -f -- "\${cur}") )
       return 0
       ;;
+    -i|--image)
+      COMPREPLY=( $(compgen -f -- "\${cur}") )
+      return 0
+      ;;
+    --tools)
+      COMPREPLY=( $(compgen -f -- "\${cur}") )
+      return 0
+      ;;
+    -C|--session)
+      return 0
+      ;;
     -c|--config)
       COMPREPLY=( $(compgen -d -- "\${cur}") )
       return 0
@@ -55,7 +66,7 @@ _${funcName}_completions() {
       COMPREPLY=( $(compgen -W "${shells}" -- "\${cur}") )
       return 0
       ;;
-    -s|--system|-r|--role|--roles|-t|--temperature|--max-output-tokens)
+    -s|--system|-r|--role|--roles|-t|--temperature|--max-output-tokens|--cost|--markdown)
       return 0
       ;;
   esac
@@ -79,13 +90,18 @@ _${funcName}() {
     '(-m --model)'{-m,--model}'[Model in provider/model-id format]:model:->models' \\
     '(-s --system)'{-s,--system}'[System prompt]:prompt:' \\
     '(-r --role)'{-r,--role}'[Role name from roles directory]:role:' \\
-    '(-R --roles)'{-R,--roles}'[List available roles]' \\
+    '--roles[List available roles]' \\
     '*'{-f,--file}'[Include file contents]:file:_files' \\
+    '(-i --image)'{-i,--image}'[Include image file]:file:_files' \\
     '(-j --json)'{-j,--json}'[Output full JSON response object]' \\
     '--no-stream[Wait for full response, then print]' \\
     '(-t --temperature)'{-t,--temperature}'[Sampling temperature (${APP.temperature.min}-${APP.temperature.max})]:temp:' \\
     '--max-output-tokens[Maximum tokens to generate]:tokens:' \\
     '(-c --config)'{-c,--config}'[Path to config directory]:dir:_directories' \\
+    '--markdown[Render markdown output]' \\
+    '--cost[Show estimated cost of the request]' \\
+    '(-C --session)'{-C,--session}'[Session name for conversation history]:name:' \\
+    '--tools[Path to tools configuration file]:file:_files' \\
     '--providers[List supported providers]' \\
     '--completions[Generate shell completions]:shell:(${shells})' \\
     '(-V --version)'{-V,--version}'[Print version]' \\
@@ -108,13 +124,18 @@ function fish(): string {
 complete -c ${name} -s m -l model -d 'Model in provider/model-id format' -x -a '${SUPPORTED_PROVIDERS.map((p) => `${p}/`).join(" ")}'
 complete -c ${name} -s s -l system -d 'System prompt' -x
 complete -c ${name} -s r -l role -d 'Role name from roles directory' -x
-complete -c ${name} -s R -l roles -d 'List available roles'
+complete -c ${name} -l roles -d 'List available roles'
 complete -c ${name} -s f -l file -d 'Include file contents in prompt (repeatable)' -r -F
+complete -c ${name} -s i -l image -d 'Include image file' -r -F
 complete -c ${name} -s j -l json -d 'Output full JSON response object'
 complete -c ${name} -l no-stream -d 'Wait for full response, then print'
 complete -c ${name} -s t -l temperature -d 'Sampling temperature (${APP.temperature.min}-${APP.temperature.max})' -x
 complete -c ${name} -l max-output-tokens -d 'Maximum tokens to generate' -x
 complete -c ${name} -s c -l config -d 'Path to config directory' -x -a '(__fish_complete_directories)'
+complete -c ${name} -l markdown -d 'Render markdown output'
+complete -c ${name} -l cost -d 'Show estimated cost of the request'
+complete -c ${name} -s C -l session -d 'Session name for conversation history' -x
+complete -c ${name} -l tools -d 'Path to tools configuration file' -r -F
 complete -c ${name} -l providers -d 'List supported providers'
 complete -c ${name} -l completions -d 'Generate shell completions' -x -a '${shells}'
 complete -c ${name} -s V -l version -d 'Print version'
