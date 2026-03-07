@@ -220,6 +220,7 @@ Models are queried in parallel for speed. Each result shows the model name, resp
 | Vertex | `GOOGLE_VERTEX_PROJECT`, `GOOGLE_VERTEX_LOCATION` | `vertex/google/cloud/llama-3.1` |
 | Ollama | `OLLAMA_HOST` | `ollama/llama3` |
 | HuggingFace | `HF_TOKEN` | `huggingface/meta-llama/Llama-3.3-70b-Instruct` |
+| DeepInfra | `DEEPINFRA_API_KEY` | `deepinfra/meta-llama/Llama-3.3-70b-Instruct` |
 
 ## ⚙️ Configuration
 
@@ -524,14 +525,20 @@ Commands:
 Options:
   -m, --model <model>          Model in provider/model-id format
   -s, --system <prompt>        System prompt
+  -r, --role <name>            Use a saved role from ~/.ai-pipe/roles/
   -f, --file <path>            Include file contents in prompt (repeatable)
+  -i, --image <path>           Include image in prompt for vision models (repeatable)
   -j, --json                   Output full JSON response object
   -F, --format <fmt>           Output format (json, yaml, csv, text)
   --no-stream                  Wait for full response, then print
+  --markdown                   Render markdown output
+  --cost                       Show estimated cost of the request
   -t, --temperature <n>        Sampling temperature (0-2)
   --max-output-tokens <n>      Maximum tokens to generate
   -c, --config <path>          Path to config directory
+  -C, --session <name>         Session name for conversation history
   --providers                  List supported providers and their API key status
+  --roles                      List available roles from ~/.ai-pipe/roles/
   --completions <shell>        Generate shell completions (bash, zsh, fish)
   -i, --image <path>           Attach image for vision models (repeatable)
   -r, --role <name>            Use a saved system prompt from ~/.ai-pipe/roles/
@@ -636,7 +643,7 @@ The release workflow handles `bun publish`, binary builds, and GitHub release.
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details.
+Contributions are welcome!
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
