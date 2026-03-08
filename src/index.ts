@@ -476,17 +476,18 @@ async function handleSessionCommand(args: string[]): Promise<void> {
         console.log(`  - ${name}`);
       }
     }
-    return;
+    process.exit(0);
   }
 
   if (subcommand === "export") {
-    const name = args[1];
-    if (!name) {
+    const rawName = args[1];
+    if (!rawName) {
       console.error(
         "Error: Session name required. Usage: ai-pipe session export <name> [--format json|md]",
       );
       process.exit(1);
     }
+    const name = sanitizeSessionName(rawName);
     // Check for --format flag
     let format = "json";
     const formatIdx = args.indexOf("--format");
@@ -499,22 +500,30 @@ async function handleSessionCommand(args: string[]): Promise<void> {
       );
       process.exit(1);
     }
-    const output =
-      format === "md"
-        ? await exportSessionMarkdown(name)
-        : await exportSessionJson(name);
-    process.stdout.write(output);
+    try {
+      const output =
+        format === "md"
+          ? await exportSessionMarkdown(name)
+          : await exportSessionJson(name);
+      process.stdout.write(output);
+    } catch (err: unknown) {
+      console.error(
+        `Error: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      process.exit(1);
+    }
     return;
   }
 
   if (subcommand === "import") {
-    const name = args[1];
-    if (!name) {
+    const rawName = args[1];
+    if (!rawName) {
       console.error(
         "Error: Session name required. Usage: ai-pipe session import <name> <file>",
       );
       process.exit(1);
     }
+    const name = sanitizeSessionName(rawName);
     // Read from file argument or stdin
     let content: string;
     const filePath = args[2];
@@ -546,13 +555,14 @@ async function handleSessionCommand(args: string[]): Promise<void> {
   }
 
   if (subcommand === "delete") {
-    const name = args[1];
-    if (!name) {
+    const rawName = args[1];
+    if (!rawName) {
       console.error(
         "Error: Session name required. Usage: ai-pipe session delete <name>",
       );
       process.exit(1);
     }
+    const name = sanitizeSessionName(rawName);
     try {
       await deleteSession(name);
       console.log(`Session "${name}" deleted.`);
@@ -1062,6 +1072,15 @@ async function runAction(
       console.error(
         `Error: Role "${opts.role}" not found. Create it at ~/${APP.configDirName}/roles/${roleFilename} or run "ai-pipe --roles" to see available roles.`,
       );
+      process.exit(1);
+    }
+  }
+
+  // Validate chain config file exists before resolving model (which checks API keys)
+  if (opts.chain) {
+    const chainFile = Bun.file(opts.chain);
+    if (!(await chainFile.exists())) {
+      console.error(`Error: Chain config not found: ${opts.chain}`);
       process.exit(1);
     }
   }
