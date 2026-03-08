@@ -903,20 +903,6 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
 }
 
 /**
- * Walk an error's cause chain to find an API call error (one with statusCode).
- */
-function findApiError(err: unknown): (Error & { statusCode: number }) | null {
-  let current: unknown = err;
-  for (let i = 0; i < 10 && current; i++) {
-    if (current instanceof Error && "statusCode" in current) {
-      return current as Error & { statusCode: number };
-    }
-    current = current instanceof Error ? current.cause : undefined;
-  }
-  return null;
-}
-
-/**
  * Format an error for display.
  *
  * For AI SDK API call errors (which carry a `statusCode`), produce a clean
