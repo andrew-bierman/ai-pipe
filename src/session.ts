@@ -11,7 +11,7 @@ const HISTORY_DIR = join(HOME_DIR, APP.configDirName, "history");
  * Export a session to JSON format.
  *
  * Reads the session file from the history directory and returns its
- * contents as a formatted JSON string. Returns "[]" if the session
+ * contents as a formatted JSON string. Throws if the session
  * does not exist.
  *
  * @param sessionName - The name of the session to export.
@@ -21,7 +21,7 @@ export async function exportSessionJson(sessionName: string): Promise<string> {
   const path = join(HISTORY_DIR, `${sessionName}.json`);
   const file = Bun.file(path);
   if (!(await file.exists())) {
-    return JSON.stringify([], null, 2);
+    throw new Error(`Session "${sessionName}" not found`);
   }
   const content = await file.text();
   // Parse and re-serialize to ensure valid, formatted JSON
@@ -33,8 +33,7 @@ export async function exportSessionJson(sessionName: string): Promise<string> {
  * Export a session to Markdown format.
  *
  * Each message becomes a heading (## User / ## Assistant / ## System)
- * followed by its content. Returns an empty string if the session
- * does not exist.
+ * followed by its content. Throws if the session does not exist.
  *
  * @param sessionName - The name of the session to export.
  * @returns A Markdown-formatted string of the conversation.
@@ -45,7 +44,7 @@ export async function exportSessionMarkdown(
   const path = join(HISTORY_DIR, `${sessionName}.json`);
   const file = Bun.file(path);
   if (!(await file.exists())) {
-    return "";
+    throw new Error(`Session "${sessionName}" not found`);
   }
   const content = await file.text();
   const raw = JSON.parse(content);

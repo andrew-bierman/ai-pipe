@@ -40,27 +40,26 @@ async function writeSession(
 // ── exportSessionJson ─────────────────────────────────────────────────
 
 describe("exportSessionJson", () => {
-  test("returns valid JSON for an existing session", async () => {
-    // We can't override the module's HISTORY_DIR, so we test the function
-    // by verifying it returns "[]" for a non-existent session.
-    const result = await exportSessionJson(`nonexistent-${Date.now()}`);
-    const parsed = JSON.parse(result);
-    expect(Array.isArray(parsed)).toBe(true);
-    expect(parsed).toEqual([]);
+  test("throws for non-existent session", async () => {
+    expect(exportSessionJson(`nonexistent-${Date.now()}`)).rejects.toThrow(
+      "not found",
+    );
   });
 
-  test("returns empty array JSON for missing session", async () => {
-    const result = await exportSessionJson(`missing-session-${Date.now()}`);
-    expect(result).toBe(JSON.stringify([], null, 2));
+  test("throws for missing session", async () => {
+    expect(exportSessionJson(`missing-session-${Date.now()}`)).rejects.toThrow(
+      "not found",
+    );
   });
 });
 
 // ── exportSessionMarkdown ─────────────────────────────────────────────
 
 describe("exportSessionMarkdown", () => {
-  test("returns empty string for missing session", async () => {
-    const result = await exportSessionMarkdown(`missing-session-${Date.now()}`);
-    expect(result).toBe("");
+  test("throws for missing session", async () => {
+    expect(
+      exportSessionMarkdown(`missing-session-${Date.now()}`),
+    ).rejects.toThrow("not found");
   });
 });
 
@@ -130,9 +129,8 @@ describe("deleteSession", () => {
     // Delete it
     await deleteSession(sessionName);
 
-    // Verify it's gone by trying to export (should return empty)
-    const exported = await exportSessionJson(sessionName);
-    expect(JSON.parse(exported)).toEqual([]);
+    // Verify it's gone by trying to export (should throw)
+    expect(exportSessionJson(sessionName)).rejects.toThrow("not found");
   });
 });
 

@@ -499,11 +499,18 @@ async function handleSessionCommand(args: string[]): Promise<void> {
       );
       process.exit(1);
     }
-    const output =
-      format === "md"
-        ? await exportSessionMarkdown(name)
-        : await exportSessionJson(name);
-    process.stdout.write(output);
+    try {
+      const output =
+        format === "md"
+          ? await exportSessionMarkdown(name)
+          : await exportSessionJson(name);
+      process.stdout.write(output);
+    } catch (err: unknown) {
+      console.error(
+        `Error: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      process.exit(1);
+    }
     return;
   }
 
