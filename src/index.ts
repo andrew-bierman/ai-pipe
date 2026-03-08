@@ -480,13 +480,14 @@ async function handleSessionCommand(args: string[]): Promise<void> {
   }
 
   if (subcommand === "export") {
-    const name = args[1];
-    if (!name) {
+    const rawName = args[1];
+    if (!rawName) {
       console.error(
         "Error: Session name required. Usage: ai-pipe session export <name> [--format json|md]",
       );
       process.exit(1);
     }
+    const name = sanitizeSessionName(rawName);
     // Check for --format flag
     let format = "json";
     const formatIdx = args.indexOf("--format");
@@ -515,13 +516,14 @@ async function handleSessionCommand(args: string[]): Promise<void> {
   }
 
   if (subcommand === "import") {
-    const name = args[1];
-    if (!name) {
+    const rawName = args[1];
+    if (!rawName) {
       console.error(
         "Error: Session name required. Usage: ai-pipe session import <name> <file>",
       );
       process.exit(1);
     }
+    const name = sanitizeSessionName(rawName);
     // Read from file argument or stdin
     let content: string;
     const filePath = args[2];
@@ -553,13 +555,14 @@ async function handleSessionCommand(args: string[]): Promise<void> {
   }
 
   if (subcommand === "delete") {
-    const name = args[1];
-    if (!name) {
+    const rawName = args[1];
+    if (!rawName) {
       console.error(
         "Error: Session name required. Usage: ai-pipe session delete <name>",
       );
       process.exit(1);
     }
+    const name = sanitizeSessionName(rawName);
     try {
       await deleteSession(name);
       console.log(`Session "${name}" deleted.`);
