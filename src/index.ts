@@ -1,44 +1,111 @@
-import { homedir } from "node:os";
+#!/usr/bin/env bun
 import { join } from "node:path";
-import { generateText, type ModelMessage, streamText } from "ai";
-import { program } from "commander";
+import {
+  generateText,
+  type LanguageModel,
+  type ModelMessage,
+  streamText,
+} from "ai";
+import { defineCommand, runMain, showUsage } from "citty";
 import { z } from "zod";
+
 import pkg from "../package.json";
+import {
+  buildCacheKey,
+  getCachedResponse,
+  setCachedResponse,
+} from "./cache.ts";
+import { executeChain, loadChainConfig } from "./chain.ts";
+import { startChat } from "./chat.ts";
 import { generateCompletions } from "./completions.ts";
-import { type Config, listRoles, loadConfig, loadRole } from "./config.ts";
+import {
+  type Config,
+  getProviderDefaults,
+  listRoles,
+  loadConfig,
+  loadRole,
+  resolveAlias,
+} from "./config.ts";
+import { handleConfigCommand } from "./config-commands.ts";
 import { APP } from "./constants.ts";
+import type { UsageInfo } from "./cost.ts";
 import { calculateCost, formatCost, parseModelString } from "./cost.ts";
+import {
+  type DiffOptions,
+  formatDiffJson,
+  formatDiffResults,
+  runDiff,
+} from "./diff.ts";
+import {
+  formatOutput,
+  type OutputFormat,
+  OutputFormatSchema,
+} from "./formats.ts";
+import { runInit } from "./init.ts";
 import { renderMarkdown } from "./markdown.ts";
+import { loadMCPConfig, MCPManager } from "./mcp.ts";
+import { PluginManager } from "./plugins.ts";
 import {
   PROVIDER_ENV_VARS,
   ProviderIdSchema,
   printProviders,
   resolveModel,
 } from "./provider.ts";
+import { withRetry } from "./retry.ts";
+import {
+  deleteSession,
+  exportSessionJson,
+  exportSessionMarkdown,
+  importSession,
+  listSessions,
+} from "./session.ts";
+import { StreamingMarkdownRenderer } from "./streaming-markdown.ts";
+import { applyTemplate, listTemplates, loadTemplate } from "./templates.ts";
+import { loadToolsConfig } from "./tools.ts";
+import { checkForUpdates } from "./update.ts";
 
 // Session name sanitization: only allow alphanumeric, hyphens, underscores
 const SESSION_NAME_REGEX = /^[A-Za-z0-9_-]+$/;
-const SESSION_SCHEMA = z.string().regex(SESSION_NAME_REGEX);
 
+/**
+ * Sanitize a session name by replacing invalid characters with underscores.
+ *
+ * Only alphanumeric characters, hyphens, and underscores are preserved.
+ * All other characters are replaced with "_" to prevent directory traversal
+ * and filesystem issues.
+ *
+ * @param session - The raw session name to sanitize.
+ * @returns A sanitized session name safe for use as a filename.
+ */
 export function sanitizeSessionName(session: string): string {
   return session.replace(/[^A-Za-z0-9_-]/g, "_");
 }
 
+/**
+ * Check whether a session name contains only valid characters.
+ *
+ * Valid characters: A-Z, a-z, 0-9, hyphens, and underscores.
+ *
+ * @param session - The session name to validate.
+ * @returns `true` if the session name is valid, `false` otherwise.
+ */
 export function isValidSessionName(session: string): boolean {
   return SESSION_NAME_REGEX.test(session);
 }
 
-// Zod schema for history messages
+/** Zod schema for a single conversation history message. */
 export const HistoryMessageSchema = z.object({
   role: z.enum(["user", "assistant", "system"]),
   content: z.string(),
 });
 
+/** A single message in the conversation history. */
 export type HistoryMessage = z.infer<typeof HistoryMessageSchema>;
 
-// History file schema: array of messages
+/** Zod schema for validating a full conversation history (array of messages). */
 export const HistorySchema = z.array(HistoryMessageSchema);
 
+/** CLI option values as parsed by citty and validated by CLIOptionsSchema. */
 export interface CLIOptions {
   model?: string;
   system?: string;
@@ -49,6 +116,7 @@ export interface CLIOptions {
   stream: boolean;
   markdown: boolean;
   cost: boolean;
+  chat: boolean;
   temperature?: number;
   maxOutputTokens?: number;
   config?: string;
@@ -56,9 +124,22 @@ export interface CLIOptions {
   completions?: string;
   session?: string;
   roles?: boolean;
+  template?: string;
+  templates?: boolean;
+  cache: boolean;
+  updateCheck?: boolean;
+  retries?: number;
+  format?: OutputFormat;
   tools?: string;
+  mcp?: string;
+  budget?: number;
+  chain?: string;
+  verbose?: boolean;
+  plugins?: string;
+  diff?: string;
 }
 
+/** Zod schema for validating and coercing CLI options from citty. */
 export const CLIOptionsSchema = z.object({
   model: z.string().optional(),
   system: z.string().optional(),
@@ -69,6 +150,7 @@ export const CLIOptionsSchema = z.object({
   stream: z.boolean(),
   markdown: z.boolean().optional().default(false),
   cost: z.boolean().optional().default(false),
+  chat: z.boolean().optional().default(false),
   temperature: z
     .number()
     .min(APP.temperature.min)
@@ -80,9 +162,27 @@ export const CLIOptionsSchema = z.object({
   completions: z.string().optional(),
   session: z.string().optional(),
   roles: z.boolean().optional(),
+  template: z.string().optional(),
+  templates: z.boolean().optional(),
+  cache: z.boolean().optional().default(true),
+  updateCheck: z.boolean().optional().default(true),
+  retries: z.number().int().nonnegative().optional(),
+  format: OutputFormatSchema.optional(),
   tools: z.string().optional(),
+  mcp: z.string().optional(),
+  budget: z.number().positive().optional(),
+  chain: z.string().optional(),
+  verbose: z.boolean().optional().default(false),
+  plugins: z.string().optional(),
+  diff: z.string().optional(),
 });
 
+/**
+ * Zod schema for the structured JSON output emitted with `--json`.
+ *
+ * Aligned with the Vercel AI SDK's `LanguageModelUsage` and `FinishReason` types.
+ * See `sdk-compat.test.ts` for compile-time alignment tests.
+ */
 export const JsonOutputSchema = z.object({
   text: z.string(),
   model: z.string(),
@@ -103,11 +203,83 @@ export const JsonOutputSchema = z.object({
         reasoningTokens: z.number().optional(),
       })
       .optional(),
+    raw: z.record(z.string(), z.unknown()).optional(),
   }),
   finishReason: z.string(),
+  sources: z
+    .array(
+      z.object({
+        url: z.string(),
+        title: z.string().optional(),
+      }),
+    )
+    .optional(),
+  reasoning: z.string().nullish(),
+  providerMetadata: z.record(z.string(), z.unknown()).optional(),
 });
 
+/** The structured JSON output type for `--json` mode. */
 export type JsonOutput = z.infer<typeof JsonOutputSchema>;
+
+/** A source from the AI SDK (discriminated union of 'url' and 'document' types). */
+export type AnySource = {
+  type: "source";
+  sourceType: string;
+  [key: string]: unknown;
+};
+
+/** Filter sources to URL-type and extract {url, title?}. */
+export function extractSources(sources: AnySource[]): JsonOutput["sources"] {
+  const urlSources = sources.filter(
+    (s): s is AnySource & { sourceType: "url"; url: string; title?: string } =>
+      s.sourceType === "url" &&
+      typeof (s as Record<string, unknown>).url === "string",
+  );
+  if (urlSources.length === 0) return undefined;
+  return urlSources.map((s) => ({
+    url: s.url,
+    ...(s.title ? { title: s.title } : {}),
+  }));
+}
+
+/** Build a full JsonOutput from a generateText result. */
+export function buildJsonOutput(
+  result: {
+    text: string;
+    usage: JsonOutput["usage"];
+    finishReason: string;
+    sources?: AnySource[];
+    reasoningText?: string | undefined | null;
+    providerMetadata?: Record<string, unknown> | undefined;
+  },
+  opts: { modelString: string; text?: string },
+): JsonOutput {
+  const output: JsonOutput = {
+    text: opts.text ?? result.text,
+    model: opts.modelString,
+    usage: result.usage,
+    finishReason: result.finishReason,
+  };
+  const sources = extractSources(result.sources ?? []);
+  if (sources) output.sources = sources;
+  if (result.reasoningText) output.reasoning = result.reasoningText;
+  if (
+    result.providerMetadata &&
+    Object.keys(result.providerMetadata).length > 0
+  )
+    output.providerMetadata = result.providerMetadata;
+  return output;
+}
+
+/** Format sources as a numbered list for plain text output. */
+export function formatSourcesText(sources: AnySource[]): string {
+  const urlSources = extractSources(sources);
+  if (!urlSources || urlSources.length === 0) return "";
+  const lines = urlSources.map(
+    (s, i) => `[${i + 1}] ${s.title ? `${s.title} — ` : ""}${s.url}`,
+  );
+  return `\n\nSources:\n${lines.join("\n")}`;
+}
 
 /**
  * Load a file's content as a Data URL (base64 encoded).
@@ -127,15 +299,24 @@ export async function loadAsDataUrl(
 }
 
 /**
+ * Options for the loadOrExit helper function.
+ */
+interface LoadOrExitOptions<T> {
+  label: string;
+  fn: (path: string) => Promise<T>;
+  paths: string[];
+}
+
+/**
  * Helper to reduce duplication between readFiles and readImages.
  * Validates file exists, then applies the processing function.
  * Throws with label-prefixed error message on failure.
  */
-async function loadOrExit<T>(
-  label: string,
-  fn: (path: string) => Promise<T>,
-  paths: string[],
-): Promise<T[]> {
+async function loadOrExit<T>({
+  label,
+  fn,
+  paths,
+}: LoadOrExitOptions<T>): Promise<T[]> {
   const results: T[] = [];
   for (const path of paths) {
     const file = Bun.file(path);
@@ -147,43 +328,90 @@ async function loadOrExit<T>(
   return results;
 }
 
+/**
+ * Read one or more files and return their contents formatted as markdown
+ * code blocks, each prefixed with the file path as a heading.
+ *
+ * @param paths - Array of file paths to read.
+ * @returns A single string with all file contents, separated by double newlines.
+ * @throws If any file does not exist.
+ */
 export async function readFiles(paths: string[]): Promise<string> {
-  const parts = await loadOrExit(
-    "File",
-    async (path: string) => {
+  const parts = await loadOrExit({
+    label: "File",
+    fn: async (path: string) => {
       const file = Bun.file(path);
       return `# ${path}\n\`\`\`\n${await file.text()}\n\`\`\``;
     },
     paths,
-  );
+  });
   return parts.join("\n\n");
 }
 
+/**
+ * Read one or more image files and return them as base64-encoded data URLs.
+ *
+ * The MIME type is detected from each file's content. Used for vision model
+ * support with the `-i` / `--image` CLI flag.
+ *
+ * @param paths - Array of image file paths to read.
+ * @returns An array of objects with `url` properties containing data URLs.
+ * @throws If any image file does not exist.
+ */
 export async function readImages(paths: string[]): Promise<{ url: string }[]> {
-  return loadOrExit(
-    "Image",
-    async (path: string) => {
+  return loadOrExit({
+    label: "Image",
+    fn: async (path: string) => {
       const file = Bun.file(path);
       const mimeType = file.type || "image/png";
       const dataUrl = await loadAsDataUrl(path, mimeType);
       return { url: dataUrl };
     },
     paths,
-  );
+  });
 }
 
-export function buildPrompt(
-  argPrompt: string | null,
-  fileContent: string | null = null,
-  stdinContent: string | null = null,
-): string {
+export interface BuildPromptOptions {
+  prompt: string | null;
+  fileContent?: string | null;
+  stdinContent?: string | null;
+}
+
+/**
+ * Build the final prompt string from argument text, file contents, and stdin.
+ *
+ * Non-null parts are joined with double newlines. The order is:
+ * argument prompt, file content, stdin content.
+ * Breaking change (pre-1.0): signature changed from positional args to object param.
+ *
+ * @param options - Object containing prompt, fileContent, and stdinContent.
+ * @returns The combined prompt string (may be empty if all inputs are null).
+ */
+export function buildPrompt({
+  prompt,
+  fileContent = null,
+  stdinContent = null,
+}: BuildPromptOptions): string {
   const parts: string[] = [];
-  if (argPrompt) parts.push(argPrompt);
+  if (prompt) parts.push(prompt);
   if (fileContent) parts.push(fileContent);
   if (stdinContent) parts.push(stdinContent);
   return parts.join("\n\n");
 }
 
+/**
+ * Resolve effective options by merging CLI flags, provider config, global config, and defaults.
+ *
+ * Priority order (highest to lowest): CLI flags > provider-specific config > global config > built-in defaults.
+ *
+ * After resolving the model string, the provider is extracted (e.g., "anthropic" from
+ * "anthropic/claude-sonnet-4-5") and used to look up provider-specific overrides from
+ * the config's `providers` section.
+ *
+ * @param opts - CLI options as parsed by citty.
+ * @param config - Loaded configuration from config files.
+ * @returns The merged options with all values resolved.
+ */
 export function resolveOptions(
   opts: CLIOptions,
   config: Config,
@@ -194,12 +422,27 @@ export function resolveOptions(
   maxOutputTokens: number | undefined;
   markdown: boolean;
 } {
+  // First resolve the model string to determine the provider
+  const modelString = opts.model ?? config.model ?? APP.defaultModel;
+  const { provider } = parseModelString(modelString);
+
+  // Look up provider-specific overrides
+  const providerDefaults = getProviderDefaults(config, provider);
+
   return {
-    modelString: opts.model ?? config.model ?? APP.defaultModel,
-    system: opts.system ?? config.system ?? undefined,
-    temperature: opts.temperature ?? config.temperature ?? undefined,
+    modelString,
+    system:
+      opts.system ?? providerDefaults.system ?? config.system ?? undefined,
+    temperature:
+      opts.temperature ??
+      providerDefaults.temperature ??
+      config.temperature ??
+      undefined,
     maxOutputTokens:
-      opts.maxOutputTokens ?? config.maxOutputTokens ?? undefined,
+      opts.maxOutputTokens ??
+      providerDefaults.maxOutputTokens ??
+      config.maxOutputTokens ??
+      undefined,
     markdown: opts.markdown,
   };
 }
@@ -212,12 +455,148 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf-8").trimEnd();
 }
 
-const HISTORY_DIR = join(homedir(), ".ai-pipe", "history");
+/**
+ * Handle the `session` subcommand and its sub-actions.
+ *
+ * Routes to: list, export, import, delete.
+ * Prints usage information if no valid sub-action is provided.
+ *
+ * @param args - The remaining arguments after "session".
+ */
+async function handleSessionCommand(args: string[]): Promise<void> {
+  const subcommand = args[0];
+
+  if (subcommand === "list") {
+    const sessions = await listSessions();
+    if (sessions.length === 0) {
+      console.log("No saved sessions.");
+    } else {
+      console.log("Saved sessions:");
+      for (const name of sessions) {
+        console.log(`  - ${name}`);
+      }
+    }
+    return;
+  }
+
+  if (subcommand === "export") {
+    const name = args[1];
+    if (!name) {
+      console.error(
+        "Error: Session name required. Usage: ai-pipe session export <name> [--format json|md]",
+      );
+      process.exit(1);
+    }
+    // Check for --format flag
+    let format = "json";
+    const formatIdx = args.indexOf("--format");
+    if (formatIdx !== -1 && args[formatIdx + 1] !== undefined) {
+      format = args[formatIdx + 1] as string;
+    }
+    if (format !== "json" && format !== "md") {
+      console.error(
+        `Error: Unsupported format "${format}". Use "json" or "md".`,
+      );
+      process.exit(1);
+    }
+    const output =
+      format === "md"
+        ? await exportSessionMarkdown(name)
+        : await exportSessionJson(name);
+    process.stdout.write(output);
+    return;
+  }
+
+  if (subcommand === "import") {
+    const name = args[1];
+    if (!name) {
+      console.error(
+        "Error: Session name required. Usage: ai-pipe session import <name> <file>",
+      );
+      process.exit(1);
+    }
+    // Read from file argument or stdin
+    let content: string;
+    const filePath = args[2];
+    if (filePath) {
+      const file = Bun.file(filePath);
+      if (!(await file.exists())) {
+        console.error(`Error: File not found: ${filePath}`);
+        process.exit(1);
+      }
+      content = await file.text();
+    } else if (!process.stdin.isTTY) {
+      content = await readStdin();
+    } else {
+      console.error(
+        "Error: Provide a file path or pipe content via stdin. Usage: ai-pipe session import <name> <file>",
+      );
+      process.exit(1);
+    }
+    try {
+      await importSession(name, content);
+      console.log(`Session "${name}" imported successfully.`);
+    } catch (err: unknown) {
+      console.error(
+        `Error: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (subcommand === "delete") {
+    const name = args[1];
+    if (!name) {
+      console.error(
+        "Error: Session name required. Usage: ai-pipe session delete <name>",
+      );
+      process.exit(1);
+    }
+    try {
+      await deleteSession(name);
+      console.log(`Session "${name}" deleted.`);
+    } catch (err: unknown) {
+      console.error(
+        `Error: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      process.exit(1);
+    }
+    return;
+  }
+
+  // Unknown or missing subcommand — print usage
+  console.log(`Usage: ai-pipe session <command>
+
+Commands:
+  list                     List all saved sessions
+  export <name> [--format] Export a session (json or md, default: json)
+  import <name> [file]     Import a session from file or stdin
+  delete <name>            Delete a session`);
+}
+
+const HOME_DIR = Bun.env.HOME ?? Bun.env.USERPROFILE ?? "";
+if (!HOME_DIR) {
+  console.warn(
+    "Warning: Neither HOME nor USERPROFILE environment variable is set. History paths may not resolve correctly.",
+  );
+}
+const HISTORY_DIR = join(HOME_DIR, ".ai-pipe", "history");
 
 function getHistoryPath(session: string): string {
   return join(HISTORY_DIR, `${session}.json`);
 }
 
+/**
+ * Load conversation history for a named session from disk.
+ *
+ * History is stored as JSON in `~/.ai-pipe/history/<session>.json`.
+ * Returns an empty array if the file does not exist, contains invalid JSON,
+ * or fails Zod validation.
+ *
+ * @param session - The sanitized session name.
+ * @returns An array of conversation messages, or empty array on any failure.
+ */
 export async function loadHistory(session: string): Promise<ModelMessage[]> {
   const path = getHistoryPath(session);
   const file = Bun.file(path);
@@ -238,19 +617,263 @@ export async function loadHistory(session: string): Promise<ModelMessage[]> {
   }
 }
 
+/**
+ * Save conversation history for a named session to disk.
+ *
+ * Creates the history directory (`~/.ai-pipe/history/`) if it does not exist.
+ * The session file is written as pretty-printed JSON.
+ *
+ * @param session - The sanitized session name.
+ * @param messages - The full conversation history to persist.
+ */
 export async function saveHistory(
   session: string,
   messages: ModelMessage[],
 ): Promise<void> {
   const path = getHistoryPath(session);
-  // Ensure directory exists using mkdir with recursive
-  // Use fs.mkdir for directory creation with recursive option
-  const { mkdir } = await import("node:fs/promises");
-  await mkdir(HISTORY_DIR, { recursive: true });
+  // Note: Bun.write() automatically creates parent directories (verified),
+  // so no explicit mkdir call is needed here.
   await Bun.write(path, JSON.stringify(messages, null, 2));
 }
 
-async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
+/** Parameters for the executePrompt helper */
+interface ExecutePromptParams {
+  model: LanguageModel;
+  modelString: string;
+  messages?: ModelMessage[];
+  prompt?: string;
+  system?: string;
+  temperature: number | undefined;
+  maxOutputTokens: number | undefined;
+  stream: boolean;
+  json: boolean;
+  format?: OutputFormat;
+  markdown: boolean;
+  showCost: boolean;
+  /** If provided, saves assistant response to session history */
+  session?: {
+    name: string;
+    messages: ModelMessage[];
+  };
+  /** If provided, enables response caching (non-session, non-streaming only) */
+  cacheKey?: string | null;
+  /** If provided, tools available for the model to call */
+  tools?: Record<string, unknown>;
+  /** If provided, warn when cost exceeds this budget (in USD) */
+  budget?: number;
+  /** Number of retries on transient/rate-limit errors (0 = no retries) */
+  retries?: number;
+  /** Optional transform applied to response text before output (plugin afterResponse) */
+  afterResponseTransform?: (text: string) => Promise<string>;
+}
+
+/**
+ * Unified prompt execution for both session and non-session modes.
+ * Handles streaming vs non-streaming, JSON output, markdown rendering,
+ * cost display, caching, and optional session history persistence.
+ */
+async function executePrompt(params: ExecutePromptParams): Promise<void> {
+  const {
+    model,
+    modelString,
+    messages,
+    prompt,
+    system,
+    temperature,
+    maxOutputTokens,
+    stream,
+    json,
+    format,
+    markdown,
+    showCost,
+    session,
+    cacheKey,
+    tools,
+    budget,
+    retries,
+    afterResponseTransform,
+  } = params;
+
+  // Check cache before making API call (only for non-session, non-streaming)
+  if (cacheKey) {
+    const cached = await getCachedResponse(cacheKey);
+    if (cached) {
+      if (format) {
+        const outputData: JsonOutput = {
+          text: cached.text,
+          model: cached.model,
+          usage: cached.usage,
+          finishReason: cached.finishReason,
+        };
+        const output = formatOutput(outputData, format);
+        process.stdout.write(`${output}\n`);
+      } else if (json) {
+        const output: JsonOutput = {
+          text: cached.text,
+          model: cached.model,
+          usage: cached.usage,
+          finishReason: cached.finishReason,
+        };
+        process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+      } else {
+        const text = markdown
+          ? renderMarkdown(cached.text)
+          : `${cached.text}\n`;
+        process.stdout.write(text);
+      }
+      displayCostIfEnabled({ usage: cached.usage, modelString, showCost });
+      checkBudget({ usage: cached.usage, modelString, budget });
+      return;
+    }
+  }
+
+  // Build the common model call options with proper type narrowing
+  // Cast tools to satisfy AI SDK's ToolSet type constraint
+  const baseOptions = {
+    model,
+    temperature,
+    maxOutputTokens,
+    ...(tools
+      ? { tools: tools as Parameters<typeof generateText>[0]["tools"] }
+      : {}),
+  };
+  const callOptions =
+    messages !== undefined
+      ? { ...baseOptions, messages }
+      : { ...baseOptions, system, prompt: prompt ?? "" };
+
+  if (json || format || !stream) {
+    const result =
+      retries !== undefined && retries > 0
+        ? await withRetry(() => generateText(callOptions), {
+            maxRetries: retries,
+          })
+        : await generateText(callOptions);
+
+    // Apply afterResponse plugin transform if provided
+    const responseText = afterResponseTransform
+      ? await afterResponseTransform(result.text)
+      : result.text;
+
+    // Store in cache if applicable (failures are non-fatal)
+    if (cacheKey) {
+      try {
+        await setCachedResponse(cacheKey, {
+          text: result.text,
+          usage: result.usage,
+          finishReason: result.finishReason,
+          model: modelString,
+        });
+      } catch {
+        // Cache write failure is not critical; the model response still succeeded
+      }
+    }
+
+    // Save to session history if applicable
+    if (session) {
+      session.messages.push({ role: "assistant", content: responseText });
+      await saveHistory(session.name, session.messages);
+    }
+
+    if (format) {
+      const outputData = buildJsonOutput(result, {
+        modelString,
+        text: responseText,
+      });
+      const output = formatOutput(outputData, format);
+      process.stdout.write(`${output}\n`);
+    } else if (json) {
+      const output = buildJsonOutput(result, {
+        modelString,
+        text: responseText,
+      });
+      process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+    } else {
+      const sourcesText = formatSourcesText(result.sources ?? []);
+      const output = markdown
+        ? renderMarkdown(responseText + sourcesText)
+        : `${responseText}${sourcesText}\n`;
+      process.stdout.write(output);
+    }
+
+    displayCostIfEnabled({ usage: result.usage, modelString, showCost });
+    checkBudget({ usage: result.usage, modelString, budget });
+  } else {
+    const consumeStream = async () => {
+      const result = streamText(callOptions);
+
+      // When markdown is enabled, progressively re-render as tokens arrive.
+      if (markdown) {
+        const renderer = new StreamingMarkdownRenderer();
+        for await (const chunk of result.textStream) {
+          renderer.append(chunk);
+        }
+        renderer.finish();
+
+        // Apply afterResponse plugin transform to collected buffer
+        const streamedText = afterResponseTransform
+          ? await afterResponseTransform(renderer.getBuffer())
+          : renderer.getBuffer();
+
+        // Save to session history if applicable
+        if (session) {
+          session.messages.push({
+            role: "assistant",
+            content: streamedText,
+          });
+          await saveHistory(session.name, session.messages);
+        }
+      } else {
+        let fullResponse = "";
+        for await (const chunk of result.textStream) {
+          process.stdout.write(chunk);
+          fullResponse += chunk;
+        }
+
+        // Append sources after stream completes
+        const streamSources = await result.sources;
+        const sourcesText = formatSourcesText(streamSources ?? []);
+        process.stdout.write(`${sourcesText}\n`);
+
+        // Apply afterResponse plugin transform to collected response
+        const streamedText = afterResponseTransform
+          ? await afterResponseTransform(fullResponse)
+          : fullResponse;
+
+        // Save to session history if applicable
+        if (session) {
+          session.messages.push({ role: "assistant", content: streamedText });
+          await saveHistory(session.name, session.messages);
+        }
+      }
+
+      displayCostIfEnabled({
+        usage: await result.usage,
+        modelString,
+        showCost,
+      });
+      checkBudget({ usage: await result.usage, modelString, budget });
+    };
+
+    if (retries !== undefined && retries > 0) {
+      await withRetry(consumeStream, { maxRetries: retries });
+    } else {
+      await consumeStream();
+    }
+  }
+}
+
+/**
+ * Format an error for display, extracting the message from Error instances.
+ */
+function formatError(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+async function runAction(
+  promptArgs: string[],
+  rawOpts: Record<string, unknown>,
+): Promise<void> {
   const parsed = CLIOptionsSchema.safeParse(rawOpts);
   if (!parsed.success) {
     for (const issue of parsed.error.issues) {
@@ -279,11 +902,29 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
     const rolesDir = `~/${APP.configDirName}/roles/`;
     if (roles.length === 0) {
       console.log(`No roles found. Create role files in ${rolesDir}`);
-      console.log(`Example: ${rolesDir}reviewer.md`);
+      console.log(`Example: ${rolesDir}reviewer.txt`);
     } else {
       console.log("Available roles:");
       for (const role of roles) {
         console.log(`  - ${role}`);
+      }
+    }
+    return;
+  }
+
+  // List available templates
+  if (opts.templates) {
+    const templates = await listTemplates();
+    const templatesDir = `~/${APP.configDirName}/templates/`;
+    if (templates.length === 0) {
+      console.log(
+        `No templates found. Create template files in ${templatesDir}`,
+      );
+      console.log(`Example: ${templatesDir}review.md`);
+    } else {
+      console.log("Available templates:");
+      for (const template of templates) {
+        console.log(`  - ${template}`);
       }
     }
     return;
@@ -303,7 +944,8 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
     }
   }
 
-  const hasStdin = !process.stdin.isTTY;
+  // In chat mode, skip stdin/prompt reading — input comes from the REPL
+  const hasStdin = !opts.chat && !process.stdin.isTTY;
   const argPrompt = promptArgs.length > 0 ? promptArgs.join(" ") : null;
   const stdinContent = hasStdin ? await readStdin() : null;
 
@@ -311,7 +953,7 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
   try {
     fileContent = opts.file?.length ? await readFiles(opts.file) : null;
   } catch (err: unknown) {
-    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(`Error: ${formatError(err)}`);
     process.exit(1);
   }
 
@@ -319,14 +961,88 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
   try {
     images = opts.image?.length ? await readImages(opts.image) : [];
   } catch (err: unknown) {
-    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(`Error: ${formatError(err)}`);
     process.exit(1);
   }
 
-  const prompt = buildPrompt(argPrompt, fileContent, stdinContent);
-  if (!prompt && images.length === 0) {
-    program.help();
+  let prompt = buildPrompt({ prompt: argPrompt, fileContent, stdinContent });
+
+  // Apply template if --template is set
+  if (opts.template) {
+    const templateContent = await loadTemplate(opts.template);
+    if (templateContent) {
+      prompt = applyTemplate(templateContent, { input: prompt });
+    } else {
+      const templateFilename = opts.template.endsWith(".md")
+        ? opts.template
+        : `${opts.template}.md`;
+      console.error(
+        `Error: Template "${opts.template}" not found. Create it at ~/${APP.configDirName}/templates/${templateFilename} or run "ai-pipe --templates" to see available templates.`,
+      );
+      process.exit(1);
+    }
+  }
+
+  if (!opts.chat && !opts.diff && !prompt && images.length === 0) {
+    await showUsage(mainCommand);
+    process.exit(0);
+  }
+
+  // Handle --diff: compare multiple models for the same prompt
+  if (opts.diff) {
+    const models = opts.diff
+      .split(",")
+      .map((m) => m.trim())
+      .filter(Boolean)
+      .map((m) => resolveAlias(config, m));
+
+    if (models.length < 2) {
+      console.error(
+        'Error: --diff requires at least 2 comma-separated models (e.g., --diff "openai/gpt-4o,anthropic/claude-sonnet-4-5")',
+      );
+      process.exit(1);
+    }
+
+    if (!prompt) {
+      console.error("Error: --diff requires a prompt.");
+      process.exit(1);
+    }
+
+    // Resolve system prompt from role or --system flag
+    let diffSystem = opts.system;
+    if (opts.role && opts.system === undefined) {
+      const roleContent = await loadRole(opts.role);
+      if (roleContent) {
+        diffSystem = roleContent;
+      }
+    }
+
+    const diffOptions: DiffOptions = {
+      models,
+      prompt,
+      system: diffSystem,
+      temperature: opts.temperature,
+      maxOutputTokens: opts.maxOutputTokens,
+      showCost: opts.cost,
+    };
+
+    try {
+      const results = await runDiff(diffOptions);
+      if (opts.json) {
+        process.stdout.write(`${formatDiffJson(results)}\n`);
+      } else {
+        process.stdout.write(`${formatDiffResults(results)}\n`);
+      }
+    } catch (err: unknown) {
+      console.error(`Error: ${formatError(err)}`);
+      process.exit(1);
+    }
     return;
+  }
+
+  // Resolve model aliases before resolveOptions
+  if (opts.model) {
+    opts.model = resolveAlias(config, opts.model);
   }
 
   const { modelString, system, temperature, maxOutputTokens, markdown } =
@@ -340,15 +1056,131 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
     if (roleContent) {
       systemPrompt = roleContent;
     } else {
+      const roleFilename = opts.role.endsWith(".md")
+        ? opts.role
+        : `${opts.role}.md`;
       console.error(
-        `Error: Role "${opts.role}" not found in ~/${APP.configDirName}/roles/`,
+        `Error: Role "${opts.role}" not found. Create it at ~/${APP.configDirName}/roles/${roleFilename} or run "ai-pipe --roles" to see available roles.`,
       );
-      console.error("Use --roles to list available roles.");
       process.exit(1);
     }
   }
 
   const model = resolveModel(modelString);
+
+  // If --chat is set, enter interactive chat mode instead of one-shot execution
+  if (opts.chat) {
+    await startChat({
+      model,
+      modelString,
+      system: systemPrompt,
+      temperature,
+      maxOutputTokens,
+      markdown,
+      showCost: opts.cost,
+      budget: opts.budget,
+    });
+    return;
+  }
+
+  // If --chain is set, execute chain mode (non-streaming, sequential LLM calls)
+  if (opts.chain) {
+    try {
+      const steps = await loadChainConfig(opts.chain);
+      const result = await executeChain({
+        steps,
+        initialInput: prompt,
+        defaultModel: model,
+        defaultModelString: modelString,
+        config,
+        temperature,
+        maxOutputTokens,
+        verbose: opts.verbose,
+      });
+
+      if (opts.format) {
+        const outputData: JsonOutput = {
+          text: result,
+          model: modelString,
+          usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+          finishReason: "stop",
+        };
+        const output = formatOutput(outputData, opts.format);
+        process.stdout.write(`${output}\n`);
+      } else if (opts.json) {
+        const output: JsonOutput = {
+          text: result,
+          model: modelString,
+          usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+          finishReason: "stop",
+        };
+        process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+      } else {
+        const output = markdown ? renderMarkdown(result) : `${result}\n`;
+        process.stdout.write(output);
+      }
+    } catch (err: unknown) {
+      console.error(`Error: ${formatError(err)}`);
+      process.exit(1);
+    }
+    return;
+  }
+
+  // Load tools from config file if --tools flag is provided
+  const toolConfigs = await loadToolsConfig(opts.tools);
+  const staticTools: Record<string, unknown> =
+    toolConfigs.length > 0
+      ? Object.fromEntries(
+          toolConfigs.map((t) => [
+            t.name,
+            { description: t.description, parameters: t.parameters },
+          ]),
+        )
+      : {};
+
+  // Load MCP tools if --mcp flag is provided
+  let mcpManager: MCPManager | undefined;
+  let mcpTools: Record<string, unknown> = {};
+  if (opts.mcp) {
+    try {
+      const mcpConfig = await loadMCPConfig(opts.mcp);
+      mcpManager = new MCPManager();
+      await mcpManager.connect(mcpConfig);
+      mcpTools = await mcpManager.getTools();
+    } catch (err: unknown) {
+      console.error(`Error loading MCP config: ${formatError(err)}`);
+      process.exit(1);
+    }
+  }
+
+  // Merge static tools and MCP tools
+  const allTools = { ...staticTools, ...mcpTools };
+  const tools: Record<string, unknown> | undefined =
+    Object.keys(allTools).length > 0 ? allTools : undefined;
+
+  // Load plugins if --plugins flag is provided (or auto-load from default path)
+  let pluginManager: PluginManager | undefined;
+  const defaultPluginsPath = join(HOME_DIR, ".ai-pipe", "plugins.json");
+  const pluginsConfigPath = opts.plugins ?? defaultPluginsPath;
+  try {
+    const pluginsFile = Bun.file(pluginsConfigPath);
+    if (await pluginsFile.exists()) {
+      pluginManager = new PluginManager();
+      await pluginManager.loadPlugins(pluginsConfigPath);
+    }
+  } catch (err: unknown) {
+    console.error(`Error loading plugins: ${formatError(err)}`);
+    process.exit(1);
+  }
+
+  // Run beforeRequest plugin hooks to transform the prompt
+  if (pluginManager) {
+    prompt = await pluginManager.beforeRequest({
+      prompt,
+      model: modelString,
+      system: systemPrompt,
+    });
+  }
 
   // Load conversation history if session is provided
   // Sanitize session name to prevent directory traversal
@@ -360,188 +1192,408 @@ async function run(promptArgs: string[], rawOpts: Record<string, unknown>) {
   // Add current user message to messages if using session
   // Only add system message if history is empty (first message in conversation)
   if (sessionName) {
-    if (system && messages.length === 0) {
-      messages.unshift({ role: "system", content: system });
+    if (systemPrompt && messages.length === 0) {
+      messages.unshift({ role: "system", content: systemPrompt });
     }
     messages.push({ role: "user", content: prompt });
   }
 
   try {
-    if (sessionName) {
-      // Use conversation history mode
-      if (opts.json || !opts.stream) {
-        const result = await generateText({
-          model,
-          messages,
-          temperature,
-          maxOutputTokens,
-        });
-
-        // Save to history
-        messages.push({ role: "assistant", content: result.text });
-        await saveHistory(sessionName, messages);
-
-        if (opts.json) {
-          const output: JsonOutput = {
-            text: result.text,
-            model: modelString,
-            usage: result.usage,
-            finishReason: result.finishReason,
-          };
-          process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
-        } else {
-          process.stdout.write(`${result.text}\n`);
-        }
-
-        // Display cost if requested
-        displayCostIfEnabled(result.usage, modelString, opts.cost);
-      } else {
-        const result = streamText({
-          model,
-          messages,
-          temperature,
-          maxOutputTokens,
-        });
-
-        let fullResponse = "";
-        for await (const chunk of result.textStream) {
-          process.stdout.write(chunk);
-          fullResponse += chunk;
-        }
-        process.stdout.write("\n");
-
-        // Save to history
-        messages.push({ role: "assistant", content: fullResponse });
-        await saveHistory(sessionName, messages);
-
-        // Display cost if requested (usage is available after stream completes)
-        displayCostIfEnabled(await result.usage, modelString, opts.cost);
-      }
-    } else {
-      // Use regular prompt mode
-      if (opts.json || !opts.stream) {
-        const result = await generateText({
-          model,
-          system,
+    // Build cache key for non-session mode when caching is enabled
+    const useCache =
+      !sessionName && opts.cache && (opts.json || opts.format || !opts.stream);
+    const cacheKey = useCache
+      ? buildCacheKey({
+          model: modelString,
+          system: systemPrompt,
           prompt,
           temperature,
           maxOutputTokens,
-        });
+        })
+      : null;
 
-        if (opts.json) {
-          const output: JsonOutput = {
-            text: result.text,
-            model: modelString,
-            usage: result.usage,
-            finishReason: result.finishReason,
-          };
-          process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
-        } else {
-          process.stdout.write(`${result.text}\n`);
-        }
-
-        // Display cost if requested
-        displayCostIfEnabled(result.usage, modelString, opts.cost);
-      } else {
-        const result = streamText({
-          model,
-          system,
-          prompt,
-          temperature,
-          maxOutputTokens,
-        });
-
-        for await (const chunk of result.textStream) {
-          process.stdout.write(chunk);
-        }
-        process.stdout.write("\n");
-
-        // Display cost if requested (usage is available after stream completes)
-        displayCostIfEnabled(await result.usage, modelString, opts.cost);
-      }
-    }
+    await executePrompt({
+      model,
+      modelString,
+      messages: sessionName ? messages : undefined,
+      prompt: sessionName ? undefined : prompt,
+      system: sessionName ? undefined : systemPrompt,
+      temperature,
+      maxOutputTokens,
+      stream: opts.stream,
+      json: opts.json,
+      format: opts.format,
+      markdown,
+      showCost: opts.cost,
+      session: sessionName ? { name: sessionName, messages } : undefined,
+      cacheKey,
+      tools,
+      budget: opts.budget,
+      retries: opts.retries,
+      afterResponseTransform: pluginManager
+        ? async (text: string) =>
+            pluginManager.afterResponse({ text, model: modelString })
+        : undefined,
+    });
   } catch (err: unknown) {
-    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(`Error: ${formatError(err)}`);
     process.exit(1);
+  } finally {
+    // Clean up MCP server connections on exit
+    if (mcpManager) {
+      await mcpManager.close();
+    }
+    // Clean up plugins on exit
+    if (pluginManager) {
+      await pluginManager.cleanup();
+    }
   }
+
+  // Check for updates (bounded wait, printed to stderr)
+  if (opts.updateCheck !== false) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    try {
+      const updateMessage = await checkForUpdates(undefined, controller.signal);
+      if (updateMessage) {
+        process.stderr.write(updateMessage);
+      }
+    } catch {
+      // Timeout or abort — silently ignore
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+}
+
+interface DisplayCostOptions {
+  usage: UsageInfo | undefined;
+  modelString: string;
+  showCost: boolean;
 }
 
 /**
  * Display cost information if the --cost flag is set
  */
-function displayCostIfEnabled(
-  usage: { inputTokens?: number; outputTokens?: number } | undefined,
-  modelString: string,
-  showCost: boolean,
-): void {
+function displayCostIfEnabled({
+  usage,
+  modelString,
+  showCost,
+}: DisplayCostOptions): void {
   if (!showCost || !usage) return;
 
   const { provider, modelId } = parseModelString(modelString);
-  const costInfo = calculateCost(provider, modelId, usage);
+  const costInfo = calculateCost({ provider, modelId, usage });
   const formattedCost = formatCost(costInfo);
   console.error(`\n💰 Cost: ${formattedCost}`);
 }
 
-export function setupCLI() {
-  program
-    .name(APP.name)
-    .description(APP.description)
-    .version(pkg.version)
-    .argument("[prompt...]", "Prompt text. Multiple words are joined.")
-    .option("-m, --model <model>", "Model in provider/model-id format")
-    .option("-s, --system <prompt>", "System prompt")
-    .option(
-      "-r, --role <name>",
-      `Use a role from ~/${APP.configDirName}/roles/`,
-    )
-    .option(
-      "-f, --file <path>",
-      "Include file contents in prompt (repeatable)",
-      (val: string, acc: string[]) => {
-        acc.push(val);
-        return acc;
-      },
-      [] as string[],
-    )
-    .option(
-      "-i, --image <path>",
-      "Include image in prompt for vision models (repeatable)",
-      (val: string, acc: string[]) => {
-        acc.push(val);
-        return acc;
-      },
-      [] as string[],
-    )
-    .option("-j, --json", "Output full JSON response object", false)
-    .option("--no-stream", "Wait for full response, then print")
-    .option("--markdown", "Render markdown output", false)
-    .option("--cost", "Show estimated cost of the request", false)
-    .option(
-      "-t, --temperature <n>",
-      `Sampling temperature (${APP.temperature.min}-${APP.temperature.max})`,
-      parseFloat,
-    )
-    .option("--max-output-tokens <n>", "Maximum tokens to generate", parseInt)
-    .option("-c, --config <path>", "Path to config directory")
-    .option("-C, --session <name>", "Session name for conversation history")
-    .option("--providers", "List supported providers and their API key status")
-    .option(
-      "--roles",
-      `List available roles from ~/${APP.configDirName}/roles/`,
-    )
-    .option(
-      "--completions <shell>",
-      `Generate shell completions (${APP.supportedShells.join(", ")})`,
-    )
-    // TODO: --tools flag is not yet wired into run(). opts.tools is parsed but not used.
-    // See PR-CEREBRAS.md and tools.ts for planned implementation.
-    .option("--tools <path>", "Path to tools configuration file (JSON)")
-    .action(run);
+/**
+ * Check if the cost of a request exceeds the budget, and print a warning if so.
+ */
+function checkBudget({
+  usage,
+  modelString,
+  budget,
+}: {
+  usage: UsageInfo | undefined;
+  modelString: string;
+  budget: number | undefined;
+}): void {
+  if (budget === undefined || !usage) return;
 
-  return program;
+  const { provider, modelId } = parseModelString(modelString);
+  const costInfo = calculateCost({ provider, modelId, usage });
+  if (costInfo.totalCost > budget) {
+    console.error(
+      `⚠️  Budget exceeded: $${costInfo.totalCost.toFixed(4)} (budget: $${budget.toFixed(4)})`,
+    );
+  }
 }
+
+/**
+ * Parse repeatable flags (-f/--file and -i/--image) from raw argv.
+ *
+ * citty does not support repeatable options natively, so we manually
+ * extract all occurrences of the specified flags from process.argv.
+ *
+ * @param rawArgs - The raw argv array (typically process.argv.slice(2)).
+ * @param shortFlag - The short form, e.g. "-f".
+ * @param longFlag - The long form, e.g. "--file".
+ * @returns An array of collected values, or undefined if none found.
+ */
+function parseRepeatableFlag(
+  rawArgs: string[],
+  shortFlag: string,
+  longFlag: string,
+): string[] | undefined {
+  const values: string[] = [];
+  for (let i = 0; i < rawArgs.length; i++) {
+    const arg = rawArgs[i] as string | undefined;
+    if (arg === undefined) continue;
+    if (arg === shortFlag || arg === longFlag) {
+      const next = rawArgs[i + 1];
+      if (next !== undefined && !next.startsWith("-")) {
+        values.push(next);
+        i++; // skip the value
+      }
+    } else if (arg.startsWith(`${longFlag}=`)) {
+      values.push(arg.slice(longFlag.length + 1));
+    }
+  }
+  return values.length > 0 ? values : undefined;
+}
+
+/**
+ * citty command definition for the CLI.
+ *
+ * All options are defined as citty args. Repeatable flags (-f, -i) are
+ * handled separately via parseRepeatableFlag() since citty does not
+ * support repeatable options natively.
+ */
+export const mainCommand = defineCommand({
+  meta: {
+    name: APP.name,
+    version: pkg.version,
+    description: APP.description,
+  },
+  args: {
+    model: {
+      type: "string",
+      alias: "m",
+      description: "Model in provider/model-id format",
+    },
+    system: {
+      type: "string",
+      alias: "s",
+      description: "System prompt",
+    },
+    role: {
+      type: "string",
+      alias: "r",
+      description: `Use a role from ~/${APP.configDirName}/roles/`,
+    },
+    file: {
+      type: "string",
+      alias: "f",
+      description: "Include file contents in prompt (repeatable)",
+    },
+    image: {
+      type: "string",
+      alias: "i",
+      description: "Include image in prompt for vision models (repeatable)",
+    },
+    json: {
+      type: "boolean",
+      alias: "j",
+      description: "Output full JSON response object",
+      default: false,
+    },
+    format: {
+      type: "string",
+      alias: "F",
+      description: "Output format (json, yaml, csv, text)",
+    },
+    stream: {
+      type: "boolean",
+      description: "Stream output as it arrives",
+      negativeDescription: "Wait for full response, then print",
+      default: true,
+    },
+    cache: {
+      type: "boolean",
+      description: "Enable response caching",
+      negativeDescription: "Disable response caching",
+      default: true,
+    },
+    markdown: {
+      type: "boolean",
+      description: "Render markdown output",
+      default: false,
+    },
+    cost: {
+      type: "boolean",
+      description: "Show estimated cost of the request",
+      default: false,
+    },
+    chat: {
+      type: "boolean",
+      description: "Start interactive chat mode",
+      default: false,
+    },
+    temperature: {
+      type: "string",
+      alias: "t",
+      description: `Sampling temperature (${APP.temperature.min}-${APP.temperature.max})`,
+    },
+    maxOutputTokens: {
+      type: "string",
+      description: "Maximum tokens to generate",
+    },
+    config: {
+      type: "string",
+      alias: "c",
+      description: "Path to config directory",
+    },
+    session: {
+      type: "string",
+      alias: "C",
+      description: "Session name for conversation history",
+    },
+    providers: {
+      type: "boolean",
+      description: "List supported providers and their API key status",
+      default: false,
+    },
+    roles: {
+      type: "boolean",
+      description: `List available roles from ~/${APP.configDirName}/roles/`,
+      default: false,
+    },
+    template: {
+      type: "string",
+      alias: "T",
+      description: `Use a template from ~/${APP.configDirName}/templates/`,
+    },
+    templates: {
+      type: "boolean",
+      description: `List available templates from ~/${APP.configDirName}/templates/`,
+      default: false,
+    },
+    completions: {
+      type: "string",
+      description: `Generate shell completions (${APP.supportedShells.join(", ")})`,
+    },
+    retries: {
+      type: "string",
+      description: "Number of retries on rate limit or transient errors",
+    },
+    tools: {
+      type: "string",
+      description: "Path to tools configuration file (JSON)",
+    },
+    mcp: {
+      type: "string",
+      description: "Path to MCP server configuration file (JSON)",
+    },
+    budget: {
+      type: "string",
+      alias: "B",
+      description: "Max dollar budget per request (e.g., 0.05)",
+    },
+    chain: {
+      type: "string",
+      description: "Path to chain config JSON file for multi-step LLM calls",
+    },
+    verbose: {
+      type: "boolean",
+      alias: "v",
+      description: "Show intermediate chain outputs on stderr",
+      default: false,
+    },
+    plugins: {
+      type: "string",
+      alias: "P",
+      description: "Path to plugins configuration file (JSON)",
+    },
+    diff: {
+      type: "string",
+      alias: "D",
+      description:
+        "Compare models (comma-separated, e.g., openai/gpt-4o,anthropic/claude-sonnet-4-5)",
+    },
+    updateCheck: {
+      type: "boolean",
+      description: "Check for updates after execution",
+      negativeDescription: "Disable update notifications",
+      default: true,
+    },
+  },
+  async run({ args, rawArgs }) {
+    // Collect positional args (prompt words) from citty's _ array
+    const promptArgs = args._ || [];
+
+    // Detect subcommands before normal flag processing
+    const firstArg = promptArgs[0];
+    if (firstArg === "init") {
+      await runInit();
+      return;
+    }
+    if (firstArg === "config") {
+      await handleConfigCommand(promptArgs.slice(1));
+      return;
+    }
+    if (firstArg === "session") {
+      await handleSessionCommand(promptArgs.slice(1));
+      return;
+    }
+
+    // Parse repeatable flags manually (citty does not support repeatable options)
+    const files = parseRepeatableFlag(rawArgs, "-f", "--file");
+    const images = parseRepeatableFlag(rawArgs, "-i", "--image");
+
+    // Map citty's parsed args to the CLIOptions shape
+    const rawOpts: Record<string, unknown> = {
+      model: args.model,
+      system: args.system,
+      role: args.role,
+      file: files,
+      image: images,
+      json: args.json,
+      format: args.format,
+      stream: args.stream,
+      cache: args.cache,
+      markdown: args.markdown,
+      cost: args.cost,
+      chat: args.chat,
+      temperature:
+        args.temperature !== undefined
+          ? Number.parseFloat(args.temperature)
+          : undefined,
+      maxOutputTokens:
+        args.maxOutputTokens !== undefined
+          ? Number.parseInt(args.maxOutputTokens, 10)
+          : undefined,
+      config: args.config,
+      session: args.session,
+      providers: args.providers,
+      roles: args.roles,
+      template: args.template,
+      templates: args.templates,
+      completions: args.completions,
+      retries:
+        args.retries !== undefined
+          ? Number.parseInt(args.retries, 10)
+          : undefined,
+      tools: args.tools,
+      mcp: args.mcp,
+      budget:
+        args.budget !== undefined ? Number.parseFloat(args.budget) : undefined,
+      chain: args.chain,
+      verbose: args.verbose,
+      plugins: args.plugins,
+      diff: args.diff,
+      updateCheck: args.updateCheck,
+    };
+
+    await runAction(promptArgs, rawOpts);
+  },
+});
 
 // Only run CLI when executed directly (Bun), not when imported
 if (import.meta.main) {
-  setupCLI().parse();
+  // When stdin is a TTY (e.g. `ai-pipe "say hello"` without piping),
+  // Bun keeps the process alive because the TTY stream holds an active
+  // ref on the event loop. This prevents `process.exit()` from terminating
+  // the process when called from within citty's async `runMain` handler.
+  // Monkey-patching process.exit to destroy stdin first ensures clean exit.
+  const originalExit = process.exit.bind(process);
+  process.exit = ((code?: number) => {
+    if (process.stdin.isTTY) {
+      process.stdin.destroy();
+    }
+    originalExit(code);
+  }) as typeof process.exit;
+
+  runMain(mainCommand);
 }

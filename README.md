@@ -20,6 +20,20 @@ A powerful CLI for calling LLMs from the terminal. Text in, text out. Built on t
 - ⚙️ **Config Directory** — set defaults in `~/.ai-pipe/`
 - 🐚 **Shell Completions** — bash, zsh, fish
 - 📦 **Standalone Binary** — compile to a single executable with `bun build --compile`
+- 💬 **Conversation History** — continue sessions with `-C`/`--session`
+- 🖼️ **Image Input** — attach images for vision models with `--image`
+- 🎭 **Roles** — saved system prompts in `~/.ai-pipe/roles/`
+- 📊 **Cost Tracking** — show estimated token costs with `--cost`
+- 📝 **Markdown Rendering** — formatted terminal output with `--markdown`
+- 💾 **Response Caching** — skip duplicate API calls with built-in cache
+- 🔔 **Update Notifications** — automatic new version alerts
+- 🔧 **Tool Use** — function calling via `--tools`
+- 📄 **Prompt Templates** — reusable prompt snippets with `--template`
+- 📤 **Session Export/Import** — share conversations as JSON or Markdown
+- 📊 **Output Formats** — structured output in JSON, YAML, CSV, or text
+- 🔗 **Chain Mode** — chain multiple LLM calls sequentially with `--chain`
+- 🔌 **Plugin System** — loadable extensions for custom transforms via `--plugins`
+- 🔀 **Response Diffing** — compare outputs from multiple models side-by-side
 
 ## 📦 Installation
 
@@ -51,9 +65,32 @@ bun install
 bun link
 ```
 
+## 🚀 Quick Start
+
+The fastest way to get started is with the interactive setup wizard:
+
+```bash
+ai-pipe init
+```
+
+This walks you through:
+1. Selecting your AI providers (OpenAI, Anthropic, Google, etc.)
+2. Entering API keys (securely masked)
+3. Choosing a default model
+4. Setting a default temperature
+
+Your config is saved to `~/.ai-pipe/`. Then try:
+
+```bash
+ai-pipe "What is TypeScript?"
+ai-pipe -m anthropic/claude-sonnet-4-5 "Write a haiku"
+cat README.md | ai-pipe "Summarize this"
+ai-pipe config show
+```
+
 ## 🔑 Setup
 
-Set an API key for at least one provider:
+Set an API key for at least one provider (or use `ai-pipe init` for guided setup):
 
 ```bash
 # OpenAI
@@ -132,7 +169,33 @@ ai-pipe -t 1.5 "write a creative story"
 
 # Limit output length
 ai-pipe --max-output-tokens 100 "explain quantum computing"
+
+# Set a budget of $0.05 per request
+ai-pipe --budget 0.05 "explain quantum computing"
+
+# Budget in chat mode tracks cumulative cost
+ai-pipe --chat --budget 1.00
+
+# Retry up to 3 times on rate limits or transient errors
+ai-pipe --retries 3 "explain recursion"
 ```
+
+### Response Diffing
+
+Compare outputs from multiple models for the same prompt:
+
+```bash
+# Compare two models
+ai-pipe --diff "openai/gpt-4o,anthropic/claude-sonnet-4-5" "write a haiku about coding"
+
+# Compare with cost tracking
+ai-pipe --diff "openai/gpt-4o,google/gemini-2.5-flash,anthropic/claude-sonnet-4-5" --cost "explain monads"
+
+# JSON output for programmatic comparison
+ai-pipe --diff "openai/gpt-4o,anthropic/claude-sonnet-4-5" --json "what is rust?"
+```
+
+Models are queried in parallel for speed. Each result shows the model name, response time, token usage, and optionally cost.
 
 > 📌 **Note:** If no `provider/` prefix is given, the model defaults to `openai`. If no `-m` flag is given, it defaults to `openai/gpt-4o`.
 
@@ -157,6 +220,7 @@ ai-pipe --max-output-tokens 100 "explain quantum computing"
 | Vertex | `GOOGLE_VERTEX_PROJECT`, `GOOGLE_VERTEX_LOCATION` | `vertex/google/cloud/llama-3.1` |
 | Ollama | `OLLAMA_HOST` | `ollama/llama3` |
 | HuggingFace | `HF_TOKEN` | `huggingface/meta-llama/Llama-3.3-70b-Instruct` |
+| DeepInfra | `DEEPINFRA_API_KEY` | `deepinfra/meta-llama/Llama-3.3-70b-Instruct` |
 
 ## ⚙️ Configuration
 
@@ -194,6 +258,58 @@ ai-pipe -c ./my-config-dir "hello"
 
 > 🔧 **Note:** CLI flags always override config values.
 
+### Model Aliases
+
+Define short names for long model IDs in your config:
+
+**`~/.ai-pipe/config.json`**:
+
+```json
+{
+  "model": "claude",
+  "aliases": {
+    "claude": "anthropic/claude-sonnet-4-5",
+    "gpt": "openai/gpt-4o",
+    "gemini": "google/gemini-2.5-flash",
+    "llama": "groq/llama-3.3-70b-versatile",
+    "deepseek": "deepseek/deepseek-chat"
+  }
+}
+```
+
+Then use the short name with `-m`:
+
+```bash
+ai-pipe -m claude "write a haiku"    # expands to anthropic/claude-sonnet-4-5
+ai-pipe -m gpt "explain monads"       # expands to openai/gpt-4o
+ai-pipe -m gemini "summarize this"    # expands to google/gemini-2.5-flash
+```
+
+The `model` field in config also resolves aliases, so setting `"model": "claude"` uses `anthropic/claude-sonnet-4-5` as the default.
+
+### Config Commands
+
+Manage your configuration from the command line:
+
+```bash
+# Show current config (API keys are masked)
+ai-pipe config show
+
+# Set config values
+ai-pipe config set model anthropic/claude-sonnet-4-5
+ai-pipe config set temperature 0.7
+ai-pipe config set providers.anthropic.temperature 0.5
+
+# Set API keys (saved to apiKeys.json, not config.json)
+ai-pipe config set openai sk-your-api-key
+
+# Reset config to defaults
+ai-pipe config reset
+
+# Print config directory path
+ai-pipe config path
+```
+
 ### Shell Completions
 
 ```bash
@@ -206,6 +322,89 @@ eval "$(ai-pipe --completions zsh)"
 # fish — save to completions dir
 ai-pipe --completions fish > ~/.config/fish/completions/ai-pipe.fish
 ```
+
+### Prompt Templates
+
+Save reusable prompt snippets in `~/.ai-pipe/templates/` as `.md` files. Templates can contain `{{input}}` placeholders that get replaced with your prompt text.
+
+```bash
+# Create a template
+mkdir -p ~/.ai-pipe/templates
+echo "Review the following code for bugs, security issues, and best practices:
+
+{{input}}
+
+Provide specific, actionable feedback." > ~/.ai-pipe/templates/review.md
+
+# Use a template
+ai-pipe -T review -f main.go
+
+# Use a template with piped input
+cat src/app.ts | ai-pipe -T review
+
+# List available templates
+ai-pipe --templates
+```
+
+## 🔌 Plugins
+
+Extend ai-pipe with custom plugins that can transform prompts before sending and responses after receiving. Plugins are loaded from a JSON config file.
+
+### Plugin Config
+
+Create `~/.ai-pipe/plugins.json` (auto-loaded if present, or specify with `--plugins`):
+
+```json
+[
+  { "path": "./my-plugin.ts", "enabled": true },
+  { "path": "./another-plugin.js", "enabled": false }
+]
+```
+
+### Writing a Plugin
+
+A plugin is a TypeScript or JavaScript file that exports an object with a `name` and optional hooks:
+
+```typescript
+// my-plugin.ts
+export default {
+  name: "my-plugin",
+  version: "1.0.0",
+
+  // Transform the prompt before sending to the model
+  beforeRequest: ({ prompt, model, system }) => {
+    return `[Enhanced] ${prompt}`;
+  },
+
+  // Transform the response after receiving from the model
+  afterResponse: ({ text, model, usage }) => {
+    return text.toUpperCase();
+  },
+
+  // Called when the plugin is loaded
+  init: () => {
+    console.error("Plugin initialized");
+  },
+
+  // Called when the CLI exits
+  cleanup: () => {
+    console.error("Plugin cleaned up");
+  },
+};
+```
+
+### Using Plugins
+
+```bash
+# Use the default plugins config (~/.ai-pipe/plugins.json)
+ai-pipe "hello"
+
+# Use a custom plugins config
+ai-pipe --plugins ./my-plugins.json "hello"
+ai-pipe -P ./my-plugins.json "hello"
+```
+
+Plugins run in the order they appear in the config file. The `beforeRequest` hook chains (each plugin receives the previous plugin's output), and likewise for `afterResponse`.
 
 ## 📊 JSON Output
 
@@ -230,22 +429,129 @@ Pipe into `jq` for further processing:
 ai-pipe --json "list 3 colors" | jq -r '.text'
 ```
 
+### Output Formats
+
+Use `--format` (or `-F`) to get structured output in different formats:
+
+```bash
+# JSON output (same as --json)
+ai-pipe --format json "what is 2+2"
+
+# YAML output
+ai-pipe --format yaml "what is 2+2"
+
+# CSV output (great for spreadsheets)
+ai-pipe --format csv "list 3 colors" >> results.csv
+
+# Text only (strips metadata)
+ai-pipe --format text "hello"
+```
+
+When `--format` is used, streaming is automatically disabled (same behavior as `--json`).
+
+## 💬 Session Management
+
+Export, import, and manage conversation sessions:
+
+```bash
+# List all saved sessions
+ai-pipe session list
+
+# Export a session as JSON (prints to stdout)
+ai-pipe session export my-chat > my-chat.json
+
+# Export as Markdown
+ai-pipe session export my-chat --format md > my-chat.md
+
+# Import a session from a file
+ai-pipe session import my-chat backup.json
+
+# Import a session from stdin
+cat backup.json | ai-pipe session import my-chat
+
+# Delete a session
+ai-pipe session delete my-chat
+```
+
+## 🔗 Chain Mode
+
+Chain multiple LLM calls where the output of one becomes the input to the next. Create a chain config JSON file defining the steps:
+
+**`chain.json`**:
+
+```json
+[
+  { "prompt": "Translate to French: {{input}}" },
+  { "prompt": "Summarize in one sentence: {{input}}" },
+  { "model": "anthropic/claude-sonnet-4-5", "prompt": "Rate the quality of this translation 1-10: {{input}}" }
+]
+```
+
+Each step can optionally override the `model` and `system` prompt. The `{{input}}` placeholder is replaced with the output from the previous step (or the initial prompt for the first step).
+
+```bash
+# Run a chain
+ai-pipe --chain chain.json "Hello, how are you today?"
+
+# With verbose output (shows intermediate steps on stderr)
+ai-pipe --chain chain.json --verbose "Hello world"
+
+# Pipe into a chain
+cat article.md | ai-pipe --chain summarize-chain.json
+
+# Combine with other flags
+ai-pipe --chain chain.json --json "Hello world"
+ai-pipe --chain chain.json --markdown "Hello world"
+```
+
+> **Note:** Chain mode is always non-streaming. Each step needs the full output before the next step can begin.
+
 ## 🛠️ Command Options
 
 ```
-Usage: ai-pipe [options] [prompt...]
+Usage: ai-pipe [command|options] [prompt...]
+
+Commands:
+  init                         Interactive setup wizard
+  config show                  Show current configuration
+  config set <key> <value>     Set a config value
+  config reset                 Reset config to defaults
+  config path                  Print config directory path
+  session list                 List all saved sessions
+  session export <name>        Export a session (--format json|md)
+  session import <name> [file] Import a session from file or stdin
+  session delete <name>        Delete a session
 
 Options:
   -m, --model <model>          Model in provider/model-id format
   -s, --system <prompt>        System prompt
+  -r, --role <name>            Use a saved role from ~/.ai-pipe/roles/
   -f, --file <path>            Include file contents in prompt (repeatable)
+  -i, --image <path>           Include image in prompt for vision models (repeatable)
   -j, --json                   Output full JSON response object
+  -F, --format <fmt>           Output format (json, yaml, csv, text)
   --no-stream                  Wait for full response, then print
+  --markdown                   Render markdown output
+  --cost                       Show estimated cost of the request
   -t, --temperature <n>        Sampling temperature (0-2)
   --max-output-tokens <n>      Maximum tokens to generate
   -c, --config <path>          Path to config directory
+  -C, --session <name>         Session name for conversation history
   --providers                  List supported providers and their API key status
+  --roles                      List available roles from ~/.ai-pipe/roles/
   --completions <shell>        Generate shell completions (bash, zsh, fish)
+  -T, --template <name>        Use a prompt template from ~/.ai-pipe/templates/
+  --templates                  List available templates
+  --cost                       Show estimated token costs
+  -B, --budget <amount>        Max dollar budget per request (cumulative in chat)
+  --retries <n>                Retry on rate limit or transient errors (0=none)
+  -D, --diff <models>           Compare models (comma-separated)
+  --tools <path>               Load tool definitions from JSON config
+  --chain <path>               Path to chain config JSON for multi-step LLM calls
+  -v, --verbose                Show intermediate chain outputs on stderr
+  -P, --plugins <path>         Load plugins from JSON config
+  --no-cache                   Disable response caching
+  --no-update-check            Disable update version check
   -V, --version                Print version
   -h, --help                   Print help
 ```
@@ -275,7 +581,7 @@ Binaries are output to `dist/`.
 bun install
 
 # Run tests
-bun test              # 227 tests across 7 files
+bun test              # 808 tests across 24 files
 
 # Type checking
 bun run typecheck     # TypeScript type checking
@@ -299,25 +605,40 @@ The release workflow handles `bun publish`, binary builds, and GitHub release.
 - [x] **17 providers** — OpenAI, Anthropic, Google, and 14 more
 - [x] **npm publishing** — `npm install -g ai-pipe` / `bun install -g ai-pipe`
 - [x] **File attachments** — include file contents in prompts with `-f`
-- [ ] **Conversation history** — continue previous conversations with `-C`, named sessions with `--session`
-- [ ] **Image input** — attach images for vision models with `--image`
-- [ ] **Roles** — saved system prompts in `~/.ai-pipe/roles/` (e.g. `ai-pipe --role reviewer`)
-- [ ] **Markdown rendering** — syntax-highlighted, formatted output in the terminal
-- [ ] **Cost tracking** — show estimated token costs per request
-- [ ] **Response caching** — skip duplicate API calls for identical prompts
-- [ ] **Update notifications** — check for new versions and prompt to upgrade
-- [ ] **Tool use** — function calling and MCP support
+- [x] **Conversation history** — continue previous conversations with `-C`, named sessions with `--session`
+- [x] **Image input** — attach images for vision models with `--image`
+- [x] **Roles** — saved system prompts in `~/.ai-pipe/roles/` (e.g. `ai-pipe --role reviewer`)
+- [x] **Markdown rendering** — syntax-highlighted, formatted output in the terminal
+- [x] **Cost tracking** — show estimated token costs per request
+- [x] **Response caching** — skip duplicate API calls for identical prompts
+- [x] **Update notifications** — check for new versions and prompt to upgrade
+- [x] **Tool use** — function calling and MCP support
+- [x] **Interactive chat mode** — back-and-forth conversation with `--chat`
+- [x] **MCP support** — Model Context Protocol via `@ai-sdk/mcp`
+- [x] **Provider-specific defaults** — per-provider temperature/maxTokens in config
+- [x] **Streaming markdown** — progressive markdown rendering during streaming
+- [x] **Config commands** — `ai-pipe init` wizard, `config set/show/reset/path`
+- [x] **citty migration** — replaced Commander.js with citty (UnJS)
+- [x] **Prompt templates** — reusable prompt snippets in `~/.ai-pipe/templates/`
+- [x] **Output formats** — CSV, YAML, JSON, text structured output modes
+- [x] **Session export/import** — share conversations as JSON/Markdown
+- [x] **Token budget** — set a max spend per session with `--budget`
+- [x] **Model aliases** — short names for long model IDs in config
+- [x] **Retry with backoff** — automatic retry on rate limits and transient errors
+- [x] **Piped chain mode** — chain multiple LLM calls with `--chain`
+- [x] **Plugin system** — loadable extensions for custom providers/transforms
+- [x] **Response diffing** — compare outputs across models for same prompt
 
 ## 📚 Documentation
 
 - [API Reference](docs/api.md)
 - [Provider Configuration](docs/providers.md)
-- [Examples](examples/)
+- [Examples](docs/examples.md)
 - [Contributing Guide](CONTRIBUTING.md)
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details.
+Contributions are welcome!
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)

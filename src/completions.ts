@@ -6,10 +6,29 @@ const shells = APP.supportedShells.join(" ");
 const name = APP.name;
 const funcName = APP.name.replace(/-/g, "_");
 
+/**
+ * Generate shell completion scripts for the specified shell.
+ *
+ * Outputs a script that can be eval'd in the user's shell profile to enable
+ * tab completion for all ai-pipe flags, providers, and options.
+ *
+ * Supported shells: bash, zsh, fish.
+ *
+ * @param shell - The shell name to generate completions for.
+ * @returns The completion script as a string.
+ *
+ * @example
+ * ```bash
+ * # Add to ~/.bashrc:
+ * eval "$(ai-pipe --completions bash)"
+ * ```
+ */
 export function generateCompletions(shell: string): string {
   const result = ShellSchema.safeParse(shell);
   if (!result.success) {
-    console.error(`Error: Unknown shell "${shell}". Supported: ${shells}`);
+    console.error(
+      `Error: Unknown shell "${shell}". Supported shells: ${shells}. Example: ai-pipe --completions bash`,
+    );
     process.exit(1);
   }
 
@@ -26,12 +45,33 @@ function bash(): string {
   return `# ${name} bash completions
 # Add to ~/.bashrc: eval "$(${name} --completions bash)"
 _${funcName}_completions() {
-  local cur prev opts providers
+  local cur prev opts providers subcommands config_subcommands
   COMPREPLY=()
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
-  opts="--model --system --role --roles --file --image --json --no-stream --temperature --max-output-tokens --config --markdown --cost --session --tools --providers --completions --version --help"
+  opts="--model -m --system -s --role -r --roles --template -T --templates --file -f --image -i --json -j --format -F --no-stream --no-cache --temperature -t --max-output-tokens --config -c --cost --markdown --chat --session -C --budget -B --retries --diff -D --providers --completions --tools --mcp --chain --verbose -v --plugins -P --no-update-check --version -V --help -h"
   providers="${providers}"
+  subcommands="init config session"
+  config_subcommands="set show reset path"
+  session_subcommands="list export import delete"
+
+  # Handle config subcommands
+  if [[ "\${COMP_WORDS[1]}" == "config" ]]; then
+    if [[ \${COMP_CWORD} -eq 2 ]]; then
+      COMPREPLY=( $(compgen -W "\${config_subcommands}" -- "\${cur}") )
+      return 0
+    fi
+    return 0
+  fi
+
+  # Handle session subcommands
+  if [[ "\${COMP_WORDS[1]}" == "session" ]]; then
+    if [[ \${COMP_CWORD} -eq 2 ]]; then
+      COMPREPLY=( $(compgen -W "\${session_subcommands}" -- "\${cur}") )
+      return 0
+    fi
+    return 0
+  fi
 
   case "\${prev}" in
     -m|--model)
@@ -43,19 +83,8 @@ _${funcName}_completions() {
       compopt -o nospace
       return 0
       ;;
-    -f|--file)
+    -f|--file|-i|--image|--tools|--mcp|--chain|-P|--plugins)
       COMPREPLY=( $(compgen -f -- "\${cur}") )
-      return 0
-      ;;
-    -i|--image)
-      COMPREPLY=( $(compgen -f -- "\${cur}") )
-      return 0
-      ;;
-    --tools)
-      COMPREPLY=( $(compgen -f -- "\${cur}") )
-      return 0
-      ;;
-    -C|--session)
       return 0
       ;;
     -c|--config)
@@ -66,7 +95,11 @@ _${funcName}_completions() {
       COMPREPLY=( $(compgen -W "${shells}" -- "\${cur}") )
       return 0
       ;;
-    -s|--system|-r|--role|--roles|-t|--temperature|--max-output-tokens|--cost|--markdown)
+    -F|--format)
+      COMPREPLY=( $(compgen -W "json yaml csv text" -- "\${cur}") )
+      return 0
+      ;;
+    -C|--session|-s|--system|-r|--role|-T|--template|-t|--temperature|--max-output-tokens|-B|--budget|--retries|-D|--diff)
       return 0
       ;;
   esac
@@ -75,37 +108,79 @@ _${funcName}_completions() {
     COMPREPLY=( $(compgen -W "\${opts}" -- "\${cur}") )
     return 0
   fi
+
+  # Complete subcommands as first argument
+  if [[ \${COMP_CWORD} -eq 1 ]]; then
+    COMPREPLY=( $(compgen -W "\${subcommands}" -- "\${cur}") )
+    return 0
+  fi
 }
-complete -F _${funcName}_completions ${name}`;
+complete -F _${funcName}_completions ${name}
+complete -F _${funcName}_completions ai`;
 }
 
 function zsh(): string {
   return `# ${name} zsh completions
 # Add to ~/.zshrc: eval "$(${name} --completions zsh)"
 _${funcName}() {
-  local -a providers
+  local -a providers subcommands config_subcommands session_subcommands
   providers=(${SUPPORTED_PROVIDERS.map((p) => `'${p}/'`).join(" ")})
+  subcommands=('init:Run interactive setup wizard' 'config:Manage configuration' 'session:Manage conversation sessions')
+  config_subcommands=('set:Set a config value' 'show:Show current config' 'reset:Reset config to defaults' 'path:Print config directory path')
+  session_subcommands=('list:List all saved sessions' 'export:Export a session (json or md)' 'import:Import a session from file' 'delete:Delete a session')
+
+  # Handle config subcommands
+  if [[ "\${words[2]}" == "config" ]]; then
+    if [[ \${CURRENT} -eq 3 ]]; then
+      _describe -t commands 'config command' config_subcommands
+      return 0
+    fi
+    return 0
+  fi
+
+  # Handle session subcommands
+  if [[ "\${words[2]}" == "session" ]]; then
+    if [[ \${CURRENT} -eq 3 ]]; then
+      _describe -t commands 'session command' session_subcommands
+      return 0
+    fi
+    return 0
+  fi
 
   _arguments -s \\
     '(-m --model)'{-m,--model}'[Model in provider/model-id format]:model:->models' \\
     '(-s --system)'{-s,--system}'[System prompt]:prompt:' \\
     '(-r --role)'{-r,--role}'[Role name from roles directory]:role:' \\
     '--roles[List available roles]' \\
+    '(-T --template)'{-T,--template}'[Template name from templates directory]:template:' \\
+    '--templates[List available templates]' \\
     '*'{-f,--file}'[Include file contents]:file:_files' \\
-    '(-i --image)'{-i,--image}'[Include image file]:file:_files' \\
+    '*'{-i,--image}'[Include image file (repeatable)]:file:_files' \\
     '(-j --json)'{-j,--json}'[Output full JSON response object]' \\
+    '(-F --format)'{-F,--format}'[Output format (json, yaml, csv, text)]:format:(json yaml csv text)' \\
     '--no-stream[Wait for full response, then print]' \\
+    '--no-cache[Disable response caching]' \\
     '(-t --temperature)'{-t,--temperature}'[Sampling temperature (${APP.temperature.min}-${APP.temperature.max})]:temp:' \\
     '--max-output-tokens[Maximum tokens to generate]:tokens:' \\
     '(-c --config)'{-c,--config}'[Path to config directory]:dir:_directories' \\
-    '--markdown[Render markdown output]' \\
-    '--cost[Show estimated cost of the request]' \\
-    '(-C --session)'{-C,--session}'[Session name for conversation history]:name:' \\
-    '--tools[Path to tools configuration file]:file:_files' \\
+    '--cost[Show token usage and cost after response]' \\
+    '--markdown[Render response as formatted markdown]' \\
+    '--chat[Start interactive chat mode]' \\
+    '(-C --session)'{-C,--session}'[Session name for conversation continuity]:session:' \\
+    '(-B --budget)'{-B,--budget}'[Max dollar budget per request]:budget:' \\
     '--providers[List supported providers]' \\
     '--completions[Generate shell completions]:shell:(${shells})' \\
+    '--retries[Number of retries on rate limit or transient errors]:retries:' \\
+    '--tools[Path to tools configuration file (JSON)]:file:_files' \\
+    '--mcp[Path to MCP server configuration file (JSON)]:file:_files' \\
+    '--chain[Path to chain config JSON file]:file:_files' \\
+    '(-v --verbose)'{-v,--verbose}'[Show intermediate chain outputs on stderr]' \\
+    '(-P --plugins)'{-P,--plugins}'[Path to plugins configuration file (JSON)]:file:_files' \\
+    '(-D --diff)'{-D,--diff}'[Compare models (comma-separated)]:models:' \\
+    '--no-update-check[Disable update notifications]' \\
     '(-V --version)'{-V,--version}'[Print version]' \\
     '(-h --help)'{-h,--help}'[Print help]' \\
+    '1:command:->subcmd' \\
     '*:prompt:' \\
     && return 0
 
@@ -113,31 +188,110 @@ _${funcName}() {
     models)
       _describe -t providers 'provider' providers -S ''
       ;;
+    subcmd)
+      _describe -t commands 'command' subcommands
+      ;;
   esac
 }
-compdef _${funcName} ${name}`;
+compdef _${funcName} ${name}
+compdef _${funcName} ai`;
 }
 
 function fish(): string {
   return `# ${name} fish completions
 # Add to ~/.config/fish/completions/${name}.fish
+
+# Subcommands
+complete -c ${name} -n '__fish_use_subcommand' -a 'init' -d 'Run interactive setup wizard'
+complete -c ${name} -n '__fish_use_subcommand' -a 'config' -d 'Manage configuration'
+complete -c ${name} -n '__fish_use_subcommand' -a 'session' -d 'Manage conversation sessions'
+
+# Config subcommands
+complete -c ${name} -n '__fish_seen_subcommand_from config' -a 'set' -d 'Set a config value'
+complete -c ${name} -n '__fish_seen_subcommand_from config' -a 'show' -d 'Show current config'
+complete -c ${name} -n '__fish_seen_subcommand_from config' -a 'reset' -d 'Reset config to defaults'
+complete -c ${name} -n '__fish_seen_subcommand_from config' -a 'path' -d 'Print config directory path'
+
+# Session subcommands
+complete -c ${name} -n '__fish_seen_subcommand_from session' -a 'list' -d 'List all saved sessions'
+complete -c ${name} -n '__fish_seen_subcommand_from session' -a 'export' -d 'Export a session (json or md)'
+complete -c ${name} -n '__fish_seen_subcommand_from session' -a 'import' -d 'Import a session from file'
+complete -c ${name} -n '__fish_seen_subcommand_from session' -a 'delete' -d 'Delete a session'
+
+# Global options
 complete -c ${name} -s m -l model -d 'Model in provider/model-id format' -x -a '${SUPPORTED_PROVIDERS.map((p) => `${p}/`).join(" ")}'
 complete -c ${name} -s s -l system -d 'System prompt' -x
 complete -c ${name} -s r -l role -d 'Role name from roles directory' -x
 complete -c ${name} -l roles -d 'List available roles'
+complete -c ${name} -s T -l template -d 'Template name from templates directory' -x
+complete -c ${name} -l templates -d 'List available templates'
 complete -c ${name} -s f -l file -d 'Include file contents in prompt (repeatable)' -r -F
-complete -c ${name} -s i -l image -d 'Include image file' -r -F
+complete -c ${name} -s i -l image -d 'Include image file (repeatable)' -r -F
 complete -c ${name} -s j -l json -d 'Output full JSON response object'
+complete -c ${name} -s F -l format -d 'Output format (json, yaml, csv, text)' -x -a 'json yaml csv text'
 complete -c ${name} -l no-stream -d 'Wait for full response, then print'
+complete -c ${name} -l no-cache -d 'Disable response caching'
 complete -c ${name} -s t -l temperature -d 'Sampling temperature (${APP.temperature.min}-${APP.temperature.max})' -x
 complete -c ${name} -l max-output-tokens -d 'Maximum tokens to generate' -x
 complete -c ${name} -s c -l config -d 'Path to config directory' -x -a '(__fish_complete_directories)'
-complete -c ${name} -l markdown -d 'Render markdown output'
-complete -c ${name} -l cost -d 'Show estimated cost of the request'
-complete -c ${name} -s C -l session -d 'Session name for conversation history' -x
-complete -c ${name} -l tools -d 'Path to tools configuration file' -r -F
+complete -c ${name} -l cost -d 'Show token usage and cost after response'
+complete -c ${name} -l markdown -d 'Render response as formatted markdown'
+complete -c ${name} -l chat -d 'Start interactive chat mode'
+complete -c ${name} -s C -l session -d 'Session name for conversation continuity' -x
+complete -c ${name} -s B -l budget -d 'Max dollar budget per request' -x
 complete -c ${name} -l providers -d 'List supported providers'
 complete -c ${name} -l completions -d 'Generate shell completions' -x -a '${shells}'
+complete -c ${name} -l retries -d 'Number of retries on rate limit or transient errors' -x
+complete -c ${name} -l tools -d 'Path to tools configuration file (JSON)' -r -F
+complete -c ${name} -l mcp -d 'Path to MCP server configuration file (JSON)' -r -F
+complete -c ${name} -l chain -d 'Path to chain config JSON file' -r -F
+complete -c ${name} -s v -l verbose -d 'Show intermediate chain outputs on stderr'
+complete -c ${name} -s P -l plugins -d 'Path to plugins configuration file (JSON)' -r -F
+complete -c ${name} -s D -l diff -d 'Compare models (comma-separated)' -x
+complete -c ${name} -l no-update-check -d 'Disable update notifications'
 complete -c ${name} -s V -l version -d 'Print version'
-complete -c ${name} -s h -l help -d 'Print help'`;
+complete -c ${name} -s h -l help -d 'Print help'
+
+# ai alias completions
+complete -c ai -n '__fish_use_subcommand' -a 'init' -d 'Run interactive setup wizard'
+complete -c ai -n '__fish_use_subcommand' -a 'config' -d 'Manage configuration'
+complete -c ai -n '__fish_use_subcommand' -a 'session' -d 'Manage conversation sessions'
+complete -c ai -n '__fish_seen_subcommand_from config' -a 'set' -d 'Set a config value'
+complete -c ai -n '__fish_seen_subcommand_from config' -a 'show' -d 'Show current config'
+complete -c ai -n '__fish_seen_subcommand_from config' -a 'reset' -d 'Reset config to defaults'
+complete -c ai -n '__fish_seen_subcommand_from config' -a 'path' -d 'Print config directory path'
+complete -c ai -n '__fish_seen_subcommand_from session' -a 'list' -d 'List all saved sessions'
+complete -c ai -n '__fish_seen_subcommand_from session' -a 'export' -d 'Export a session (json or md)'
+complete -c ai -n '__fish_seen_subcommand_from session' -a 'import' -d 'Import a session from file'
+complete -c ai -n '__fish_seen_subcommand_from session' -a 'delete' -d 'Delete a session'
+complete -c ai -s m -l model -d 'Model in provider/model-id format' -x -a '${SUPPORTED_PROVIDERS.map((p) => `${p}/`).join(" ")}'
+complete -c ai -s s -l system -d 'System prompt' -x
+complete -c ai -s r -l role -d 'Role name from roles directory' -x
+complete -c ai -l roles -d 'List available roles'
+complete -c ai -s T -l template -d 'Template name from templates directory' -x
+complete -c ai -l templates -d 'List available templates'
+complete -c ai -s f -l file -d 'Include file contents in prompt (repeatable)' -r -F
+complete -c ai -s i -l image -d 'Include image file (repeatable)' -r -F
+complete -c ai -s j -l json -d 'Output full JSON response object'
+complete -c ai -s F -l format -d 'Output format (json, yaml, csv, text)' -x -a 'json yaml csv text'
+complete -c ai -l no-stream -d 'Wait for full response, then print'
+complete -c ai -s t -l temperature -d 'Sampling temperature (${APP.temperature.min}-${APP.temperature.max})' -x
+complete -c ai -l max-output-tokens -d 'Maximum tokens to generate' -x
+complete -c ai -s c -l config -d 'Path to config directory' -x -a '(__fish_complete_directories)'
+complete -c ai -l cost -d 'Show token usage and cost after response'
+complete -c ai -l markdown -d 'Render response as formatted markdown'
+complete -c ai -l chat -d 'Start interactive chat mode'
+complete -c ai -s C -l session -d 'Session name for conversation continuity' -x
+complete -c ai -s B -l budget -d 'Max dollar budget per request' -x
+complete -c ai -l providers -d 'List supported providers'
+complete -c ai -l completions -d 'Generate shell completions' -x -a '${shells}'
+complete -c ai -l retries -d 'Number of retries on rate limit or transient errors' -x
+complete -c ai -l tools -d 'Path to tools configuration file (JSON)' -r -F
+complete -c ai -l mcp -d 'Path to MCP server configuration file (JSON)' -r -F
+complete -c ai -l chain -d 'Path to chain config JSON file' -r -F
+complete -c ai -s v -l verbose -d 'Show intermediate chain outputs on stderr'
+complete -c ai -s P -l plugins -d 'Path to plugins configuration file (JSON)' -r -F
+complete -c ai -s D -l diff -d 'Compare models (comma-separated)' -x
+complete -c ai -s V -l version -d 'Print version'
+complete -c ai -s h -l help -d 'Print help'`;
 }

@@ -142,6 +142,13 @@ describe("parseModel", () => {
       "meta-llama/Llama-3.3-70b-Instruct",
       "huggingface/meta-llama/Llama-3.3-70b-Instruct",
     ],
+    ["cerebras/llama3.1-8b", "cerebras", "llama3.1-8b", "cerebras/llama3.1-8b"],
+    [
+      "gateway/openai/gpt-4o",
+      "gateway",
+      "openai/gpt-4o",
+      "gateway/openai/gpt-4o",
+    ],
   ];
 
   for (const [input, provider, modelId, fullId] of cases) {
@@ -174,8 +181,8 @@ describe("parseModel", () => {
 // ── SUPPORTED_PROVIDERS ────────────────────────────────────────────────
 
 describe("SUPPORTED_PROVIDERS", () => {
-  test("has exactly 18 providers", () => {
-    expect(SUPPORTED_PROVIDERS).toHaveLength(18);
+  test("has exactly 20 providers", () => {
+    expect(SUPPORTED_PROVIDERS).toHaveLength(20);
   });
 
   test("includes all expected providers", () => {
@@ -198,6 +205,8 @@ describe("SUPPORTED_PROVIDERS", () => {
       "vertex",
       "ollama",
       "huggingface",
+      "cerebras",
+      "gateway",
     ];
     for (const p of expected) {
       expect(SUPPORTED_PROVIDERS).toContain(p);
@@ -240,6 +249,8 @@ describe("PROVIDER_ENV_VARS", () => {
     ollama: ["OLLAMA_HOST"],
     huggingface: ["HF_TOKEN"],
     deepinfra: ["DEEPINFRA_API_KEY"],
+    cerebras: ["CEREBRAS_API_KEY"],
+    gateway: ["AI_GATEWAY_API_KEY"],
   };
 
   for (const [provider, envVars] of Object.entries(expected)) {
@@ -247,6 +258,91 @@ describe("PROVIDER_ENV_VARS", () => {
       expect(PROVIDER_ENV_VARS[provider as ProviderId]).toEqual(envVars);
     });
   }
+});
+
+// ── ModelStringSchema edge cases ──────────────────────────────────────
+
+describe("ModelStringSchema edge cases", () => {
+  test("rejects null", () => {
+    const result = ModelStringSchema.safeParse(null);
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects undefined", () => {
+    const result = ModelStringSchema.safeParse(undefined);
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects number", () => {
+    const result = ModelStringSchema.safeParse(123);
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects boolean", () => {
+    const result = ModelStringSchema.safeParse(true);
+    expect(result.success).toBe(false);
+  });
+
+  test("accepts single character model name", () => {
+    const result = ModelStringSchema.parse("x");
+    expect(result.provider).toBe("openai");
+    expect(result.modelId).toBe("x");
+  });
+
+  test("handles whitespace in model string", () => {
+    const result = ModelStringSchema.parse(" openai / gpt-4o ");
+    expect(result.provider).toBe(" openai ");
+    expect(result.modelId).toBe(" gpt-4o ");
+  });
+
+  test("handles very long model string", () => {
+    const longModel = `provider/${"a".repeat(1000)}`;
+    const result = ModelStringSchema.parse(longModel);
+    expect(result.provider).toBe("provider");
+    expect(result.modelId.length).toBe(1000);
+  });
+});
+
+// ── ProviderIdSchema edge cases ──────────────────────────────────────────
+
+describe("ProviderIdSchema edge cases", () => {
+  test("rejects null", () => {
+    expect(ProviderIdSchema.safeParse(null).success).toBe(false);
+  });
+
+  test("rejects number", () => {
+    expect(ProviderIdSchema.safeParse(42).success).toBe(false);
+  });
+
+  test("rejects provider with trailing space", () => {
+    expect(ProviderIdSchema.safeParse("openai ").success).toBe(false);
+  });
+
+  test("rejects provider with leading space", () => {
+    expect(ProviderIdSchema.safeParse(" openai").success).toBe(false);
+  });
+});
+
+// ── parseModel edge cases ────────────────────────────────────────────────
+
+describe("parseModel edge cases", () => {
+  test("handles slash at start", () => {
+    const result = parseModel("/model");
+    expect(result.provider).toBe("");
+    expect(result.modelId).toBe("model");
+  });
+
+  test("handles slash at end", () => {
+    const result = parseModel("openai/");
+    expect(result.provider).toBe("openai");
+    expect(result.modelId).toBe("");
+  });
+
+  test("handles just a slash", () => {
+    const result = parseModel("/");
+    expect(result.provider).toBe("");
+    expect(result.modelId).toBe("");
+  });
 });
 
 // ── registry ───────────────────────────────────────────────────────────

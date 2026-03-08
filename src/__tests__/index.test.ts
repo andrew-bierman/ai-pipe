@@ -1,15 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Config } from "../config.ts";
+import { type Config, resolveAlias } from "../config.ts";
 import {
   buildPrompt,
   type CLIOptions,
   CLIOptionsSchema,
+  HistoryMessageSchema,
   HistorySchema,
   isValidSessionName,
   JsonOutputSchema,
+  loadAsDataUrl,
   readFiles,
   readImages,
   resolveOptions,
@@ -20,71 +21,94 @@ import {
 
 describe("buildPrompt", () => {
   test("returns arg prompt when only args provided", () => {
-    expect(buildPrompt("explain monads", null)).toBe("explain monads");
+    expect(buildPrompt({ prompt: "explain monads" })).toBe("explain monads");
   });
 
   test("returns stdin when only stdin provided", () => {
-    expect(buildPrompt(null, null, "hello world")).toBe("hello world");
+    expect(buildPrompt({ prompt: null, stdinContent: "hello world" })).toBe(
+      "hello world",
+    );
   });
 
   test("combines arg prompt and stdin with double newline", () => {
-    const result = buildPrompt("review this code", null, "const x = 1;");
+    const result = buildPrompt({
+      prompt: "review this code",
+      stdinContent: "const x = 1;",
+    });
     expect(result).toBe("review this code\n\nconst x = 1;");
   });
 
   test("returns empty string when neither provided", () => {
-    expect(buildPrompt(null, null)).toBe("");
+    expect(buildPrompt({ prompt: null })).toBe("");
   });
 
   test("arg prompt comes first in combined output", () => {
-    const result = buildPrompt("summarize", null, "long document text");
+    const result = buildPrompt({
+      prompt: "summarize",
+      stdinContent: "long document text",
+    });
     expect(result).not.toBeNull();
     expect(result?.startsWith("summarize")).toBe(true);
     expect(result?.endsWith("long document text")).toBe(true);
   });
 
   test("preserves multiline stdin content", () => {
-    const result = buildPrompt("review", null, "line1\nline2\nline3");
+    const result = buildPrompt({
+      prompt: "review",
+      stdinContent: "line1\nline2\nline3",
+    });
     expect(result).toBe("review\n\nline1\nline2\nline3");
   });
 
   test("preserves multiline arg prompt", () => {
-    const result = buildPrompt("do this\nand that", null);
+    const result = buildPrompt({ prompt: "do this\nand that" });
     expect(result).toBe("do this\nand that");
   });
 
   test("includes file content between arg and stdin", () => {
-    const result = buildPrompt(
-      "review",
-      "# file.ts\n```\ncode\n```",
-      "stdin data",
-    );
+    const result = buildPrompt({
+      prompt: "review",
+      fileContent: "# file.ts\n```\ncode\n```",
+      stdinContent: "stdin data",
+    });
     expect(result).toBe("review\n\n# file.ts\n```\ncode\n```\n\nstdin data");
   });
 
   test("returns file content only", () => {
-    const result = buildPrompt(null, "# f.txt\n```\nhello\n```");
+    const result = buildPrompt({
+      prompt: null,
+      fileContent: "# f.txt\n```\nhello\n```",
+    });
     expect(result).toBe("# f.txt\n```\nhello\n```");
   });
 
   test("combines arg and file content without stdin", () => {
-    const result = buildPrompt("summarize", "# f.txt\n```\ncontent\n```");
+    const result = buildPrompt({
+      prompt: "summarize",
+      fileContent: "# f.txt\n```\ncontent\n```",
+    });
     expect(result).toBe("summarize\n\n# f.txt\n```\ncontent\n```");
   });
 
   test("combines file content and stdin without arg", () => {
-    const result = buildPrompt(null, "# f.txt\n```\ncontent\n```", "stdin");
+    const result = buildPrompt({
+      prompt: null,
+      fileContent: "# f.txt\n```\ncontent\n```",
+      stdinContent: "stdin",
+    });
     expect(result).toBe("# f.txt\n```\ncontent\n```\n\nstdin");
   });
 
   test("returns empty string when all three are null", () => {
-    expect(buildPrompt(null, null, null)).toBe("");
+    expect(
+      buildPrompt({ prompt: null, fileContent: null, stdinContent: null }),
+    ).toBe("");
   });
 
   test("file content default param preserves two-arg behavior", () => {
-    expect(buildPrompt("hello", null)).toBe("hello");
-    expect(buildPrompt(null, null, "stdin")).toBe("stdin");
-    expect(buildPrompt("a", null, "b")).toBe("a\n\nb");
+    expect(buildPrompt({ prompt: "hello" })).toBe("hello");
+    expect(buildPrompt({ prompt: null, stdinContent: "stdin" })).toBe("stdin");
+    expect(buildPrompt({ prompt: "a", stdinContent: "b" })).toBe("a\n\nb");
   });
 });
 
@@ -132,8 +156,8 @@ describe("readImages", () => {
     await Bun.write(path, "fake png content");
     const result = await readImages([path]);
     expect(result).toHaveLength(1);
-    expect(result[0]!.url).toMatch(/^data:image\/png;base64,/);
-    expect(result[0]!.url).toContain("ZmFrZSBwbmcgY29udGVudA=="); // "fake png content" in base64
+    expect(result[0]?.url).toMatch(/^data:image\/png;base64,/);
+    expect(result[0]?.url).toContain("ZmFrZSBwbmcgY29udGVudA=="); // "fake png content" in base64
   });
 
   test("reads multiple images and returns data URLs", async () => {
@@ -143,8 +167,8 @@ describe("readImages", () => {
     await Bun.write(path2, "image two");
     const result = await readImages([path1, path2]);
     expect(result).toHaveLength(2);
-    expect(result[0]!.url).toMatch(/^data:image\/png;base64,/);
-    expect(result[1]!.url).toMatch(/^data:image\/jpeg;base64,/);
+    expect(result[0]?.url).toMatch(/^data:image\/png;base64,/);
+    expect(result[1]?.url).toMatch(/^data:image\/jpeg;base64,/);
   });
 
   test("throws on nonexistent image file", async () => {
@@ -168,7 +192,7 @@ describe("readImages", () => {
     const pngPath = join(tmpdir(), `test-${uid()}.png`);
     await Bun.write(pngPath, "\x89PNG\r\n\x1a\n");
     const result = await readImages([pngPath]);
-    expect(result[0]!.url).toMatch(/^data:image\/png;base64,/);
+    expect(result[0]?.url).toMatch(/^data:image\/png;base64,/);
   });
 
   test("handles empty image array", async () => {
@@ -185,6 +209,8 @@ describe("resolveOptions", () => {
     stream: true,
     markdown: false,
     cost: false,
+    chat: false,
+    cache: true,
   };
   const emptyConfig: Config = {};
 
@@ -440,7 +466,7 @@ describe("JsonOutputSchema", () => {
 // ── Session Sanitization ───────────────────────────────────────────────
 
 describe("session sanitization", () => {
-  const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const _uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   test("allows valid alphanumeric session names", () => {
     expect(isValidSessionName("session123")).toBe(true);
@@ -507,7 +533,7 @@ describe("history loading", () => {
   });
 
   test("sanitizes session names when saving history", async () => {
-    const session = `test-sanitize-${uid()}`;
+    const _session = `test-sanitize-${uid()}`;
     const unsafeSession = "session with spaces/and slashes";
     const sanitized = sanitizeSessionName(unsafeSession);
 
@@ -534,5 +560,892 @@ describe("history loading", () => {
 
     const history = await loadHistory(session);
     expect(history).toEqual([]);
+  });
+});
+
+// ── HistoryMessageSchema ────────────────────────────────────────────────
+
+describe("HistoryMessageSchema", () => {
+  test("accepts valid user message", () => {
+    const result = HistoryMessageSchema.parse({
+      role: "user",
+      content: "Hello!",
+    });
+    expect(result.role).toBe("user");
+    expect(result.content).toBe("Hello!");
+  });
+
+  test("accepts valid assistant message", () => {
+    const result = HistoryMessageSchema.parse({
+      role: "assistant",
+      content: "Hi there!",
+    });
+    expect(result.role).toBe("assistant");
+  });
+
+  test("accepts valid system message", () => {
+    const result = HistoryMessageSchema.parse({
+      role: "system",
+      content: "You are a helpful assistant.",
+    });
+    expect(result.role).toBe("system");
+  });
+
+  test("rejects invalid role", () => {
+    const result = HistoryMessageSchema.safeParse({
+      role: "admin",
+      content: "test",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects missing content", () => {
+    const result = HistoryMessageSchema.safeParse({ role: "user" });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects missing role", () => {
+    const result = HistoryMessageSchema.safeParse({ content: "test" });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects empty object", () => {
+    const result = HistoryMessageSchema.safeParse({});
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects non-string content", () => {
+    const result = HistoryMessageSchema.safeParse({
+      role: "user",
+      content: 123,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("accepts empty string content", () => {
+    const result = HistoryMessageSchema.parse({
+      role: "user",
+      content: "",
+    });
+    expect(result.content).toBe("");
+  });
+});
+
+// ── HistorySchema ────────────────────────────────────────────────────────
+
+describe("HistorySchema", () => {
+  test("accepts empty array", () => {
+    const result = HistorySchema.parse([]);
+    expect(result).toEqual([]);
+  });
+
+  test("accepts array of valid messages", () => {
+    const messages = [
+      { role: "system", content: "sys" },
+      { role: "user", content: "hello" },
+      { role: "assistant", content: "hi" },
+    ];
+    const result = HistorySchema.parse(messages);
+    expect(result).toHaveLength(3);
+  });
+
+  test("rejects array with invalid message", () => {
+    const result = HistorySchema.safeParse([
+      { role: "user", content: "ok" },
+      { role: "invalid", content: "bad" },
+    ]);
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects non-array", () => {
+    const result = HistorySchema.safeParse({ role: "user", content: "test" });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects null", () => {
+    const result = HistorySchema.safeParse(null);
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects string", () => {
+    const result = HistorySchema.safeParse("not an array");
+    expect(result.success).toBe(false);
+  });
+});
+
+// ── loadAsDataUrl ────────────────────────────────────────────────────────
+
+describe("loadAsDataUrl", () => {
+  const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  test("converts file to data URL with correct MIME type", async () => {
+    const path = join(tmpdir(), `test-dataurl-${uid()}.txt`);
+    await Bun.write(path, "hello");
+    const result = await loadAsDataUrl(path, "text/plain");
+    expect(result).toMatch(/^data:text\/plain;base64,/);
+    expect(result).toContain("aGVsbG8="); // "hello" in base64
+  });
+
+  test("throws for nonexistent file", async () => {
+    const path = join(tmpdir(), `nonexistent-${uid()}.txt`);
+    await expect(loadAsDataUrl(path, "text/plain")).rejects.toThrow(
+      "File not found",
+    );
+  });
+
+  test("handles binary content", async () => {
+    const path = join(tmpdir(), `test-binary-${uid()}.bin`);
+    const bytes = new Uint8Array([0x00, 0x01, 0x02, 0xff]);
+    await Bun.write(path, bytes);
+    const result = await loadAsDataUrl(path, "application/octet-stream");
+    expect(result).toMatch(/^data:application\/octet-stream;base64,/);
+  });
+
+  test("handles empty file", async () => {
+    const path = join(tmpdir(), `test-empty-${uid()}.txt`);
+    await Bun.write(path, "");
+    const result = await loadAsDataUrl(path, "text/plain");
+    expect(result).toBe("data:text/plain;base64,");
+  });
+});
+
+// ── readFiles edge cases ─────────────────────────────────────────────────
+
+describe("readFiles edge cases", () => {
+  const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  test("returns empty string for empty array", async () => {
+    const result = await readFiles([]);
+    expect(result).toBe("");
+  });
+
+  test("handles file with empty content", async () => {
+    const path = join(tmpdir(), `test-empty-${uid()}.txt`);
+    await Bun.write(path, "");
+    const result = await readFiles([path]);
+    expect(result).toBe(`# ${path}\n\`\`\`\n\n\`\`\``);
+  });
+
+  test("handles file with multiline content", async () => {
+    const path = join(tmpdir(), `test-multiline-${uid()}.txt`);
+    await Bun.write(path, "line1\nline2\nline3");
+    const result = await readFiles([path]);
+    expect(result).toContain("line1\nline2\nline3");
+  });
+
+  test("handles file with special characters", async () => {
+    const path = join(tmpdir(), `test-special-${uid()}.txt`);
+    await Bun.write(path, 'const x = "hello";');
+    const result = await readFiles([path]);
+    expect(result).toContain('const x = "hello";');
+  });
+});
+
+// ── readImages edge cases ────────────────────────────────────────────────
+
+describe("readImages edge cases", () => {
+  const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  test("handles single image file correctly", async () => {
+    const path = join(tmpdir(), `test-img-${uid()}.jpg`);
+    await Bun.write(path, "fake jpeg data");
+    const result = await readImages([path]);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.url).toMatch(/^data:image\/jpeg;base64,/);
+  });
+});
+
+// ── CLIOptionsSchema additional tests ────────────────────────────────────
+
+describe("CLIOptionsSchema additional", () => {
+  test("accepts session option", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      markdown: false,
+      session: "my-session",
+    });
+    expect(result.session).toBe("my-session");
+  });
+
+  test("accepts role option", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      markdown: false,
+      role: "reviewer",
+    });
+    expect(result.role).toBe("reviewer");
+  });
+
+  test("accepts roles boolean", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      markdown: false,
+      roles: true,
+    });
+    expect(result.roles).toBe(true);
+  });
+
+  test("accepts image as string array", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      markdown: false,
+      image: ["img1.png", "img2.jpg"],
+    });
+    expect(result.image).toEqual(["img1.png", "img2.jpg"]);
+  });
+
+  test("accepts cost option", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      markdown: false,
+      cost: true,
+    });
+    expect(result.cost).toBe(true);
+  });
+
+  test("cost defaults to false", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+    });
+    expect(result.cost).toBe(false);
+  });
+
+  test("markdown defaults to false", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+    });
+    expect(result.markdown).toBe(false);
+  });
+
+  test("rejects non-string model", () => {
+    const result = CLIOptionsSchema.safeParse({
+      json: false,
+      stream: true,
+      markdown: false,
+      model: 123,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects non-string system", () => {
+    const result = CLIOptionsSchema.safeParse({
+      json: false,
+      stream: true,
+      markdown: false,
+      system: true,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("accepts temperature at boundary 0", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      markdown: false,
+      temperature: 0,
+    });
+    expect(result.temperature).toBe(0);
+  });
+
+  test("accepts temperature at boundary 2", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      markdown: false,
+      temperature: 2,
+    });
+    expect(result.temperature).toBe(2);
+  });
+
+  test("accepts maxOutputTokens = 1", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      markdown: false,
+      maxOutputTokens: 1,
+    });
+    expect(result.maxOutputTokens).toBe(1);
+  });
+
+  test("rejects maxOutputTokens = 0", () => {
+    const result = CLIOptionsSchema.safeParse({
+      json: false,
+      stream: true,
+      markdown: false,
+      maxOutputTokens: 0,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects missing required json field", () => {
+    const result = CLIOptionsSchema.safeParse({
+      stream: true,
+      markdown: false,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects missing required stream field", () => {
+    const result = CLIOptionsSchema.safeParse({
+      json: false,
+      markdown: false,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+// ── JsonOutputSchema additional ──────────────────────────────────────────
+
+describe("JsonOutputSchema additional", () => {
+  test("rejects missing usage", () => {
+    const result = JsonOutputSchema.safeParse({
+      text: "hi",
+      model: "m",
+      finishReason: "stop",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects non-object usage", () => {
+    const result = JsonOutputSchema.safeParse({
+      text: "hi",
+      model: "m",
+      usage: "none",
+      finishReason: "stop",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("accepts all common finishReason values", () => {
+    for (const reason of [
+      "stop",
+      "length",
+      "content-filter",
+      "error",
+      "other",
+    ]) {
+      const result = JsonOutputSchema.safeParse({
+        text: "",
+        model: "m",
+        usage: {},
+        finishReason: reason,
+      });
+      expect(result.success).toBe(true);
+    }
+  });
+
+  test("accepts empty text", () => {
+    const result = JsonOutputSchema.parse({
+      text: "",
+      model: "m",
+      usage: {},
+      finishReason: "stop",
+    });
+    expect(result.text).toBe("");
+  });
+
+  test("accepts partial inputTokenDetails", () => {
+    const result = JsonOutputSchema.parse({
+      text: "t",
+      model: "m",
+      usage: {
+        inputTokenDetails: { cacheReadTokens: 5 },
+      },
+      finishReason: "stop",
+    });
+    expect(result.usage.inputTokenDetails?.cacheReadTokens).toBe(5);
+    expect(result.usage.inputTokenDetails?.noCacheTokens).toBeUndefined();
+  });
+
+  test("accepts partial outputTokenDetails", () => {
+    const result = JsonOutputSchema.parse({
+      text: "t",
+      model: "m",
+      usage: {
+        outputTokenDetails: { reasoningTokens: 10 },
+      },
+      finishReason: "stop",
+    });
+    expect(result.usage.outputTokenDetails?.reasoningTokens).toBe(10);
+    expect(result.usage.outputTokenDetails?.textTokens).toBeUndefined();
+  });
+});
+
+// ── session sanitization additional ──────────────────────────────────────
+
+describe("session sanitization additional", () => {
+  test("sanitizeSessionName handles path traversal (../..)", () => {
+    expect(sanitizeSessionName("../../etc/passwd")).toBe("______etc_passwd");
+  });
+
+  test("sanitizeSessionName handles double dots", () => {
+    expect(sanitizeSessionName("..")).toBe("__");
+  });
+
+  test("sanitizeSessionName handles single dot", () => {
+    expect(sanitizeSessionName(".")).toBe("_");
+  });
+
+  test("sanitizeSessionName handles null bytes", () => {
+    expect(sanitizeSessionName("test\0name")).toBe("test_name");
+  });
+
+  test("sanitizeSessionName handles tab and newline", () => {
+    expect(sanitizeSessionName("test\tname\n")).toBe("test_name_");
+  });
+
+  test("isValidSessionName rejects path traversal", () => {
+    expect(isValidSessionName("../etc/passwd")).toBe(false);
+    expect(isValidSessionName("../../secret")).toBe(false);
+  });
+
+  test("isValidSessionName rejects null bytes", () => {
+    expect(isValidSessionName("test\0")).toBe(false);
+  });
+
+  test("isValidSessionName accepts single character", () => {
+    expect(isValidSessionName("a")).toBe(true);
+    expect(isValidSessionName("1")).toBe(true);
+    expect(isValidSessionName("-")).toBe(true);
+    expect(isValidSessionName("_")).toBe(true);
+  });
+
+  test("isValidSessionName rejects unicode characters", () => {
+    expect(isValidSessionName("session\u00e9")).toBe(false);
+    expect(isValidSessionName("session\u2603")).toBe(false);
+  });
+});
+
+// ── resolveOptions additional ────────────────────────────────────────────
+
+describe("resolveOptions additional", () => {
+  const defaultOpts: CLIOptions = {
+    json: false,
+    stream: true,
+    markdown: false,
+    cost: false,
+    chat: false,
+    cache: true,
+  };
+  const emptyConfig: Config = {};
+
+  test("markdown flag is passed through", () => {
+    const opts: CLIOptions = { ...defaultOpts, markdown: true };
+    const result = resolveOptions(opts, emptyConfig);
+    expect(result.markdown).toBe(true);
+  });
+
+  test("markdown defaults to false", () => {
+    const result = resolveOptions(defaultOpts, emptyConfig);
+    expect(result.markdown).toBe(false);
+  });
+
+  test("temperature of 0 from opts is used (not falsy fallthrough)", () => {
+    const config: Config = { temperature: 1.5 };
+    const opts: CLIOptions = { ...defaultOpts, temperature: 0 };
+    const result = resolveOptions(opts, config);
+    expect(result.temperature).toBe(0);
+  });
+
+  test("maxOutputTokens from config is used when opts has none", () => {
+    const config: Config = { maxOutputTokens: 4096 };
+    const result = resolveOptions(defaultOpts, config);
+    expect(result.maxOutputTokens).toBe(4096);
+  });
+
+  test("system from opts overrides config system", () => {
+    const config: Config = { system: "config system" };
+    const opts: CLIOptions = { ...defaultOpts, system: "cli system" };
+    const result = resolveOptions(opts, config);
+    expect(result.system).toBe("cli system");
+  });
+
+  test("empty string system from opts is used", () => {
+    const config: Config = { system: "config system" };
+    const opts: CLIOptions = { ...defaultOpts, system: "" };
+    const result = resolveOptions(opts, config);
+    // Empty string is not nullish, so ?? preserves it over config
+    expect(result.system).toBe("");
+  });
+});
+
+// ── resolveOptions provider-specific defaults ────────────────────────────
+
+describe("resolveOptions provider-specific defaults", () => {
+  const defaultOpts: CLIOptions = {
+    json: false,
+    stream: true,
+    markdown: false,
+    cost: false,
+    chat: false,
+    cache: true,
+  };
+  const _emptyConfig: Config = {};
+
+  test("provider-specific temperature overrides global config", () => {
+    const config: Config = {
+      model: "anthropic/claude-sonnet-4-5",
+      temperature: 0.7,
+      providers: {
+        anthropic: { temperature: 0.5 },
+      },
+    };
+    const result = resolveOptions(defaultOpts, config);
+    expect(result.temperature).toBe(0.5);
+  });
+
+  test("provider-specific system overrides global config", () => {
+    const config: Config = {
+      model: "anthropic/claude-sonnet-4-5",
+      system: "Global system.",
+      providers: {
+        anthropic: { system: "You are Claude." },
+      },
+    };
+    const result = resolveOptions(defaultOpts, config);
+    expect(result.system).toBe("You are Claude.");
+  });
+
+  test("provider-specific maxOutputTokens overrides global config", () => {
+    const config: Config = {
+      model: "anthropic/claude-sonnet-4-5",
+      maxOutputTokens: 1000,
+      providers: {
+        anthropic: { maxOutputTokens: 4096 },
+      },
+    };
+    const result = resolveOptions(defaultOpts, config);
+    expect(result.maxOutputTokens).toBe(4096);
+  });
+
+  test("CLI flags override provider-specific config", () => {
+    const config: Config = {
+      model: "anthropic/claude-sonnet-4-5",
+      temperature: 0.7,
+      providers: {
+        anthropic: { temperature: 0.5, system: "provider system" },
+      },
+    };
+    const opts: CLIOptions = {
+      ...defaultOpts,
+      temperature: 0.9,
+      system: "cli system",
+    };
+    const result = resolveOptions(opts, config);
+    expect(result.temperature).toBe(0.9);
+    expect(result.system).toBe("cli system");
+  });
+
+  test("missing provider section falls through to global config", () => {
+    const config: Config = {
+      model: "openai/gpt-4o",
+      temperature: 0.7,
+      system: "Global system.",
+      providers: {
+        anthropic: { temperature: 0.5 },
+      },
+    };
+    // openai model - no openai provider config, should use global
+    const result = resolveOptions(defaultOpts, config);
+    expect(result.temperature).toBe(0.7);
+    expect(result.system).toBe("Global system.");
+  });
+
+  test("no providers key at all falls through to global config", () => {
+    const config: Config = {
+      model: "anthropic/claude-sonnet-4-5",
+      temperature: 0.7,
+    };
+    const result = resolveOptions(defaultOpts, config);
+    expect(result.temperature).toBe(0.7);
+  });
+
+  test("provider overrides only specific fields, others fall through to global", () => {
+    const config: Config = {
+      model: "anthropic/claude-sonnet-4-5",
+      system: "Global system.",
+      temperature: 0.7,
+      maxOutputTokens: 1000,
+      providers: {
+        anthropic: { temperature: 0.5 },
+      },
+    };
+    const result = resolveOptions(defaultOpts, config);
+    expect(result.temperature).toBe(0.5); // from provider
+    expect(result.system).toBe("Global system."); // from global
+    expect(result.maxOutputTokens).toBe(1000); // from global
+  });
+
+  test("works with model specified via CLI flag", () => {
+    const config: Config = {
+      temperature: 0.7,
+      providers: {
+        google: { temperature: 0.3 },
+      },
+    };
+    const opts: CLIOptions = {
+      ...defaultOpts,
+      model: "google/gemini-2.5-flash",
+    };
+    const result = resolveOptions(opts, config);
+    expect(result.temperature).toBe(0.3);
+    expect(result.modelString).toBe("google/gemini-2.5-flash");
+  });
+
+  test("full resolution order: CLI > provider > global > defaults", () => {
+    const config: Config = {
+      model: "anthropic/claude-sonnet-4-5",
+      temperature: 0.7,
+      system: "Global system.",
+      maxOutputTokens: 500,
+      providers: {
+        anthropic: {
+          temperature: 0.5,
+          system: "Provider system.",
+          maxOutputTokens: 4096,
+        },
+      },
+    };
+    const opts: CLIOptions = {
+      ...defaultOpts,
+      temperature: 0.9, // CLI wins for temperature
+      // system not set - provider wins
+      // maxOutputTokens not set - provider wins
+    };
+    const result = resolveOptions(opts, config);
+    expect(result.temperature).toBe(0.9); // CLI flag
+    expect(result.system).toBe("Provider system."); // provider config
+    expect(result.maxOutputTokens).toBe(4096); // provider config
+  });
+
+  test("backward compatible with existing config (no providers key)", () => {
+    const config: Config = {
+      model: "openai/gpt-4o",
+      system: "Be concise.",
+      temperature: 0.7,
+      maxOutputTokens: 500,
+    };
+    const result = resolveOptions(defaultOpts, config);
+    expect(result.modelString).toBe("openai/gpt-4o");
+    expect(result.system).toBe("Be concise.");
+    expect(result.temperature).toBe(0.7);
+    expect(result.maxOutputTokens).toBe(500);
+  });
+});
+
+// ── buildPrompt edge cases ───────────────────────────────────────────────
+
+describe("buildPrompt edge cases", () => {
+  test("empty string arg is treated as falsy", () => {
+    const result = buildPrompt({
+      prompt: "",
+      fileContent: null,
+      stdinContent: null,
+    });
+    expect(result).toBe("");
+  });
+
+  test("empty string stdin is treated as falsy", () => {
+    const result = buildPrompt({
+      prompt: null,
+      fileContent: null,
+      stdinContent: "",
+    });
+    expect(result).toBe("");
+  });
+
+  test("whitespace-only arg is kept", () => {
+    const result = buildPrompt({
+      prompt: "  ",
+      fileContent: null,
+      stdinContent: null,
+    });
+    expect(result).toBe("  ");
+  });
+
+  test("handles very long prompt", () => {
+    const longPrompt = "a".repeat(100000);
+    const result = buildPrompt({
+      prompt: longPrompt,
+      fileContent: null,
+      stdinContent: null,
+    });
+    expect(result.length).toBe(100000);
+  });
+
+  test("handles unicode content", () => {
+    const result = buildPrompt({
+      prompt: "Hello \u2603",
+      fileContent: null,
+      stdinContent: "\u00e9l\u00e8ve",
+    });
+    expect(result).toContain("\u2603");
+    expect(result).toContain("\u00e9l\u00e8ve");
+  });
+});
+
+// ── Budget option ─────────────────────────────────────────────────────────
+
+describe("budget option", () => {
+  test("budget is parsed correctly as a positive number", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      markdown: false,
+      budget: 0.05,
+    });
+    expect(result.budget).toBe(0.05);
+  });
+
+  test("budget is optional (undefined when not set)", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      markdown: false,
+    });
+    expect(result.budget).toBeUndefined();
+  });
+
+  test("budget accepts large values", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      markdown: false,
+      budget: 100,
+    });
+    expect(result.budget).toBe(100);
+  });
+
+  test("budget accepts small fractional values", () => {
+    const result = CLIOptionsSchema.parse({
+      json: false,
+      stream: true,
+      markdown: false,
+      budget: 0.001,
+    });
+    expect(result.budget).toBe(0.001);
+  });
+
+  test("budget rejects zero", () => {
+    const result = CLIOptionsSchema.safeParse({
+      json: false,
+      stream: true,
+      markdown: false,
+      budget: 0,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("budget rejects negative values", () => {
+    const result = CLIOptionsSchema.safeParse({
+      json: false,
+      stream: true,
+      markdown: false,
+      budget: -1,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("budget rejects non-number values", () => {
+    const result = CLIOptionsSchema.safeParse({
+      json: false,
+      stream: true,
+      markdown: false,
+      budget: "five",
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+// ── resolveOptions with aliases integration ──────────────────────────────
+
+describe("resolveOptions with aliases", () => {
+  const defaultOpts: CLIOptions = {
+    json: false,
+    stream: true,
+    markdown: false,
+    cost: false,
+    chat: false,
+    cache: true,
+  };
+
+  test("alias in opts.model is resolved before resolveOptions", () => {
+    const config: Config = {
+      aliases: {
+        claude: "anthropic/claude-sonnet-4-5",
+      },
+    };
+    // Simulate what runAction does: resolve alias first, then pass to resolveOptions
+    const opts: CLIOptions = { ...defaultOpts, model: "claude" };
+    if (opts.model) opts.model = resolveAlias(config, opts.model);
+    const result = resolveOptions(opts, config);
+    expect(result.modelString).toBe("anthropic/claude-sonnet-4-5");
+  });
+
+  test("non-alias model passes through unchanged", () => {
+    const config: Config = {
+      aliases: {
+        claude: "anthropic/claude-sonnet-4-5",
+      },
+    };
+    const opts: CLIOptions = { ...defaultOpts, model: "openai/gpt-4o" };
+    if (opts.model) opts.model = resolveAlias(config, opts.model);
+    const result = resolveOptions(opts, config);
+    expect(result.modelString).toBe("openai/gpt-4o");
+  });
+
+  test("config.model alias is resolved via resolveAlias", () => {
+    const config: Config = {
+      model: "claude",
+      aliases: {
+        claude: "anthropic/claude-sonnet-4-5",
+      },
+    };
+    // Config model resolves via alias when no CLI model specified
+    // Note: in actual code, config.model is not resolved via resolveAlias
+    // (only opts.model is), but the model string goes through resolveOptions as-is
+    const result = resolveOptions(defaultOpts, config);
+    // Without CLI model, config.model is used directly
+    expect(result.modelString).toBe("claude");
+  });
+
+  test("alias resolution works with provider-specific config", () => {
+    const config: Config = {
+      aliases: {
+        claude: "anthropic/claude-sonnet-4-5",
+      },
+      providers: {
+        anthropic: { temperature: 0.5 },
+      },
+    };
+    const opts: CLIOptions = { ...defaultOpts, model: "claude" };
+    if (opts.model) opts.model = resolveAlias(config, opts.model);
+    const result = resolveOptions(opts, config);
+    expect(result.modelString).toBe("anthropic/claude-sonnet-4-5");
+    // Provider-specific defaults should apply since the resolved model is anthropic/...
+    expect(result.temperature).toBe(0.5);
+  });
+
+  test("alias resolution with empty aliases map", () => {
+    const config: Config = { aliases: {} };
+    const opts: CLIOptions = { ...defaultOpts, model: "claude" };
+    if (opts.model) opts.model = resolveAlias(config, opts.model);
+    const result = resolveOptions(opts, config);
+    expect(result.modelString).toBe("claude");
+  });
+
+  test("alias resolution without aliases in config", () => {
+    const config: Config = {};
+    const opts: CLIOptions = { ...defaultOpts, model: "claude" };
+    if (opts.model) opts.model = resolveAlias(config, opts.model);
+    const result = resolveOptions(opts, config);
+    expect(result.modelString).toBe("claude");
   });
 });

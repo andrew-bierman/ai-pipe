@@ -1,13 +1,36 @@
-// Pricing per 1M tokens (as of Feb 2025)
-// Format: { inputPrice: number; outputPrice: number }
-export type ModelPricing = {
-  inputPrice: number; // per 1M tokens
-  outputPrice: number; // per 1M tokens
-};
+/** Number of tokens per pricing unit (pricing is per 1M tokens) */
+const TOKENS_PER_UNIT = 1_000_000;
 
+/** Default pricing for unknown providers/models */
+const ZERO_PRICING: ModelPricing = Object.freeze({
+  inputPrice: 0,
+  outputPrice: 0,
+});
+
+/** Cost decimal precision for formatting */
+const COST_DECIMAL_PLACES = 4;
+
+/**
+ * Pricing per 1M tokens for a single model.
+ * Prices are in USD.
+ */
+export interface ModelPricing {
+  /** Cost in USD per 1M input tokens. */
+  readonly inputPrice: number;
+  /** Cost in USD per 1M output tokens. */
+  readonly outputPrice: number;
+}
+
+/** Map of model IDs to their pricing. Each provider should include a "default" entry. */
 export type ProviderPricing = Record<string, ModelPricing>;
 
-// Provider pricing registry
+/**
+ * Provider pricing registry.
+ *
+ * Maps provider IDs to per-model pricing. Each provider should include a
+ * "default" entry used as a fallback when an exact or prefix model match
+ * is not found. Prices are in USD per 1M tokens (as of Feb 2025).
+ */
 export const PRICING: Record<string, ProviderPricing> = {
   openai: {
     "gpt-4o": { inputPrice: 2.5, outputPrice: 10.0 },
@@ -107,37 +130,52 @@ export const PRICING: Record<string, ProviderPricing> = {
   },
 };
 
+/** Calculated cost breakdown for a single LLM request. */
 export interface CostInfo {
-  inputTokens: number;
-  outputTokens: number;
-  inputCost: number;
-  outputCost: number;
-  totalCost: number;
+  /** Number of input (prompt) tokens consumed. */
+  readonly inputTokens: number;
+  /** Number of output (completion) tokens generated. */
+  readonly outputTokens: number;
+  /** Cost in USD for input tokens. */
+  readonly inputCost: number;
+  /** Cost in USD for output tokens. */
+  readonly outputCost: number;
+  /** Total cost in USD (inputCost + outputCost). */
+  readonly totalCost: number;
 }
 
+/** Token usage information returned by the AI SDK. */
 export interface UsageInfo {
-  inputTokens?: number;
-  outputTokens?: number;
-  totalTokens?: number;
-  inputTokenDetails?: {
-    noCacheTokens?: number;
-    cacheReadTokens?: number;
-    cacheWriteTokens?: number;
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+  readonly totalTokens?: number;
+  readonly inputTokenDetails?: {
+    readonly noCacheTokens?: number;
+    readonly cacheReadTokens?: number;
+    readonly cacheWriteTokens?: number;
   };
-  outputTokenDetails?: {
-    textTokens?: number;
-    reasoningTokens?: number;
+  readonly outputTokenDetails?: {
+    readonly textTokens?: number;
+    readonly reasoningTokens?: number;
   };
 }
 
 /**
- * Get pricing for a specific provider and model
+ * Look up pricing for a specific provider and model.
+ *
+ * Resolution order: exact model ID match, then prefix match (e.g.,
+ * "gpt-4o-2024-11-20" matches the "gpt-4o" entry), then the provider's
+ * "default" entry, then zero pricing as a final fallback.
+ *
+ * @param provider - Provider ID (e.g., "openai", "anthropic").
+ * @param modelId - Model identifier within the provider (e.g., "gpt-4o").
+ * @returns The resolved pricing for the model.
  */
 export function getPricing(provider: string, modelId: string): ModelPricing {
   const providerPricing = PRICING[provider];
 
   if (!providerPricing) {
-    return { inputPrice: 0, outputPrice: 0 };
+    return ZERO_PRICING;
   }
 
   // Try exact model match first
@@ -160,23 +198,33 @@ export function getPricing(provider: string, modelId: string): ModelPricing {
     return providerPricing.default;
   }
 
-  return { inputPrice: 0, outputPrice: 0 };
+  return ZERO_PRICING;
+}
+
+export interface CalculateCostOptions {
+  provider: string;
+  modelId: string;
+  usage: UsageInfo;
 }
 
 /**
- * Calculate cost from token usage
+ * Calculate the USD cost of an LLM request from token usage.
+ * Breaking change (pre-1.0): signature changed from positional args to object param.
+ *
+ * @param options - Object containing provider, modelId, and usage.
+ * @returns A breakdown of input cost, output cost, and total cost.
  */
-export function calculateCost(
-  provider: string,
-  modelId: string,
-  usage: UsageInfo,
-): CostInfo {
+export function calculateCost({
+  provider,
+  modelId,
+  usage,
+}: CalculateCostOptions): CostInfo {
   const pricing = getPricing(provider, modelId);
   const inputTokens = usage.inputTokens ?? 0;
   const outputTokens = usage.outputTokens ?? 0;
 
-  const inputCost = (inputTokens / 1_000_000) * pricing.inputPrice;
-  const outputCost = (outputTokens / 1_000_000) * pricing.outputPrice;
+  const inputCost = (inputTokens / TOKENS_PER_UNIT) * pricing.inputPrice;
+  const outputCost = (outputTokens / TOKENS_PER_UNIT) * pricing.outputPrice;
   const totalCost = inputCost + outputCost;
 
   return {
@@ -189,20 +237,27 @@ export function calculateCost(
 }
 
 /**
- * Format cost for display
+ * Format a cost breakdown into a human-readable string for terminal display.
+ *
+ * Examples:
+ * - `"$0.0025 (1,000 in) + $0.0200 (2,000 out) = $0.0225"`
+ * - `"$0.0000 (0 tokens)"`
+ *
+ * @param costInfo - The calculated cost breakdown to format.
+ * @returns A formatted cost string suitable for display on stderr.
  */
 export function formatCost(costInfo: CostInfo): string {
   const parts: string[] = [];
 
   if (costInfo.inputTokens > 0) {
     parts.push(
-      `$${costInfo.inputCost.toFixed(4)} (${costInfo.inputTokens.toLocaleString()} in)`,
+      `$${costInfo.inputCost.toFixed(COST_DECIMAL_PLACES)} (${costInfo.inputTokens.toLocaleString()} in)`,
     );
   }
 
   if (costInfo.outputTokens > 0) {
     parts.push(
-      `$${costInfo.outputCost.toFixed(4)} (${costInfo.outputTokens.toLocaleString()} out)`,
+      `$${costInfo.outputCost.toFixed(COST_DECIMAL_PLACES)} (${costInfo.outputTokens.toLocaleString()} out)`,
     );
   }
 
@@ -210,11 +265,18 @@ export function formatCost(costInfo: CostInfo): string {
     return "$0.0000 (0 tokens)";
   }
 
-  return `${parts.join(" + ")} = $${costInfo.totalCost.toFixed(4)}`;
+  return `${parts.join(" + ")} = $${costInfo.totalCost.toFixed(COST_DECIMAL_PLACES)}`;
 }
 
 /**
- * Parse model string to extract provider and model ID
+ * Parse a "provider/model-id" string into its component parts.
+ *
+ * If no slash is present, defaults to "openai" as the provider.
+ * Only the first slash is used as a delimiter, so model IDs containing
+ * slashes (e.g., "togetherai/meta-llama/Llama-3.3-70b") are handled correctly.
+ *
+ * @param modelString - The model string to parse (e.g., "openai/gpt-4o").
+ * @returns An object with `provider` and `modelId` fields.
  */
 export function parseModelString(modelString: string): {
   provider: string;
