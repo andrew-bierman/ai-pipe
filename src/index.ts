@@ -1073,6 +1073,15 @@ async function runAction(
     }
   }
 
+  // Validate chain config file exists before resolving model (which checks API keys)
+  if (opts.chain) {
+    const chainFile = Bun.file(opts.chain);
+    if (!(await chainFile.exists())) {
+      console.error(`Error: Chain config not found: ${opts.chain}`);
+      process.exit(1);
+    }
+  }
+
   const model = resolveModel(modelString);
 
   // If --chat is set, enter interactive chat mode instead of one-shot execution
