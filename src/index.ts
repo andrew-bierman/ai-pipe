@@ -47,6 +47,7 @@ import { loadMCPConfig, MCPManager } from "./mcp.ts";
 import { PluginManager } from "./plugins.ts";
 import {
   PROVIDER_ENV_VARS,
+  type ProviderId,
   ProviderIdSchema,
   printProviders,
   resolveModel,
@@ -466,6 +467,17 @@ async function readStdin(): Promise<string> {
 async function handleSessionCommand(args: string[]): Promise<void> {
   const subcommand = args[0];
 
+  if (!subcommand || subcommand === "--help" || subcommand === "-h") {
+    console.log(`Usage: ai-pipe session <command>
+
+Commands:
+  list                     List all saved sessions
+  export <name> [--format] Export a session (json or md, default: json)
+  import <name> [file]     Import a session from file or stdin
+  delete <name>            Delete a session`);
+    process.exit(0);
+  }
+
   if (subcommand === "list") {
     const sessions = await listSessions();
     if (sessions.length === 0) {
@@ -810,7 +822,17 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
     checkBudget({ usage: result.usage, modelString, budget });
   } else {
     const consumeStream = async () => {
-      const result = streamText(callOptions);
+      // Capture API errors via the onError callback to prevent bun from
+      // dumping raw stack traces with request bodies, response headers,
+      // and cookies. Without this, bun's native ReadableStream error
+      // handling writes the full error to stderr before JS catch blocks fire.
+      let capturedApiError: unknown = null;
+      const result = streamText({
+        ...callOptions,
+        onError: ({ error }) => {
+          capturedApiError = error;
+        },
+      });
 
       // When markdown is enabled, progressively re-render as tokens arrive.
       if (markdown) {
@@ -818,6 +840,10 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
         for await (const chunk of result.textStream) {
           renderer.append(chunk);
         }
+
+        // If onError captured an API error, throw it now for clean formatting
+        if (capturedApiError) throw capturedApiError;
+
         renderer.finish();
 
         // Apply afterResponse plugin transform to collected buffer
@@ -839,6 +865,9 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
           process.stdout.write(chunk);
           fullResponse += chunk;
         }
+
+        // If onError captured an API error, throw it now for clean formatting
+        if (capturedApiError) throw capturedApiError;
 
         // Append sources after stream completes
         const streamSources = await result.sources;
@@ -874,9 +903,35 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
 }
 
 /**
- * Format an error for display, extracting the message from Error instances.
+ * Format an error for display.
+ *
+ * For AI SDK API call errors (which carry a `statusCode`), produce a clean
+ * one-line message instead of dumping stack traces, request bodies, and
+ * response headers.
  */
-function formatError(err: unknown): string {
+function formatError(err: unknown, modelString?: string): string {
+  if (err instanceof Error && "statusCode" in err) {
+    const statusCode = (err as Error & { statusCode: number }).statusCode;
+    // Determine the provider name for the error message
+    let providerEnvHint = "";
+    if (modelString) {
+      const { provider } = parseModelString(modelString);
+      const parsed = ProviderIdSchema.safeParse(provider);
+      if (parsed.success) {
+        const envVars = PROVIDER_ENV_VARS[parsed.data as ProviderId];
+        providerEnvHint = envVars[0] ? ` Check your ${envVars[0]}.` : "";
+      }
+    }
+    if (statusCode === 401) {
+      return `Invalid API key.${providerEnvHint}`;
+    }
+    if (statusCode === 429) {
+      return "Rate limited. Please wait and try again.";
+    }
+    // For other HTTP errors, extract just the first line of the message
+    const brief = err.message.split("\n")[0] ?? err.message;
+    return `API returned ${statusCode}: ${brief}`;
+  }
   return err instanceof Error ? err.message : String(err);
 }
 
@@ -1255,7 +1310,7 @@ async function runAction(
         : undefined,
     });
   } catch (err: unknown) {
-    console.error(`Error: ${formatError(err)}`);
+    console.error(`Error: ${formatError(err, modelString)}`);
     process.exit(1);
   } finally {
     // Clean up MCP server connections on exit
@@ -1613,6 +1668,18 @@ if (import.meta.main) {
     }
     originalExit(code);
   }) as typeof process.exit;
+
+  // Intercept subcommand --help before citty processes it, since citty
+  // treats --help globally and shows the main help instead of routing to
+  // the subcommand handler.
+  const argv = process.argv.slice(2);
+  if (
+    argv[0] === "session" &&
+    (argv.includes("--help") || argv.includes("-h"))
+  ) {
+    handleSessionCommand(["--help"]);
+    // handleSessionCommand calls process.exit(0)
+  }
 
   runMain(mainCommand, {
     showUsage: async (cmd, parent) => {
