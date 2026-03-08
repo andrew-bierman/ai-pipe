@@ -1582,5 +1582,18 @@ export const mainCommand = defineCommand({
 
 // Only run CLI when executed directly (Bun), not when imported
 if (import.meta.main) {
+  // When stdin is a TTY (e.g. `ai-pipe "say hello"` without piping),
+  // Bun keeps the process alive because the TTY stream holds an active
+  // ref on the event loop. This prevents `process.exit()` from terminating
+  // the process when called from within citty's async `runMain` handler.
+  // Monkey-patching process.exit to destroy stdin first ensures clean exit.
+  const originalExit = process.exit.bind(process);
+  process.exit = ((code?: number) => {
+    if (process.stdin.isTTY) {
+      process.stdin.destroy();
+    }
+    originalExit(code);
+  }) as typeof process.exit;
+
   runMain(mainCommand);
 }
