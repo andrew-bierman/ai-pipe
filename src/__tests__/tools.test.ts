@@ -65,20 +65,24 @@ describe("loadToolsConfig", () => {
     };
     await Bun.write(configPath, JSON.stringify(config));
 
-    const result = await loadToolsConfig(configPath);
-    expect(result).toHaveLength(1);
-    expect(result[0]!.name).toBe("getWeather");
-
-    rmSync(configPath);
+    try {
+      const result = await loadToolsConfig(configPath);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.name).toBe("getWeather");
+    } finally {
+      rmSync(configPath);
+    }
   });
 
   test("returns empty array for invalid JSON", async () => {
     const configPath = join(tmpDir, `ai-tools-invalid-${uid()}.json`);
     await Bun.write(configPath, "not valid json");
 
-    const result = await loadToolsConfig(configPath);
-    expect(result).toEqual([]);
-
-    rmSync(configPath);
+    try {
+      const result = await loadToolsConfig(configPath);
+      expect(result).toEqual([]);
+    } finally {
+      rmSync(configPath);
+    }
   });
 });

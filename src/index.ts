@@ -15,7 +15,6 @@ import {
   printProviders,
   resolveModel,
 } from "./provider.ts";
-import { loadToolsConfig } from "./tools.ts";
 
 // Session name sanitization: only allow alphanumeric, hyphens, underscores
 const SESSION_NAME_REGEX = /^[A-Za-z0-9_-]+$/;
@@ -534,6 +533,8 @@ export function setupCLI() {
       "--completions <shell>",
       `Generate shell completions (${APP.supportedShells.join(", ")})`,
     )
+    // TODO: --tools flag is not yet wired into run(). opts.tools is parsed but not used.
+    // See PR-CEREBRAS.md and tools.ts for planned implementation.
     .option("--tools <path>", "Path to tools configuration file (JSON)")
     .action(run);
 

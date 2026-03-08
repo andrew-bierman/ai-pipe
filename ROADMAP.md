@@ -7,9 +7,9 @@
 - DeepInfra provider (#44)
 - Cost tracking (#50)
 - Response caching (#53)
-- Tool use / --tools flag (#54)
 
 ## In Progress 🔧
+- Tool use / --tools flag (#54)
 
 ## Backlog 📋
 - Provider-specific defaults
