@@ -476,7 +476,7 @@ async function handleSessionCommand(args: string[]): Promise<void> {
         console.log(`  - ${name}`);
       }
     }
-    return;
+    process.exit(0);
   }
 
   if (subcommand === "export") {
