@@ -6,7 +6,7 @@ import {
   type ModelMessage,
   streamText,
 } from "ai";
-import { defineCommand, runMain, showUsage } from "citty";
+import { defineCommand, renderUsage, runMain, showUsage } from "citty";
 import { z } from "zod";
 
 import pkg from "../package.json";
@@ -1595,5 +1595,26 @@ if (import.meta.main) {
     originalExit(code);
   }) as typeof process.exit;
 
-  runMain(mainCommand);
+  runMain(mainCommand, {
+    showUsage: async (cmd, parent) => {
+      const usage = await renderUsage(cmd, parent);
+      const subcommands: [string, string][] = [
+        ["init", "Run interactive setup wizard"],
+        ["config", "Manage configuration (set, show, reset, path)"],
+        [
+          "session",
+          "Manage conversation sessions (list, export, import, delete)",
+        ],
+      ];
+      const maxName = Math.max(...subcommands.map(([n]) => n.length));
+      const lines = subcommands
+        .map(
+          ([name, desc]) => `  \x1b[36m${name.padEnd(maxName)}\x1b[0m  ${desc}`,
+        )
+        .join("\n");
+      console.log(
+        `${usage}\n\n\x1b[1m\x1b[4mCOMMANDS\x1b[0m\n\n${lines}\n\n  Use \x1b[36m${APP.name} <command> --help\x1b[0m for more information about a command.\n`,
+      );
+    },
+  });
 }
