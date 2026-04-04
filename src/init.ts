@@ -188,7 +188,8 @@ function isSimpleApiKeyProvider(provider: ProviderId): boolean {
  */
 export async function runInit(): Promise<void> {
   if (!HOME_DIR) {
-    throw new Error("HOME or USERPROFILE environment variable is not set");
+    p.log.error("HOME or USERPROFILE environment variable is not set.");
+    process.exit(1);
   }
 
   p.intro(`  ai-pipe v${pkg.version} - Setup Wizard  `);
