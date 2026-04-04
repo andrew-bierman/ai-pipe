@@ -103,15 +103,30 @@ export function renderMarkdown(text: string): string {
 function renderMarkdownFallback(text: string): string {
   let result = text;
 
-  // Fenced code blocks (```lang\n...\n```)
+  // 1. Extract fenced code blocks into placeholders
+  const codeBlocks: string[] = [];
   result = result.replace(
     /```(\w+)?\n([\s\S]*?)```/g,
     (_match, lang: string | undefined, code: string) => {
       const trimmed = code.endsWith("\n") ? code.slice(0, -1) : code;
       const langLine = lang ? `${ANSI.DIM}${lang}${ANSI.DIM_OFF}\n` : "";
-      return `${langLine}${ANSI.DIM}───${ANSI.DIM_OFF}\n${ANSI.GREEN}${trimmed}${ANSI.COLOR_OFF}\n${ANSI.DIM}───${ANSI.DIM_OFF}\n\n`;
+      const rendered = `${langLine}${ANSI.DIM}───${ANSI.DIM_OFF}\n${ANSI.GREEN}${trimmed}${ANSI.COLOR_OFF}\n${ANSI.DIM}───${ANSI.DIM_OFF}\n\n`;
+      const idx = codeBlocks.length;
+      codeBlocks.push(rendered);
+      return `\x00CODEBLOCK_${idx}\x00`;
     },
   );
+
+  // 2. Extract inline code into placeholders
+  const inlineCode: string[] = [];
+  result = result.replace(/`([^`]+)`/g, (_match, code: string) => {
+    const rendered = `${ANSI.DIM}${ANSI.CYAN}\`${code}\`${ANSI.COLOR_OFF}${ANSI.DIM_OFF}`;
+    const idx = inlineCode.length;
+    inlineCode.push(rendered);
+    return `\x00INLINECODE_${idx}\x00`;
+  });
+
+  // 3. Run all other markdown replacements
 
   // Headings (# ... ######)
   result = result.replace(
@@ -203,13 +218,6 @@ function renderMarkdownFallback(text: string): string {
     `${ANSI.DIM}${"─".repeat(HR_WIDTH)}${ANSI.DIM_OFF}\n`,
   );
 
-  // Inline code `code` (before bold/italic to avoid conflicts)
-  result = result.replace(
-    /`([^`]+)`/g,
-    (_match, code: string) =>
-      `${ANSI.DIM}${ANSI.CYAN}\`${code}\`${ANSI.COLOR_OFF}${ANSI.DIM_OFF}`,
-  );
-
   // Bold **text**
   result = result.replace(
     /\*\*(.+?)\*\*/g,
@@ -225,6 +233,16 @@ function renderMarkdownFallback(text: string): string {
   // Paragraphs: double newlines become paragraph breaks
   // Ensure trailing newlines for paragraph spacing
   result = result.replace(/\n\n+/g, "\n\n");
+
+  // 4. Reinsert inline code
+  for (let i = 0; i < inlineCode.length; i++) {
+    result = result.replace(`\x00INLINECODE_${i}\x00`, inlineCode[i] as string);
+  }
+
+  // 5. Reinsert code blocks
+  for (let i = 0; i < codeBlocks.length; i++) {
+    result = result.replace(`\x00CODEBLOCK_${i}\x00`, codeBlocks[i] as string);
+  }
 
   return result;
 }
