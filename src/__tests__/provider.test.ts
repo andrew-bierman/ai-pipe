@@ -181,8 +181,8 @@ describe("parseModel", () => {
 // ── SUPPORTED_PROVIDERS ────────────────────────────────────────────────
 
 describe("SUPPORTED_PROVIDERS", () => {
-  test("has exactly 20 providers", () => {
-    expect(SUPPORTED_PROVIDERS).toHaveLength(20);
+  test("has exactly 23 providers", () => {
+    expect(SUPPORTED_PROVIDERS).toHaveLength(23);
   });
 
   test("includes all expected providers", () => {
@@ -207,6 +207,9 @@ describe("SUPPORTED_PROVIDERS", () => {
       "huggingface",
       "cerebras",
       "gateway",
+      "luma",
+      "fal",
+      "replicate",
     ];
     for (const p of expected) {
       expect(SUPPORTED_PROVIDERS).toContain(p);
@@ -251,6 +254,9 @@ describe("PROVIDER_ENV_VARS", () => {
     deepinfra: ["DEEPINFRA_API_KEY"],
     cerebras: ["CEREBRAS_API_KEY"],
     gateway: ["AI_GATEWAY_API_KEY"],
+    luma: ["LUMA_API_KEY"],
+    fal: ["FAL_API_KEY"],
+    replicate: ["REPLICATE_API_TOKEN"],
   };
 
   for (const [provider, envVars] of Object.entries(expected)) {
