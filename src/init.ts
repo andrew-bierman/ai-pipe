@@ -187,6 +187,10 @@ function isSimpleApiKeyProvider(provider: ProviderId): boolean {
  * `config.json` and `apiKeys.json` to `~/.ai-pipe/`.
  */
 export async function runInit(): Promise<void> {
+  if (!HOME_DIR) {
+    throw new Error("HOME or USERPROFILE environment variable is not set");
+  }
+
   p.intro(`  ai-pipe v${pkg.version} - Setup Wizard  `);
 
   // Check if config already exists
