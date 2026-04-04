@@ -1,3 +1,4 @@
+import { chmodSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { APP } from "./constants.ts";
@@ -30,13 +31,36 @@ async function readJsonFile(path: string): Promise<Record<string, unknown>> {
 }
 
 /**
+ * Ensure the config directory exists with restricted permissions (0o700).
+ */
+function ensureConfigDir(): void {
+  mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
+  // Ensure permissions even if directory already existed
+  try {
+    chmodSync(CONFIG_DIR, 0o700);
+  } catch {
+    // Best effort — may fail on some platforms
+  }
+}
+
+/**
  * Write an object to a JSON file, creating parent directories as needed.
+ * If the file is apiKeys.json, it is written with restricted permissions (0o600).
  */
 async function writeJsonFile(
   path: string,
   data: Record<string, unknown>,
 ): Promise<void> {
+  ensureConfigDir();
   await Bun.write(path, `${JSON.stringify(data, null, 2)}\n`);
+  // Restrict permissions on sensitive files (API keys)
+  if (path === API_KEYS_PATH) {
+    try {
+      chmodSync(path, 0o600);
+    } catch {
+      // Best effort — may fail on some platforms
+    }
+  }
 }
 
 /**
