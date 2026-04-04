@@ -12,7 +12,7 @@ A powerful CLI for calling LLMs from the terminal. Text in, text out. Built on t
 
 ## ✨ Features
 
-- 🤖 **17+ AI Providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, Fireworks, OpenRouter, Azure AI, Together AI, Amazon Bedrock, Google Vertex AI, Ollama, Hugging Face
+- 🤖 **20+ AI Providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, Fireworks, OpenRouter, Azure AI, Together AI, Amazon Bedrock, Google Vertex AI, Ollama, Hugging Face, DeepInfra, Cerebras, Luma, fal.ai, Replicate
 - 📡 **Streaming by Default** — tokens print as they arrive
 - 🔄 **Pipe-friendly** — reads from stdin, writes to stdout, errors to stderr
 - 📎 **File Attachments** — include file contents in prompts with `-f`
@@ -124,6 +124,18 @@ export OLLAMA_HOST="http://localhost:11434"
 
 # Fireworks AI
 export FIREWORKS_API_KEY="fw_..."
+
+# Cerebras
+export CEREBRAS_API_KEY="..."
+
+# Luma
+export LUMA_API_KEY="..."
+
+# fal.ai
+export FAL_API_KEY="..."
+
+# Replicate
+export REPLICATE_API_TOKEN="r8_..."
 ```
 
 > 💡 **Tip:** Run `ai-pipe --providers` to see which keys are configured.
@@ -221,6 +233,10 @@ Models are queried in parallel for speed. Each result shows the model name, resp
 | Ollama | `OLLAMA_HOST` | `ollama/llama3` |
 | HuggingFace | `HF_TOKEN` | `huggingface/meta-llama/Llama-3.3-70b-Instruct` |
 | DeepInfra | `DEEPINFRA_API_KEY` | `deepinfra/meta-llama/Llama-3.3-70b-Instruct` |
+| Cerebras | `CEREBRAS_API_KEY` | `cerebras/llama3.1-8b` |
+| Luma | `LUMA_API_KEY` | `luma/photon-1` |
+| fal.ai | `FAL_API_KEY` | `fal/fal-ai/fast-sdxl` |
+| Replicate | `REPLICATE_API_TOKEN` | `replicate/meta/llama-2-70b-chat` |
 
 ## ⚙️ Configuration
 
@@ -602,7 +618,7 @@ The release workflow handles `bun publish`, binary builds, and GitHub release.
 - [x] **Config directory** — set defaults in `~/.ai-pipe/`
 - [x] **Shell completions** — bash, zsh, fish
 - [x] **Standalone binary** — compile to a single executable with `bun build --compile`
-- [x] **17 providers** — OpenAI, Anthropic, Google, and 14 more
+- [x] **23 providers** — OpenAI, Anthropic, Google, and 20 more
 - [x] **npm publishing** — `npm install -g ai-pipe` / `bun install -g ai-pipe`
 - [x] **File attachments** — include file contents in prompts with `-f`
 - [x] **Conversation history** — continue previous conversations with `-C`, named sessions with `--session`

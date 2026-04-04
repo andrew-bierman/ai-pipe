@@ -1,3 +1,4 @@
+import { chmodSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 import * as p from "@clack/prompts";
@@ -38,6 +39,9 @@ const PROVIDER_LABELS: Record<ProviderId, string> = {
   deepinfra: "DeepInfra",
   cerebras: "Cerebras",
   gateway: "Vercel AI Gateway",
+  luma: "Luma",
+  fal: "fal.ai",
+  replicate: "Replicate",
 };
 
 /**
@@ -380,6 +384,14 @@ export async function runInit(): Promise<void> {
       ...apiKeys,
     };
 
+    // Ensure config directory exists with restricted permissions
+    mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
+    try {
+      chmodSync(CONFIG_DIR, 0o700);
+    } catch {
+      // Best effort
+    }
+
     await Bun.write(CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`);
 
     if (Object.keys(mergedApiKeys).length > 0) {
@@ -387,6 +399,12 @@ export async function runInit(): Promise<void> {
         API_KEYS_PATH,
         `${JSON.stringify(mergedApiKeys, null, 2)}\n`,
       );
+      // Restrict API keys file permissions (owner read/write only)
+      try {
+        chmodSync(API_KEYS_PATH, 0o600);
+      } catch {
+        // Best effort — may fail on some platforms
+      }
     }
 
     s.stop("Configuration saved!");

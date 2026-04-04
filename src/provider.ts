@@ -5,16 +5,19 @@ import { cerebras } from "@ai-sdk/cerebras";
 import { cohere } from "@ai-sdk/cohere";
 import { deepinfra } from "@ai-sdk/deepinfra";
 import { deepseek } from "@ai-sdk/deepseek";
+import { fal } from "@ai-sdk/fal";
 import { fireworks } from "@ai-sdk/fireworks";
 import { gateway } from "@ai-sdk/gateway";
 import { google } from "@ai-sdk/google";
 import { vertex } from "@ai-sdk/google-vertex";
 import { groq } from "@ai-sdk/groq";
 import { huggingface } from "@ai-sdk/huggingface";
+import { luma } from "@ai-sdk/luma";
 import { mistral } from "@ai-sdk/mistral";
 import { openai } from "@ai-sdk/openai";
 import { perplexity } from "@ai-sdk/perplexity";
 import type { ProviderV3 } from "@ai-sdk/provider";
+import { replicate } from "@ai-sdk/replicate";
 import { togetherai } from "@ai-sdk/togetherai";
 import { xai } from "@ai-sdk/xai";
 import { openrouter } from "@openrouter/ai-sdk-provider";
@@ -55,6 +58,9 @@ export const registry = createProviderRegistry(
     deepinfra,
     cerebras,
     gateway,
+    luma,
+    fal,
+    replicate,
   },
   { separator: "/" },
 );
@@ -81,6 +87,9 @@ export const SUPPORTED_PROVIDERS = Object.freeze([
   "deepinfra",
   "cerebras",
   "gateway",
+  "luma",
+  "fal",
+  "replicate",
 ] as const);
 
 /** Zod schema for validating a provider ID against the supported providers list. */
@@ -117,6 +126,9 @@ export const PROVIDER_ENV_VARS: Record<ProviderId, readonly string[]> = {
   deepinfra: ["DEEPINFRA_API_KEY"],
   cerebras: ["CEREBRAS_API_KEY"],
   gateway: ["AI_GATEWAY_API_KEY"],
+  luma: ["LUMA_API_KEY"],
+  fal: ["FAL_API_KEY"],
+  replicate: ["REPLICATE_API_TOKEN"],
 } as const satisfies Record<ProviderId, readonly string[]>;
 
 /**

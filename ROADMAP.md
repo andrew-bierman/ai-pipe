@@ -7,15 +7,14 @@
 - DeepInfra provider (#44)
 - Cost tracking (#50)
 - Response caching (#53)
-
-## In Progress 🔧
 - Tool use / --tools flag (#54)
-
-## Backlog 📋
+- MCP support
 - Provider-specific defaults
 - Better error messages
-- MCP support
 - Streaming improvements
+
+## Backlog 📋
+- (No items currently in backlog)
 
 ## Notes
 - Main branch: `main`

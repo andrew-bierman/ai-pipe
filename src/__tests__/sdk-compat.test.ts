@@ -212,15 +212,21 @@ describe("AI SDK registry compatibility", () => {
     // We can't make a real API call, but we can verify the registry
     // doesn't throw when resolving a provider/model pair.
     // Note: some providers (vertex) require env vars at model creation time,
-    // so we skip providers that throw LoadSettingError.
+    // so we skip providers that throw LoadSettingError. Some providers
+    // (luma, fal, replicate) validate model IDs eagerly and throw
+    // NoSuchModelError for unknown model IDs like "test-model".
+    const allowedErrors = new Set([
+      "AI_LoadSettingError",
+      "AI_NoSuchModelError",
+    ]);
     for (const provider of SUPPORTED_PROVIDERS) {
       try {
         registry.languageModel(
           `${provider}/test-model` as `${ProviderId}/${string}`,
         );
       } catch (e: unknown) {
-        // Allow LoadSettingError (missing env config), but fail on other errors
-        expect((e as Error).name).toBe("AI_LoadSettingError");
+        // Allow known non-fatal errors, but fail on unexpected ones
+        expect(allowedErrors.has((e as Error).name)).toBe(true);
       }
     }
   });
