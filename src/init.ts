@@ -39,6 +39,9 @@ const PROVIDER_LABELS: Record<ProviderId, string> = {
   deepinfra: "DeepInfra",
   cerebras: "Cerebras",
   gateway: "Vercel AI Gateway",
+  luma: "Luma",
+  fal: "fal.ai",
+  replicate: "Replicate",
 };
 
 /**
