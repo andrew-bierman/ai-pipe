@@ -35,7 +35,10 @@ async function readJsonFile(path: string): Promise<Record<string, unknown>> {
  */
 function ensureConfigDir(): void {
   if (!HOME_DIR) {
-    throw new Error("HOME or USERPROFILE environment variable is not set");
+    console.error(
+      "Error: HOME or USERPROFILE environment variable is not set.",
+    );
+    process.exit(1);
   }
   mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
   // Ensure permissions even if directory already existed
