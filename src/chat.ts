@@ -170,17 +170,20 @@ export async function startChat(options: ChatOptions): Promise<void> {
       if (input.endsWith("\\")) {
         multilineBuffer += `${input.slice(0, -1)}\n`;
         isMultiline = true;
-        // Show a continuation prompt
-        process.stderr.write(`${GRAY}  ...${RESET} `);
+        // Show a continuation prompt via readline to stay in sync
+        rl.setPrompt(`${GRAY}  ...${RESET} `);
+        rl.prompt();
         return;
       }
 
-      // If we were accumulating multiline, append this final line
+      // If we were accumulating multiline, append this final line and restore prompt
       let fullInput: string;
       if (isMultiline) {
         fullInput = multilineBuffer + input;
         multilineBuffer = "";
         isMultiline = false;
+        // Restore the normal prompt after multiline input is complete
+        rl.setPrompt(buildPrompt(userMessageCount(messages)));
       } else {
         fullInput = input;
       }
@@ -235,12 +238,18 @@ export async function startChat(options: ChatOptions): Promise<void> {
         isStreaming = true;
         spinner.start();
 
+        // Capture API errors via onError to prevent Bun from dumping
+        // verbose stack traces before the JS catch block fires.
+        let streamError: Error | null = null;
         const result = streamText({
           model,
           messages,
           temperature,
           maxOutputTokens,
           abortSignal: currentAbort.signal,
+          onError: ({ error }) => {
+            streamError = error as Error;
+          },
         });
 
         // Stream the response
@@ -249,28 +258,50 @@ export async function startChat(options: ChatOptions): Promise<void> {
 
         if (markdown) {
           const renderer = new StreamingMarkdownRenderer();
-          for await (const chunk of result.textStream) {
+          try {
+            for await (const chunk of result.textStream) {
+              if (firstChunk) {
+                spinner.stop();
+                console.error(""); // blank line before response
+                firstChunk = false;
+              }
+              renderer.append(chunk);
+              fullResponse += chunk;
+            }
+          } finally {
             if (firstChunk) {
               spinner.stop();
-              console.error(""); // blank line before response
-              firstChunk = false;
+              process.stderr.write("\r\x1b[K"); // clear spinner line
             }
-            renderer.append(chunk);
-            fullResponse += chunk;
           }
+
+          // If onError captured an API error, throw it now for clean formatting
+          if (streamError) throw streamError;
+
           renderer.finish();
           fullResponse = renderer.getBuffer();
         } else {
-          for await (const chunk of result.textStream) {
+          try {
+            for await (const chunk of result.textStream) {
+              if (firstChunk) {
+                spinner.stop();
+                // Print a visual separator before the response
+                process.stdout.write(`\n${MAGENTA}`);
+                firstChunk = false;
+              }
+              process.stdout.write(chunk);
+              fullResponse += chunk;
+            }
+          } finally {
             if (firstChunk) {
               spinner.stop();
-              // Print a visual separator before the response
-              process.stdout.write(`\n${MAGENTA}`);
-              firstChunk = false;
+              process.stderr.write("\r\x1b[K"); // clear spinner line
             }
-            process.stdout.write(chunk);
-            fullResponse += chunk;
           }
+
+          // If onError captured an API error, throw it now for clean formatting
+          if (streamError) throw streamError;
+
           process.stdout.write(`${RESET}\n`);
         }
 
