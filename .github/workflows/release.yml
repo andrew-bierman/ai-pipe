@@ -23,9 +23,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Node LTS
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24.22.1"
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: package.json
 
       - run: bun install --frozen-lockfile
 
@@ -86,9 +90,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Node LTS
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24.22.1"
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: package.json
 
       - run: bun install --frozen-lockfile
 
@@ -116,9 +124,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Node LTS
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24.22.1"
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: package.json
 
       - run: bun install --frozen-lockfile
 
@@ -148,9 +160,13 @@ jobs:
         with:
           ref: main
 
+      - name: Setup Node LTS
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24.22.1"
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: package.json
 
       - name: Bump package.json version
         run: |
@@ -191,9 +207,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Node LTS
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24.22.1"
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: package.json
 
       - run: bun install --frozen-lockfile
 
