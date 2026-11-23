@@ -1,7 +1,7 @@
 import { generateText } from "ai";
 import type { UsageInfo } from "./cost.ts";
 import { calculateCost, formatCost, parseModelString } from "./cost.ts";
-import { resolveModel } from "./provider.ts";
+import { type CustomProviders, resolveModel } from "./provider.ts";
 
 export interface DiffResult {
   model: string;
@@ -15,6 +15,7 @@ export interface DiffResult {
 
 export interface DiffOptions {
   models: string[];
+  customProviders?: CustomProviders;
   prompt: string;
   system?: string;
   temperature?: number;
@@ -29,7 +30,7 @@ export interface DiffOptions {
 export async function runDiff(options: DiffOptions): Promise<DiffResult[]> {
   const results = await Promise.allSettled(
     options.models.map(async (modelString) => {
-      const model = resolveModel(modelString);
+      const model = resolveModel(modelString, options.customProviders);
       const start = performance.now();
 
       const result = await generateText({

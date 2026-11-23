@@ -2,7 +2,11 @@ import { chmodSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { APP } from "./constants.ts";
-import { PROVIDER_ENV_VARS, SUPPORTED_PROVIDERS } from "./provider.ts";
+import {
+  PROVIDER_ENV_VARS,
+  PROVIDER_OPTIONAL_ENV_VARS,
+  SUPPORTED_PROVIDERS,
+} from "./provider.ts";
 
 const HOME_DIR = Bun.env.HOME ?? Bun.env.USERPROFILE ?? "";
 const CONFIG_DIR = join(HOME_DIR, APP.configDirName);
@@ -241,9 +245,15 @@ export async function configShow(): Promise<void> {
   console.log("  Environment Variables:");
   let anyEnvSet = false;
   for (const provider of SUPPORTED_PROVIDERS) {
-    const envVars = PROVIDER_ENV_VARS[provider];
-    const allSet = envVars.every((v) => !!process.env[v]);
-    if (allSet) {
+    const required = PROVIDER_ENV_VARS[provider];
+    const optional = PROVIDER_OPTIONAL_ENV_VARS[provider] ?? [];
+    const envVars = [
+      ...(required.every((variable) => !!process.env[variable])
+        ? required
+        : []),
+      ...optional.filter((variable) => !!process.env[variable]),
+    ];
+    if (envVars.length > 0) {
       anyEnvSet = true;
       console.log(`    ${provider}: ${envVars.join(", ")} (set)`);
     }

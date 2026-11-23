@@ -3,7 +3,11 @@ import { basename, join } from "node:path";
 import { z } from "zod";
 
 import { APP } from "./constants.ts";
-import { ProviderIdSchema, SUPPORTED_PROVIDERS } from "./provider.ts";
+import {
+  CustomProvidersSchema,
+  ProviderIdSchema,
+  SUPPORTED_PROVIDERS,
+} from "./provider.ts";
 
 /** Zod schema for the API keys file. Keys must be valid provider IDs. */
 const ApiKeysSchema = z
@@ -53,6 +57,7 @@ export const ConfigSchema = z.object({
     .optional(),
   maxOutputTokens: z.number().int().positive().optional(),
   providers: z.record(z.string(), ProviderConfigSchema).optional(),
+  customProviders: CustomProvidersSchema.optional(),
   aliases: z.record(z.string(), z.string()).optional(),
 });
 
@@ -135,12 +140,24 @@ export async function loadConfig(configDir?: string): Promise<Config> {
   const dir = configDir ?? DEFAULT_CONFIG_DIR;
 
   const [settings, keys] = await Promise.all([
-    loadJsonFile(join(dir, APP.configFile), ConfigSchema),
+    loadJsonFile(join(dir, APP.configFile), z.unknown()),
     loadJsonFile(join(dir, APP.apiKeysFile), ApiKeysSchema),
   ]);
 
+  const parsed = ConfigSchema.safeParse(settings);
+  if (!parsed.success) {
+    const customIssue = parsed.error.issues.find(
+      (issue) => issue.path[0] === "customProviders",
+    );
+    if (customIssue) {
+      throw new Error(
+        `Invalid config.json setting ${customIssue.path.join(".")}: ${customIssue.message}`,
+      );
+    }
+  }
+
   return {
-    ...(settings ?? {}),
+    ...(parsed.data ?? {}),
     ...(keys ? { apiKeys: keys } : {}),
   };
 }

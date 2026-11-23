@@ -401,4 +401,4 @@ export async function startChat(options: ChatOptions): Promise<void> {
  * Get the current messages array from a chat session.
  * Exported for testing purposes.
  */
-export { EXIT_COMMANDS, CLEAR_COMMAND };
+export { CLEAR_COMMAND, EXIT_COMMANDS };

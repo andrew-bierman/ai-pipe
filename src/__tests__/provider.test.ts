@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { generateText } from "ai";
 import {
+  getModelEndpoint,
+  getProviderConfigEnvVar,
   ModelStringSchema,
   PROVIDER_ENV_VARS,
+  PROVIDER_OPTIONAL_ENV_VARS,
   type ProviderId,
   ProviderIdSchema,
   parseModel,
@@ -181,10 +185,6 @@ describe("parseModel", () => {
 // ── SUPPORTED_PROVIDERS ────────────────────────────────────────────────
 
 describe("SUPPORTED_PROVIDERS", () => {
-  test("has exactly 23 providers", () => {
-    expect(SUPPORTED_PROVIDERS).toHaveLength(23);
-  });
-
   test("includes all expected providers", () => {
     const expected: ProviderId[] = [
       "openai",
@@ -204,6 +204,8 @@ describe("SUPPORTED_PROVIDERS", () => {
       "bedrock",
       "vertex",
       "ollama",
+      "lmstudio",
+      "local",
       "huggingface",
       "cerebras",
       "gateway",
@@ -225,11 +227,9 @@ describe("SUPPORTED_PROVIDERS", () => {
 // ── PROVIDER_ENV_VARS ──────────────────────────────────────────────────
 
 describe("PROVIDER_ENV_VARS", () => {
-  test("maps every provider to at least one env var", () => {
+  test("maps every provider to its required env vars", () => {
     for (const provider of SUPPORTED_PROVIDERS) {
-      expect(PROVIDER_ENV_VARS[provider]).toBeDefined();
       expect(Array.isArray(PROVIDER_ENV_VARS[provider])).toBe(true);
-      expect(PROVIDER_ENV_VARS[provider].length).toBeGreaterThan(0);
     }
   });
 
@@ -249,7 +249,9 @@ describe("PROVIDER_ENV_VARS", () => {
     togetherai: ["TOGETHERAI_API_KEY"],
     bedrock: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
     vertex: ["GOOGLE_VERTEX_PROJECT", "GOOGLE_VERTEX_LOCATION"],
-    ollama: ["OLLAMA_HOST"],
+    ollama: [],
+    lmstudio: [],
+    local: ["AI_PIPE_LOCAL_BASE_URL"],
     huggingface: ["HF_TOKEN"],
     deepinfra: ["DEEPINFRA_API_KEY"],
     cerebras: ["CEREBRAS_API_KEY"],
@@ -264,6 +266,17 @@ describe("PROVIDER_ENV_VARS", () => {
       expect(PROVIDER_ENV_VARS[provider as ProviderId]).toEqual(envVars);
     });
   }
+
+  test("maps OpenAI-compatible config entries to tokens and preserves legacy Ollama host settings", () => {
+    expect(PROVIDER_OPTIONAL_ENV_VARS.ollama).toEqual(["OLLAMA_HOST"]);
+    expect(getProviderConfigEnvVar("ollama")).toBe("OLLAMA_HOST");
+    expect(PROVIDER_OPTIONAL_ENV_VARS.lmstudio).toEqual([
+      "LM_STUDIO_BASE_URL",
+      "LM_STUDIO_API_KEY",
+    ]);
+    expect(getProviderConfigEnvVar("lmstudio")).toBe("LM_STUDIO_API_KEY");
+    expect(getProviderConfigEnvVar("local")).toBe("AI_PIPE_LOCAL_API_KEY");
+  });
 });
 
 // ── ModelStringSchema edge cases ──────────────────────────────────────
@@ -471,7 +484,7 @@ describe("resolveModel", () => {
     {
       provider: "ollama",
       model: "ollama/llama3",
-      envVars: ["OLLAMA_HOST"],
+      envVars: [],
       expectedModelId: "llama3",
     },
     {
@@ -498,5 +511,115 @@ describe("resolveModel", () => {
     const m = resolveModel("gpt-4o-mini");
     expect(m).toBeDefined();
     expect(m.modelId).toBe("gpt-4o-mini");
+  });
+});
+
+describe("local model endpoints", () => {
+  const originalEnv = { ...process.env };
+  afterEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  test("uses loopback defaults without API keys or cloud endpoint settings", () => {
+    delete process.env.LM_STUDIO_BASE_URL;
+    delete process.env.OLLAMA_HOST;
+    expect(getModelEndpoint("lmstudio")).toBe("http://127.0.0.1:1234/v1");
+    expect(getModelEndpoint("ollama")).toBe("http://127.0.0.1:11434");
+    expect(getModelEndpoint("openai")).toBeUndefined();
+    expect(resolveModel("lmstudio/owner/model").modelId).toBe("owner/model");
+  });
+
+  test("preserves bare Ollama host and port syntax", () => {
+    process.env.OLLAMA_HOST = "localhost";
+    expect(getModelEndpoint("ollama")).toBe("http://localhost:11434");
+    process.env.OLLAMA_HOST = ":8080";
+    expect(getModelEndpoint("ollama")).toBe("http://127.0.0.1:8080");
+  });
+
+  test("rejects invalid or credential-bearing endpoints without exposing the value", () => {
+    delete process.env.AI_PIPE_LOCAL_BASE_URL;
+    expect(() => registry.languageModel("local/model")).toThrow(
+      "Set AI_PIPE_LOCAL_BASE_URL",
+    );
+    process.env.AI_PIPE_LOCAL_BASE_URL = "http://user:secret@localhost:8080/v1";
+    expect(() => resolveModel("local/model")).toThrow(
+      "AI_PIPE_LOCAL_BASE_URL must be an HTTP(S) base URL",
+    );
+  });
+
+  test("routes configured local models to the matching endpoint and sends only its own token", async () => {
+    const requests: Array<{
+      path: string;
+      auth: string | null;
+      model: string;
+    }> = [];
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      async fetch(request) {
+        const path = new URL(request.url).pathname;
+        const { model } = (await request.json()) as { model: string };
+        requests.push({
+          path,
+          auth: request.headers.get("authorization"),
+          model,
+        });
+        if (path === "/api/chat") {
+          return Response.json({
+            model,
+            message: { role: "assistant", content: "works" },
+            done: true,
+            done_reason: "stop",
+          });
+        }
+        return Response.json({
+          choices: [
+            {
+              index: 0,
+              message: { role: "assistant", content: "works" },
+              finish_reason: "stop",
+            },
+          ],
+        });
+      },
+    });
+    try {
+      process.env.LM_STUDIO_BASE_URL = new URL("lm/v1/", server.url).href;
+      process.env.AI_PIPE_LOCAL_BASE_URL = new URL(
+        "custom/v1",
+        server.url,
+      ).href;
+      process.env.OLLAMA_HOST = server.url.host;
+      process.env.OPENAI_API_KEY = "cloud-only";
+      process.env.LM_STUDIO_API_KEY = "lm-studio-only";
+      delete process.env.AI_PIPE_LOCAL_API_KEY;
+      for (const model of [
+        "lmstudio/owner/model",
+        "local/private-model",
+        "ollama/native-model",
+      ]) {
+        const result = await generateText({
+          model: resolveModel(model),
+          prompt: "Smoke test",
+          maxRetries: 0,
+        });
+        expect(result.text).toBe("works");
+      }
+      expect(requests).toEqual([
+        {
+          path: "/lm/v1/chat/completions",
+          auth: "Bearer lm-studio-only",
+          model: "owner/model",
+        },
+        {
+          path: "/custom/v1/chat/completions",
+          auth: null,
+          model: "private-model",
+        },
+        { path: "/api/chat", auth: null, model: "native-model" },
+      ]);
+    } finally {
+      await server.stop(true);
+    }
   });
 });

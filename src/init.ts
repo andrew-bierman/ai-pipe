@@ -6,6 +6,7 @@ import pkg from "../package.json";
 import { APP } from "./constants.ts";
 import {
   PROVIDER_ENV_VARS,
+  PROVIDER_OPTIONAL_ENV_VARS,
   type ProviderId,
   SUPPORTED_PROVIDERS,
 } from "./provider.ts";
@@ -35,6 +36,8 @@ const PROVIDER_LABELS: Record<ProviderId, string> = {
   bedrock: "Amazon Bedrock",
   vertex: "Google Vertex AI",
   ollama: "Ollama (Local)",
+  lmstudio: "LM Studio",
+  local: "OpenAI-compatible endpoint",
   huggingface: "Hugging Face",
   deepinfra: "DeepInfra",
   cerebras: "Cerebras",
@@ -237,7 +240,10 @@ export async function runInit(): Promise<void> {
     options: SUPPORTED_PROVIDERS.map((id) => ({
       value: id,
       label: PROVIDER_LABELS[id],
-      hint: PROVIDER_ENV_VARS[id].join(", "),
+      hint: [
+        ...PROVIDER_ENV_VARS[id],
+        ...(PROVIDER_OPTIONAL_ENV_VARS[id] ?? []),
+      ].join(", "),
     })),
     required: true,
   });
@@ -285,8 +291,15 @@ export async function runInit(): Promise<void> {
       }
 
       apiKeys[provider] = apiKey;
+    } else if (
+      provider === "lmstudio" ||
+      provider === "local" ||
+      provider === "ollama"
+    ) {
+      p.log.info(
+        `Start your local server before making requests. See the provider guide for ${PROVIDER_LABELS[provider]} endpoint and authentication settings.`,
+      );
     } else {
-      // For multi-env-var providers (bedrock, vertex, ollama), show guidance
       const envVars = PROVIDER_ENV_VARS[provider];
       p.log.info(
         `${PROVIDER_LABELS[provider]} requires environment variables: ${envVars.join(", ")}\nSet them in your shell profile (e.g., ~/.bashrc or ~/.zshrc).`,
@@ -298,6 +311,16 @@ export async function runInit(): Promise<void> {
   // Build model options from selected providers
   const modelOptions: { value: string; label: string; hint?: string }[] = [];
   for (const provider of selectedProviders) {
+    if (
+      provider === "lmstudio" ||
+      provider === "local" ||
+      provider === "ollama"
+    ) {
+      modelOptions.push({
+        value: `${provider}/`,
+        label: `Enter a model ID for ${PROVIDER_LABELS[provider]}`,
+      });
+    }
     const models = POPULAR_MODELS[provider];
     if (models) {
       for (const model of models) {
@@ -321,7 +344,18 @@ export async function runInit(): Promise<void> {
       process.exit(0);
     }
 
-    defaultModel = selected as string;
+    defaultModel = selected;
+    if (selected.endsWith("/")) {
+      const modelId = await p.text({
+        message: "Model ID as shown by your server",
+        validate: (value) => (value?.trim() ? undefined : "Enter a model ID"),
+      });
+      if (p.isCancel(modelId)) {
+        p.cancel("Setup cancelled.");
+        process.exit(0);
+      }
+      defaultModel = `${selected}${modelId.trim()}`;
+    }
   }
 
   // Step 4: Default temperature

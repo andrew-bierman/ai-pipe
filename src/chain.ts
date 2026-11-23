@@ -57,7 +57,9 @@ export async function executeChain(options: ChainOptions): Promise<string> {
     const modelString = step.model
       ? resolveAlias(options.config, step.model)
       : options.defaultModelString;
-    const model = step.model ? resolveModel(modelString) : options.defaultModel;
+    const model = step.model
+      ? resolveModel(modelString, options.config.customProviders)
+      : options.defaultModel;
 
     if (options.verbose) {
       process.stderr.write(
