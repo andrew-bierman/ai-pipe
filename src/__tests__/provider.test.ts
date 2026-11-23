@@ -534,6 +534,10 @@ describe("local model endpoints", () => {
     expect(getModelEndpoint("ollama")).toBe("http://localhost:11434");
     process.env.OLLAMA_HOST = ":8080";
     expect(getModelEndpoint("ollama")).toBe("http://127.0.0.1:8080");
+    process.env.OLLAMA_HOST = "localhost/proxy:123/ollama";
+    expect(getModelEndpoint("ollama")).toBe(
+      "http://localhost:11434/proxy:123/ollama",
+    );
   });
 
   test("rejects invalid or credential-bearing endpoints without exposing the value", () => {

@@ -57,7 +57,7 @@ export function getModelEndpoint(provider: ProviderId): string | undefined {
   if (!endpoint) return undefined;
 
   const bareOllamaHost = provider === "ollama" && !endpoint.includes("://");
-  const hasExplicitPort = /^[^/]+:\d+(?:\/|$)/.test(endpoint);
+  const hasExplicitPort = /^[^/]*:\d+(?:\/|$)/.test(endpoint);
   if (bareOllamaHost) {
     const host = endpoint.startsWith(":") ? `127.0.0.1${endpoint}` : endpoint;
     endpoint = `http://${host}`;

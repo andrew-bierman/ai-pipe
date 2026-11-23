@@ -101,7 +101,10 @@ export function getProviderDefaults(
  * @returns The resolved model string.
  */
 export function resolveAlias(config: Config, modelString: string): string {
-  return config.aliases?.[modelString] ?? modelString;
+  const aliases = config.aliases;
+  return aliases && Object.hasOwn(aliases, modelString)
+    ? (aliases[modelString] ?? modelString)
+    : modelString;
 }
 
 const HOME_DIR = Bun.env.HOME ?? Bun.env.USERPROFILE ?? "";
