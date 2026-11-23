@@ -1,4 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { CLEAR_COMMAND, EXIT_COMMANDS, startChat } from "../chat.ts";
@@ -56,6 +58,8 @@ describe("clear command", () => {
 
 describe("CLI: --chat flag", () => {
   const CLI = join(import.meta.dir, "..", "index.ts");
+  const testHome = mkdtempSync(join(tmpdir(), "ai-pipe-chat-"));
+  afterAll(() => rmSync(testHome, { recursive: true, force: true }));
 
   test("--chat appears in help output", async () => {
     const proc = Bun.spawn(["bun", CLI, "--help"], {
@@ -75,6 +79,8 @@ describe("CLI: --chat flag", () => {
       stderr: "pipe",
       env: {
         ...process.env,
+        HOME: testHome,
+        USERPROFILE: testHome,
         OPENAI_API_KEY: "",
         ANTHROPIC_API_KEY: "",
       },
