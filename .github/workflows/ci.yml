@@ -6,12 +6,17 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node LTS
         uses: actions/setup-node@v6
@@ -20,6 +25,16 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
+
+      - name: Require package version bump
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          changes=$(git diff --name-only "$BASE_SHA" HEAD -- src/ package.json bun.lock .github/workflows/release.yml scripts/release-version.ts)
+          if [[ -n "$changes" ]]; then
+            bun scripts/release-version.ts require-bump "$BASE_SHA"
+          fi
 
       - run: bun install --frozen-lockfile
 
