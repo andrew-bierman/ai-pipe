@@ -128,8 +128,17 @@ jobs:
     name: Publish to npm
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.22.1"
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -138,9 +147,7 @@ jobs:
       - run: bun install --frozen-lockfile
 
       - name: Publish to npm
-        run: bun publish --tolerate-republish
-        env:
-          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
 
   publish-github:
     name: Publish to GitHub Packages
