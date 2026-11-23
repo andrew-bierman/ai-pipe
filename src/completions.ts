@@ -49,7 +49,7 @@ _${funcName}_completions() {
   COMPREPLY=()
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
-  opts="--model -m --system -s --role -r --roles --template -T --templates --file -f --image -i --json -j --schema --format -F --no-stream --no-cache --temperature -t --max-output-tokens --config -c --cost --markdown --chat --session -C --budget -B --retries --diff -D --providers --completions --tools --mcp --chain --verbose -v --plugins -P --no-update-check --version -V --help -h"
+  opts="--model -m --system -s --role -r --roles --template -T --templates --file -f --image -i --json -j --schema --format -F --no-stream --no-cache --temperature -t --max-output-tokens --config -c --cost --stats --markdown --chat --session -C --budget -B --retries --diff -D --providers --completions --tools --mcp --chain --verbose -v --plugins -P --no-update-check --version -V --help -h"
   providers="${providers}"
   subcommands="init config session"
   config_subcommands="set show reset path"
@@ -165,6 +165,7 @@ _${funcName}() {
     '--max-output-tokens[Maximum tokens to generate]:tokens:' \\
     '(-c --config)'{-c,--config}'[Path to config directory]:dir:_directories' \\
     '--cost[Show token usage and cost after response]' \\
+    '--stats[Print token counts and timing to stderr]' \\
     '--markdown[Render response as formatted markdown]' \\
     '--chat[Start interactive chat mode]' \\
     '(-C --session)'{-C,--session}'[Session name for conversation continuity]:session:' \\
@@ -237,6 +238,7 @@ complete -c ${name} -s t -l temperature -d 'Sampling temperature (${APP.temperat
 complete -c ${name} -l max-output-tokens -d 'Maximum tokens to generate' -x
 complete -c ${name} -s c -l config -d 'Path to config directory' -x -a '(__fish_complete_directories)'
 complete -c ${name} -l cost -d 'Show token usage and cost after response'
+complete -c ${name} -l stats -d 'Print token counts and timing to stderr'
 complete -c ${name} -l markdown -d 'Render response as formatted markdown'
 complete -c ${name} -l chat -d 'Start interactive chat mode'
 complete -c ${name} -s C -l session -d 'Session name for conversation continuity' -x
@@ -282,6 +284,7 @@ complete -c ai -s t -l temperature -d 'Sampling temperature (${APP.temperature.m
 complete -c ai -l max-output-tokens -d 'Maximum tokens to generate' -x
 complete -c ai -s c -l config -d 'Path to config directory' -x -a '(__fish_complete_directories)'
 complete -c ai -l cost -d 'Show token usage and cost after response'
+complete -c ai -l stats -d 'Print token counts and timing to stderr'
 complete -c ai -l markdown -d 'Render response as formatted markdown'
 complete -c ai -l chat -d 'Start interactive chat mode'
 complete -c ai -s C -l session -d 'Session name for conversation continuity' -x

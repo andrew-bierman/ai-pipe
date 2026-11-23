@@ -103,6 +103,7 @@ function createLocalProvider(provider: keyof typeof LOCAL_API_KEYS) {
     baseURL,
     apiKey: process.env[LOCAL_API_KEYS[provider]] || undefined,
     supportsStructuredOutputs: provider === "lmstudio",
+    includeUsage: provider === "lmstudio",
   });
 }
 

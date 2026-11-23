@@ -211,6 +211,15 @@ ai-pipe --chat --budget 1.00
 ai-pipe --retries 3 "explain recursion"
 ```
 
+### Response stats
+
+Use `--stats` with a prompt, chat, chain, or model comparison to print timing and token counts to stderr. Streaming calls also report time to first text. Throughput is the provider-reported output token count divided by the full request time. Cache hits are reported separately.
+
+```sh
+ai-pipe --stats "summarize this" < notes.txt
+ai-pipe --chat --stats
+```
+
 ### Schema-validated JSON
 
 Pass an object-shaped JSON Schema (draft 7) to get just the validated JSON object on stdout.

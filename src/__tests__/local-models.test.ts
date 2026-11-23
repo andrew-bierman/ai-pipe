@@ -107,8 +107,16 @@ test("LM Studio streams an answer for piped input without sending the OpenAI key
       object: "chat.completion.chunk",
       choices: [{ index: 0, ...choice }],
     }));
+    const events = [
+      ...chunks,
+      {
+        ...COMPLETION,
+        choices: [],
+        usage: { prompt_tokens: 10, completion_tokens: 3, total_tokens: 13 },
+      },
+    ];
     return new Response(
-      `${chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("")}data: [DONE]\n\n`,
+      `${events.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("")}data: [DONE]\n\n`,
       { headers: { "content-type": "text/event-stream" } },
     );
   });
@@ -138,6 +146,19 @@ test("LM Studio streams an answer for piped input without sending the OpenAI key
         }),
       },
     ]);
+
+    const stats = await runCli(
+      ["-m", `lmstudio/${MODEL}`, "--stats", "Summarize this"],
+      { LM_STUDIO_BASE_URL: new URL("/v1", server.url).href },
+    );
+    expect(stats.exitCode).toBe(0);
+    expect(stats.stdout).toBe("Local stream\n");
+    expect(stats.stderr).toContain("to first text");
+    expect(stats.stderr).toContain("3 output tokens");
+    expect(stats.stderr).toMatch(/\d+\.\d tok\/s end-to-end/);
+    expect(requests[1]?.body).toMatchObject({
+      stream_options: { include_usage: true },
+    });
   } finally {
     await server.stop(true);
   }

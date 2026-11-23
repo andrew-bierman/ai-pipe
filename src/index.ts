@@ -61,6 +61,7 @@ import {
   importSession,
   listSessions,
 } from "./session.ts";
+import { printResponseStats } from "./stats.ts";
 import { StreamingMarkdownRenderer } from "./streaming-markdown.ts";
 import {
   loadStructuredOutput,
@@ -123,6 +124,7 @@ export interface CLIOptions {
   stream: boolean;
   markdown: boolean;
   cost: boolean;
+  stats?: boolean;
   chat: boolean;
   temperature?: number;
   maxOutputTokens?: number;
@@ -158,6 +160,7 @@ export const CLIOptionsSchema = z.object({
   stream: z.boolean(),
   markdown: z.boolean().optional().default(false),
   cost: z.boolean().optional().default(false),
+  stats: z.boolean().optional(),
   chat: z.boolean().optional().default(false),
   temperature: z
     .number()
@@ -682,6 +685,7 @@ interface ExecutePromptParams {
   format?: OutputFormat;
   markdown: boolean;
   showCost: boolean;
+  showStats?: boolean;
   /** If provided, saves assistant response to session history */
   session?: {
     name: string;
@@ -719,6 +723,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
     format,
     markdown,
     showCost,
+    showStats,
     structuredOutput,
     session,
     cacheKey,
@@ -755,6 +760,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
           : `${cached.text}\n`;
         process.stdout.write(text);
       }
+      if (showStats) console.error("Stats: cache hit");
       displayCostIfEnabled({ usage: cached.usage, modelString, showCost });
       checkBudget({ usage: cached.usage, modelString, budget });
       return;
@@ -778,12 +784,14 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
       : { ...baseOptions, system, prompt: prompt ?? "" };
 
   if (structuredOutput || json || format || !stream) {
+    const startedAt = performance.now();
     const result =
       retries !== undefined && retries > 0
         ? await withRetry(() => generateText(callOptions), {
             maxRetries: retries,
           })
         : await generateText(callOptions);
+    const elapsedMs = performance.now() - startedAt;
 
     // Apply afterResponse plugin transform if provided
     const responseText = afterResponseTransform
@@ -834,10 +842,14 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
       process.stdout.write(output);
     }
 
+    if (showStats) printResponseStats({ usage: result.usage, elapsedMs });
     displayCostIfEnabled({ usage: result.usage, modelString, showCost });
     checkBudget({ usage: result.usage, modelString, budget });
   } else {
     const consumeStream = async () => {
+      const startedAt = performance.now();
+      let firstTextMs: number | undefined;
+      let elapsedMs: number;
       // Capture API errors via the onError callback to prevent bun from
       // dumping raw stack traces with request bodies, response headers,
       // and cookies. Without this, bun's native ReadableStream error
@@ -854,8 +866,11 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
       if (markdown) {
         const renderer = new StreamingMarkdownRenderer();
         for await (const chunk of result.textStream) {
+          if (showStats && chunk) firstTextMs ??= performance.now() - startedAt;
           renderer.append(chunk);
         }
+
+        elapsedMs = performance.now() - startedAt;
 
         // If onError captured an API error, throw it now for clean formatting
         if (capturedApiError) throw capturedApiError;
@@ -878,9 +893,12 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
       } else {
         let fullResponse = "";
         for await (const chunk of result.textStream) {
+          if (showStats && chunk) firstTextMs ??= performance.now() - startedAt;
           process.stdout.write(chunk);
           fullResponse += chunk;
         }
+
+        elapsedMs = performance.now() - startedAt;
 
         // If onError captured an API error, throw it now for clean formatting
         if (capturedApiError) throw capturedApiError;
@@ -902,12 +920,10 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
         }
       }
 
-      displayCostIfEnabled({
-        usage: await result.usage,
-        modelString,
-        showCost,
-      });
-      checkBudget({ usage: await result.usage, modelString, budget });
+      const usage = await result.usage;
+      if (showStats) printResponseStats({ usage, elapsedMs, firstTextMs });
+      displayCostIfEnabled({ usage, modelString, showCost });
+      checkBudget({ usage, modelString, budget });
     };
 
     if (retries !== undefined && retries > 0) {
@@ -1143,6 +1159,17 @@ async function runAction(
 
     try {
       const results = await runDiff(diffOptions);
+      if (opts.stats) {
+        for (const result of results) {
+          if (result.durationMs > 0) {
+            printResponseStats({
+              usage: result.usage,
+              elapsedMs: result.durationMs,
+              label: result.model,
+            });
+          }
+        }
+      }
       if (opts.json) {
         process.stdout.write(`${formatDiffJson(results)}\n`);
       } else {
@@ -1203,6 +1230,7 @@ async function runAction(
       maxOutputTokens,
       markdown,
       showCost: opts.cost,
+      showStats: opts.stats,
       budget: opts.budget,
     });
     return;
@@ -1221,6 +1249,7 @@ async function runAction(
         temperature,
         maxOutputTokens,
         verbose: opts.verbose,
+        showStats: opts.stats,
       });
 
       if (opts.format) {
@@ -1358,6 +1387,7 @@ async function runAction(
       structuredOutput,
       markdown,
       showCost: opts.cost,
+      showStats: opts.stats,
       session: sessionName ? { name: sessionName, messages } : undefined,
       cacheKey,
       tools,
@@ -1548,6 +1578,11 @@ export const mainCommand = defineCommand({
       description: "Render markdown output",
       default: false,
     },
+    stats: {
+      type: "boolean",
+      description: "Print token counts and timing to stderr",
+      default: false,
+    },
     cost: {
       type: "boolean",
       description: "Show estimated cost of the request",
@@ -1702,6 +1737,7 @@ export const mainCommand = defineCommand({
       cache: args.cache,
       markdown: args.markdown,
       cost: args.cost,
+      stats: args.stats,
       chat: args.chat,
       temperature:
         args.temperature !== undefined

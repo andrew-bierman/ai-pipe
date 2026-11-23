@@ -3,6 +3,7 @@ import { type LanguageModel, type ModelMessage, streamText } from "ai";
 
 import type { UsageInfo } from "./cost.ts";
 import { calculateCost, formatCost, parseModelString } from "./cost.ts";
+import { printResponseStats } from "./stats.ts";
 import { StreamingMarkdownRenderer } from "./streaming-markdown.ts";
 
 // ── ANSI helpers ──────────────────────────────────────────────────────
@@ -34,6 +35,7 @@ export interface ChatOptions {
   maxOutputTokens?: number;
   markdown: boolean;
   showCost: boolean;
+  showStats?: boolean;
   /** If provided, warn when cumulative cost exceeds this budget (in USD) */
   budget?: number;
 }
@@ -130,6 +132,7 @@ export async function startChat(options: ChatOptions): Promise<void> {
     maxOutputTokens,
     markdown,
     showCost,
+    showStats,
     budget,
   } = options;
 
@@ -241,6 +244,8 @@ export async function startChat(options: ChatOptions): Promise<void> {
         // Capture API errors via onError to prevent Bun from dumping
         // verbose stack traces before the JS catch block fires.
         let streamError: Error | null = null;
+        const startedAt = performance.now();
+        let firstTextMs: number | undefined;
         const result = streamText({
           model,
           messages,
@@ -260,6 +265,8 @@ export async function startChat(options: ChatOptions): Promise<void> {
           const renderer = new StreamingMarkdownRenderer();
           try {
             for await (const chunk of result.textStream) {
+              if (showStats && chunk)
+                firstTextMs ??= performance.now() - startedAt;
               if (firstChunk) {
                 spinner.stop();
                 console.error(""); // blank line before response
@@ -283,6 +290,8 @@ export async function startChat(options: ChatOptions): Promise<void> {
         } else {
           try {
             for await (const chunk of result.textStream) {
+              if (showStats && chunk)
+                firstTextMs ??= performance.now() - startedAt;
               if (firstChunk) {
                 spinner.stop();
                 // Print a visual separator before the response
@@ -305,6 +314,7 @@ export async function startChat(options: ChatOptions): Promise<void> {
           process.stdout.write(`${RESET}\n`);
         }
 
+        const elapsedMs = performance.now() - startedAt;
         isStreaming = false;
         currentAbort = null;
 
@@ -313,6 +323,7 @@ export async function startChat(options: ChatOptions): Promise<void> {
 
         // Always compute usage for budget tracking even if showCost is false
         const usage: UsageInfo | undefined = await result.usage;
+        if (showStats) printResponseStats({ usage, elapsedMs, firstTextMs });
         if (usage) {
           const { provider, modelId } = parseModelString(modelString);
           const costInfo = calculateCost({ provider, modelId, usage });
