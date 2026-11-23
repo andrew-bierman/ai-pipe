@@ -26,6 +26,8 @@ export type CachedResponse = z.infer<typeof CachedResponseSchema>;
 /** Parameters used to build a cache key */
 export interface CacheKeyParams {
   model: string;
+  endpoint?: string;
+  endpointKey?: string;
   system: string | undefined;
   prompt: string;
   temperature: number | undefined;
@@ -40,6 +42,8 @@ export function buildCacheKey(params: CacheKeyParams): string {
   const hasher = new Bun.CryptoHasher("sha256");
   const keyPayload = {
     model: params.model,
+    endpoint: params.endpoint,
+    endpointKey: params.endpointKey,
     system: params.system ?? null,
     prompt: params.prompt,
     temperature: params.temperature ?? null,

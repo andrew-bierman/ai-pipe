@@ -46,8 +46,8 @@ import { renderMarkdown } from "./markdown.ts";
 import { loadMCPConfig, MCPManager } from "./mcp.ts";
 import { PluginManager } from "./plugins.ts";
 import {
-  PROVIDER_ENV_VARS,
-  type ProviderId,
+  getModelCacheScope,
+  getProviderConfigEnvVar,
   ProviderIdSchema,
   printProviders,
   resolveModel,
@@ -424,7 +424,10 @@ export function resolveOptions(
   markdown: boolean;
 } {
   // First resolve the model string to determine the provider
-  const modelString = opts.model ?? config.model ?? APP.defaultModel;
+  const modelString = resolveAlias(
+    config,
+    opts.model ?? config.model ?? APP.defaultModel,
+  );
   const { provider } = parseModelString(modelString);
 
   // Look up provider-specific overrides
@@ -918,8 +921,8 @@ function formatError(err: unknown, modelString?: string): string {
       const { provider } = parseModelString(modelString);
       const parsed = ProviderIdSchema.safeParse(provider);
       if (parsed.success) {
-        const envVars = PROVIDER_ENV_VARS[parsed.data as ProviderId];
-        providerEnvHint = envVars[0] ? ` Check your ${envVars[0]}.` : "";
+        const keyVar = getProviderConfigEnvVar(parsed.data);
+        if (keyVar) providerEnvHint = ` Check your ${keyVar}.`;
       }
     }
     if (statusCode === 401) {
@@ -933,6 +936,15 @@ function formatError(err: unknown, modelString?: string): string {
     return `API returned ${statusCode}: ${brief}`;
   }
   return err instanceof Error ? err.message : String(err);
+}
+
+async function loadCliConfig(configDir?: string): Promise<Config> {
+  try {
+    return await loadConfig(configDir);
+  } catch (err: unknown) {
+    console.error(`Error: ${formatError(err)}`);
+    process.exit(1);
+  }
 }
 
 async function runAction(
@@ -952,7 +964,8 @@ async function runAction(
 
   // Handle info flags first
   if (opts.providers) {
-    printProviders();
+    const config = await loadCliConfig(opts.config);
+    printProviders(config.customProviders);
     return;
   }
 
@@ -995,16 +1008,16 @@ async function runAction(
     return;
   }
 
-  const config = await loadConfig(opts.config);
+  const config = await loadCliConfig(opts.config);
 
   // Inject config API keys into process.env (env vars take precedence)
   if (config.apiKeys) {
     for (const [provider, key] of Object.entries(config.apiKeys)) {
       const providerId = ProviderIdSchema.safeParse(provider);
       if (!providerId.success) continue;
-      const envVars = PROVIDER_ENV_VARS[providerId.data];
-      if (envVars[0] && !process.env[envVars[0]]) {
-        process.env[envVars[0]] = key;
+      const keyVar = getProviderConfigEnvVar(providerId.data);
+      if (keyVar && !process.env[keyVar]) {
+        process.env[keyVar] = key;
       }
     }
   }
@@ -1084,6 +1097,7 @@ async function runAction(
 
     const diffOptions: DiffOptions = {
       models,
+      customProviders: config.customProviders,
       prompt,
       system: diffSystem,
       temperature: opts.temperature,
@@ -1103,11 +1117,6 @@ async function runAction(
       process.exit(1);
     }
     return;
-  }
-
-  // Resolve model aliases before resolveOptions
-  if (opts.model) {
-    opts.model = resolveAlias(config, opts.model);
   }
 
   const { modelString, system, temperature, maxOutputTokens, markdown } =
@@ -1140,7 +1149,13 @@ async function runAction(
     }
   }
 
-  const model = resolveModel(modelString);
+  let model: ReturnType<typeof resolveModel>;
+  try {
+    model = resolveModel(modelString, config.customProviders);
+  } catch (err: unknown) {
+    console.error(`Error: ${formatError(err, modelString)}`);
+    process.exit(1);
+  }
 
   // If --chat is set, enter interactive chat mode instead of one-shot execution
   if (opts.chat) {
@@ -1279,6 +1294,7 @@ async function runAction(
     const cacheKey = useCache
       ? buildCacheKey({
           model: modelString,
+          ...getModelCacheScope(modelString, config.customProviders),
           system: systemPrompt,
           prompt,
           temperature,

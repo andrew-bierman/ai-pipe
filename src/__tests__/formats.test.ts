@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  formatOutput,
-  type OutputFormat,
-  OutputFormatSchema,
-} from "../formats.ts";
+import { formatOutput, OutputFormatSchema } from "../formats.ts";
 import type { JsonOutput } from "../index.ts";
 
 // ── Shared test data ─────────────────────────────────────────────────

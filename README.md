@@ -4,7 +4,7 @@
 
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-yellow.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
-[![Bun](https://img.shields.io/badge/Bun-1.3.5-black.svg)](https://bun.sh/)
+[![Bun](https://img.shields.io/badge/Bun-1.4.4-black.svg)](https://bun.sh/)
 
 </div>
 
@@ -13,6 +13,7 @@ A powerful CLI for calling LLMs from the terminal. Text in, text out. Built on t
 ## ✨ Features
 
 - 🤖 **20+ AI Providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, Fireworks, OpenRouter, Azure AI, Together AI, Amazon Bedrock, Google Vertex AI, Ollama, Hugging Face, DeepInfra, Cerebras, Luma, fal.ai, Replicate
+- 🖥️ **Local Models** — LM Studio, Ollama, and OpenAI-compatible model servers
 - 📡 **Streaming by Default** — tokens print as they arrive
 - 🔄 **Pipe-friendly** — reads from stdin, writes to stdout, errors to stderr
 - 📎 **File Attachments** — include file contents in prompts with `-f`
@@ -90,7 +91,28 @@ ai-pipe config show
 
 ## 🔑 Setup
 
-Set an API key for at least one provider (or use `ai-pipe init` for guided setup):
+### Local models
+
+Start your model server and use the model ID it reports.
+
+```bash
+# LM Studio, with the server running on its default port
+curl -fsS http://127.0.0.1:1234/v1/models
+ai-pipe -m 'lmstudio/<model-id>' "write a haiku"
+
+# Ollama, with the model already downloaded
+ai-pipe -m ollama/llama3 "write a haiku"
+
+# Another OpenAI-compatible server, such as llama.cpp
+AI_PIPE_LOCAL_BASE_URL=http://127.0.0.1:8080/v1 \
+  ai-pipe -m 'local/<model-id>' "write a haiku"
+```
+
+See [local provider configuration](docs/providers.md#local-models) for custom endpoints and authentication.
+
+### Cloud providers
+
+Set an API key for a cloud provider or use `ai-pipe init` for guided setup.
 
 ```bash
 # OpenAI
@@ -119,9 +141,6 @@ export GOOGLE_VERTEX_LOCATION="us-central1"
 # Hugging Face
 export HF_TOKEN="hf_..."
 
-# Ollama (local)
-export OLLAMA_HOST="http://localhost:11434"
-
 # Fireworks AI
 export FIREWORKS_API_KEY="fw_..."
 
@@ -138,7 +157,7 @@ export FAL_API_KEY="..."
 export REPLICATE_API_TOKEN="r8_..."
 ```
 
-> 💡 **Tip:** Run `ai-pipe --providers` to see which keys are configured.
+> 💡 **Tip:** Run `ai-pipe --providers` to see provider configuration status.
 
 ## 🚀 Usage
 
@@ -230,7 +249,9 @@ Models are queried in parallel for speed. Each result shows the model name, resp
 | TogetherAI | `TOGETHERAI_API_KEY` | `togetherai/meta-llama/Llama-3.3-70b-Instruct` |
 | Bedrock | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `bedrock/anthropic.claude-sonnet-4-2025-02-19` |
 | Vertex | `GOOGLE_VERTEX_PROJECT`, `GOOGLE_VERTEX_LOCATION` | `vertex/google/cloud/llama-3.1` |
-| Ollama | `OLLAMA_HOST` | `ollama/llama3` |
+| Ollama | Optional `OLLAMA_HOST` | `ollama/llama3` |
+| LM Studio | Optional `LM_STUDIO_BASE_URL`, `LM_STUDIO_API_KEY` | `lmstudio/<model-id>` |
+| OpenAI-compatible local server | `AI_PIPE_LOCAL_BASE_URL`, optional `AI_PIPE_LOCAL_API_KEY` | `local/<model-id>` |
 | HuggingFace | `HF_TOKEN` | `huggingface/meta-llama/Llama-3.3-70b-Instruct` |
 | DeepInfra | `DEEPINFRA_API_KEY` | `deepinfra/meta-llama/Llama-3.3-70b-Instruct` |
 | Cerebras | `CEREBRAS_API_KEY` | `cerebras/llama3.1-8b` |
@@ -302,6 +323,10 @@ ai-pipe -m gemini "summarize this"    # expands to google/gemini-2.5-flash
 ```
 
 The `model` field in config also resolves aliases, so setting `"model": "claude"` uses `anthropic/claude-sonnet-4-5` as the default.
+
+### Custom Providers
+
+Use `customProviders` in `~/.ai-pipe/config.json` to name your own OpenAI-compatible endpoints. Then run a model by its full ID, such as `ai-pipe -m edge/vendor/model "say hello"`, or give it an alias such as `fast`. [Custom provider setup](docs/providers.md#custom-providers)
 
 ### Config Commands
 
@@ -618,7 +643,7 @@ The release workflow handles `bun publish`, binary builds, and GitHub release.
 - [x] **Config directory** — set defaults in `~/.ai-pipe/`
 - [x] **Shell completions** — bash, zsh, fish
 - [x] **Standalone binary** — compile to a single executable with `bun build --compile`
-- [x] **23 providers** — OpenAI, Anthropic, Google, and 20 more
+- [x] **Cloud and local providers** — OpenAI, Anthropic, Google, LM Studio, Ollama, and more
 - [x] **npm publishing** — `npm install -g ai-pipe` / `bun install -g ai-pipe`
 - [x] **File attachments** — include file contents in prompts with `-f`
 - [x] **Conversation history** — continue previous conversations with `-C`, named sessions with `--session`

@@ -217,6 +217,16 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
+      - name: Set binary version
+        if: needs.resolve-version.outputs.version != ''
+        env:
+          RELEASE_VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          CURRENT=$(bun -e "console.log(require('./package.json').version)")
+          if [ "$CURRENT" != "$RELEASE_VERSION" ]; then
+            bun pm version "$RELEASE_VERSION" --no-git-tag-version
+          fi
+
       - name: Compile ${{ matrix.outfile }}
         run: bun build src/index.ts --compile --target=${{ matrix.target }} --outfile dist/${{ matrix.outfile }}
 

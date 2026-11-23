@@ -1,10 +1,10 @@
 # Providers
 
-`ai-pipe` supports 18 AI providers through the [Vercel AI SDK](https://sdk.vercel.ai/). Each provider requires one or more environment variables (or entries in `~/.ai-pipe/apiKeys.json`).
+`ai-pipe` supports cloud and [local models](#local-models) through the [Vercel AI SDK](https://sdk.vercel.ai/). Cloud providers typically require credentials in environment variables or `~/.ai-pipe/apiKeys.json`.
 
 ## Quick Start
 
-Set at least one provider's API key, then use the `provider/model-id` format:
+Use the `provider/model-id` format. For OpenAI, set an API key first.
 
 ```bash
 export OPENAI_API_KEY="sk-..."
@@ -18,7 +18,67 @@ ai-pipe -m gpt-4o "hello"       # same as openai/gpt-4o
 ai-pipe "hello"                  # uses default: openai/gpt-4o
 ```
 
-## All Providers
+## Local models
+
+### LM Studio
+
+Download a model in LM Studio and start the server from the Developer tab or with `lms server start`. Use a model ID from the server's model list. [LM Studio server documentation](https://lmstudio.ai/docs/developer/core/server)
+
+```bash
+curl -fsS http://127.0.0.1:1234/v1/models
+ai-pipe -m 'lmstudio/<model-id>' "say hello"
+```
+
+`LM_STUDIO_BASE_URL` defaults to `http://127.0.0.1:1234/v1`. Set it to the OpenAI-compatible base URL if you use a different host or port. If you enabled API authentication in LM Studio, set `LM_STUDIO_API_KEY` to your token. [LM Studio API authentication](https://lmstudio.ai/docs/developer/rest/quickstart)
+
+### Other OpenAI-compatible servers
+
+Set `AI_PIPE_LOCAL_BASE_URL` to your server's OpenAI-compatible API base URL, including its API prefix (typically `/v1`). Set `AI_PIPE_LOCAL_API_KEY` if your server requires a bearer token. The server needs to support Chat Completions. For example, with [llama.cpp's server](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md) running on port 8080:
+
+```bash
+AI_PIPE_LOCAL_BASE_URL=http://127.0.0.1:8080/v1 \
+  ai-pipe -m 'local/<model-id>' "say hello"
+```
+
+### Ollama
+
+Start [Ollama](https://ollama.com/) and pull your model. ai-pipe uses the native Ollama API and defaults to `http://127.0.0.1:11434`. Set `OLLAMA_HOST` to override the server address.
+
+```bash
+ollama pull llama3
+ai-pipe -m ollama/llama3 "say hello"
+```
+
+## Custom providers
+
+Add a `customProviders` entry to `~/.ai-pipe/config.json` for each OpenAI-compatible Chat Completions endpoint. Choose a name that isn't already used by a built-in provider.
+
+```json
+{
+  "customProviders": {
+    "edge": {
+      "baseURL": "https://edge.example.com/v1",
+      "apiKeyEnv": "EDGE_TOKEN"
+    }
+  },
+  "aliases": {
+    "fast": "edge/vendor/model"
+  },
+  "model": "fast"
+}
+```
+
+Set `baseURL` to the server's API base, including its prefix such as `/v1`. Export the bearer token in the variable named by `apiKeyEnv`, or omit `apiKeyEnv` for an endpoint that accepts unauthenticated requests.
+
+Use any model ID your server accepts. In `edge/vendor/model`, ai-pipe sends `vendor/model` to the server. The full ID and its alias also work as the default model, in chain steps, and with `--diff`. Run `ai-pipe --providers` to list configured providers.
+
+```bash
+export EDGE_TOKEN="your-token"
+ai-pipe -m edge/vendor/model "say hello"
+ai-pipe -m fast "say hello"
+```
+
+## Cloud providers
 
 ### OpenAI
 
@@ -269,30 +329,6 @@ ai-pipe -m vertex/gemini-2.5-pro "via vertex"
 
 **Note:** Both env vars are required. This uses Google Cloud authentication, which may also require `gcloud auth` or a service account.
 
-### Ollama (Local)
-
-| | |
-|---|---|
-| **Env Variable** | `OLLAMA_HOST` |
-| **Model Format** | `ollama/<model-name>` |
-| **Install** | https://ollama.com/ |
-
-```bash
-export OLLAMA_HOST="http://localhost:11434"
-
-# First, pull a model with Ollama
-ollama pull llama3
-ollama pull codellama
-ollama pull mistral
-
-# Then use it
-ai-pipe -m ollama/llama3 "hello"
-ai-pipe -m ollama/codellama "review this code"
-ai-pipe -m ollama/mistral "explain this concept"
-```
-
-**Note:** Ollama runs models locally. No API key needed -- just the host URL. Free to use, limited by your hardware.
-
 ### Hugging Face
 
 | | |
@@ -323,35 +359,10 @@ ai-pipe -m deepinfra/meta-llama/Llama-3.3-70b-Instruct "fast open source"
 
 ## Checking Provider Status
 
-Run `--providers` to see which API keys are configured in your environment:
+Run `--providers` to see provider settings and which required environment variables are configured.
 
 ```bash
 ai-pipe --providers
-```
-
-Output:
-
-```
-Provider      Env Variable(s)                            Status
-────────      ───────────────                            ──────
-openai        OPENAI_API_KEY                             ✓ set
-anthropic     ANTHROPIC_API_KEY                          ✓ set
-google        GOOGLE_GENERATIVE_AI_API_KEY               ✗ missing
-perplexity    PERPLEXITY_API_KEY                         ✗ missing
-xai           XAI_API_KEY                                ✗ missing
-mistral       MISTRAL_API_KEY                            ✗ missing
-groq          GROQ_API_KEY                               ✓ set
-deepseek      DEEPSEEK_API_KEY                           ✗ missing
-cohere        COHERE_API_KEY                             ✗ missing
-fireworks     FIREWORKS_API_KEY                          ✗ missing
-openrouter    OPENROUTER_API_KEY                         ✗ missing
-azure         AZURE_AI_API_KEY                           ✗ missing
-togetherai    TOGETHERAI_API_KEY                         ✗ missing
-bedrock       AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY   ✗ missing
-vertex        GOOGLE_VERTEX_PROJECT, GOOGLE_VERTEX_LOCATION  ✗ missing
-ollama        OLLAMA_HOST                                ✗ missing
-huggingface   HF_TOKEN                                   ✗ missing
-deepinfra     DEEPINFRA_API_KEY                          ✗ missing
 ```
 
 ## Pricing Table

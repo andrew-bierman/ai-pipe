@@ -11,6 +11,7 @@ import {
 } from "../index.ts";
 import {
   PROVIDER_ENV_VARS,
+  PROVIDER_OPTIONAL_ENV_VARS,
   type ProviderId,
   registry,
   SUPPORTED_PROVIDERS,
@@ -221,9 +222,10 @@ describe("AI SDK registry compatibility", () => {
     ]);
     for (const provider of SUPPORTED_PROVIDERS) {
       try {
-        registry.languageModel(
+        const model = registry.languageModel(
           `${provider}/test-model` as `${ProviderId}/${string}`,
         );
+        expect(model.specificationVersion).toBe("v3");
       } catch (e: unknown) {
         // Allow known non-fatal errors, but fail on unexpected ones
         expect(allowedErrors.has((e as Error).name)).toBe(true);
@@ -231,13 +233,15 @@ describe("AI SDK registry compatibility", () => {
     }
   });
 
-  test("every SUPPORTED_PROVIDER has corresponding env var(s)", () => {
+  test("all required and optional provider variable names use env syntax", () => {
     for (const provider of SUPPORTED_PROVIDERS) {
       const envVars = PROVIDER_ENV_VARS[provider];
       expect(envVars).toBeDefined();
       expect(Array.isArray(envVars)).toBe(true);
-      expect(envVars.length).toBeGreaterThan(0);
-      for (const v of envVars) {
+      for (const v of [
+        ...envVars,
+        ...(PROVIDER_OPTIONAL_ENV_VARS[provider] ?? []),
+      ]) {
         expect(v).toMatch(/^[A-Z_]+$/);
       }
     }

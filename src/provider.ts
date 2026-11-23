@@ -15,19 +15,104 @@ import { huggingface } from "@ai-sdk/huggingface";
 import { luma } from "@ai-sdk/luma";
 import { mistral } from "@ai-sdk/mistral";
 import { openai } from "@ai-sdk/openai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { perplexity } from "@ai-sdk/perplexity";
-import type { ProviderV3 } from "@ai-sdk/provider";
+import { LoadSettingError, type ProviderV3 } from "@ai-sdk/provider";
 import { replicate } from "@ai-sdk/replicate";
 import { togetherai } from "@ai-sdk/togetherai";
 import { xai } from "@ai-sdk/xai";
 import { openrouter } from "@openrouter/ai-sdk-provider";
 import { createProviderRegistry } from "ai";
-import { ollama } from "ai-sdk-ollama";
+import { createOllama } from "ai-sdk-ollama";
 import { z } from "zod";
 
 import { APP } from "./constants.ts";
 
-const openrouterProvider = openrouter as unknown as ProviderV3;
+const LOCAL_ENDPOINTS = {
+  ollama: { envVar: "OLLAMA_HOST", default: "http://127.0.0.1:11434" },
+  lmstudio: {
+    envVar: "LM_STUDIO_BASE_URL",
+    default: "http://127.0.0.1:1234/v1",
+  },
+  local: { envVar: "AI_PIPE_LOCAL_BASE_URL", default: undefined },
+} as const;
+
+const LOCAL_API_KEYS = {
+  lmstudio: "LM_STUDIO_API_KEY",
+  local: "AI_PIPE_LOCAL_API_KEY",
+} as const;
+
+/** The effective endpoint used by a local provider, including its default. */
+export function getModelEndpoint(provider: ProviderId): string | undefined {
+  if (
+    provider !== "ollama" &&
+    provider !== "lmstudio" &&
+    provider !== "local"
+  ) {
+    return undefined;
+  }
+
+  const { envVar, default: defaultURL } = LOCAL_ENDPOINTS[provider];
+  let endpoint = process.env[envVar]?.trim() || defaultURL;
+  if (!endpoint) return undefined;
+
+  const bareOllamaHost = provider === "ollama" && !endpoint.includes("://");
+  const hasExplicitPort = /^[^/]*:\d+(?:\/|$)/.test(endpoint);
+  if (bareOllamaHost) {
+    const host = endpoint.startsWith(":") ? `127.0.0.1${endpoint}` : endpoint;
+    endpoint = `http://${host}`;
+  }
+
+  const url = parseEndpoint(endpoint, envVar);
+  if (bareOllamaHost && !hasExplicitPort) url.port = "11434";
+  return url.href.replace(/\/+$/, "");
+}
+
+function parseEndpoint(endpoint: string, settingName: string): URL {
+  const url = URL.parse(endpoint);
+  if (
+    !url ||
+    (url.protocol !== "http:" && url.protocol !== "https:") ||
+    url.username ||
+    url.password ||
+    url.href.includes("?") ||
+    url.href.includes("#")
+  ) {
+    throw new LoadSettingError({
+      message: `${settingName} must be an HTTP(S) base URL without credentials, query, or fragment.`,
+    });
+  }
+  return url;
+}
+
+function createLocalProvider(provider: keyof typeof LOCAL_API_KEYS) {
+  const baseURL = getModelEndpoint(provider);
+  if (!baseURL) {
+    throw new LoadSettingError({
+      message: `Set ${LOCAL_ENDPOINTS[provider].envVar} to the server's HTTP(S) base URL (including /v1 if required).`,
+    });
+  }
+  return createOpenAICompatible({
+    name: provider,
+    baseURL,
+    apiKey: process.env[LOCAL_API_KEYS[provider]] || undefined,
+  });
+}
+
+// Read endpoint and key settings when resolving a model. The CLI applies
+// credentials from its config after this module has been imported.
+function lazyProvider(create: () => ProviderV3): ProviderV3 {
+  return {
+    specificationVersion: "v3",
+    languageModel: (modelId) => create().languageModel(modelId),
+    embeddingModel: (modelId) => create().embeddingModel(modelId),
+    imageModel: (modelId) => create().imageModel(modelId),
+  };
+}
+
+function createOllamaProvider() {
+  return createOllama({ baseURL: getModelEndpoint("ollama") });
+}
 
 /**
  * Central AI SDK provider registry.
@@ -48,12 +133,18 @@ export const registry = createProviderRegistry(
     deepseek,
     cohere,
     fireworks,
-    openrouter: openrouterProvider,
+    openrouter,
     azure,
     togetherai,
     bedrock,
     vertex,
-    ollama,
+    ollama: {
+      ...lazyProvider(createOllamaProvider),
+      rerankingModel: (modelId: string) =>
+        createOllamaProvider().rerankingModel(modelId),
+    },
+    lmstudio: lazyProvider(() => createLocalProvider("lmstudio")),
+    local: lazyProvider(() => createLocalProvider("local")),
     huggingface,
     deepinfra,
     cerebras,
@@ -83,6 +174,8 @@ export const SUPPORTED_PROVIDERS = Object.freeze([
   "bedrock",
   "vertex",
   "ollama",
+  "lmstudio",
+  "local",
   "huggingface",
   "deepinfra",
   "cerebras",
@@ -97,6 +190,67 @@ export const ProviderIdSchema = z.enum(SUPPORTED_PROVIDERS);
 
 /** Union type of all valid provider identifiers. */
 export type ProviderId = z.infer<typeof ProviderIdSchema>;
+
+export const CustomProvidersSchema = z.record(
+  z
+    .string()
+    .regex(/^[a-z][a-z0-9-]*$/)
+    .refine(
+      (name) => !ProviderIdSchema.safeParse(name).success,
+      "Built-in provider names are reserved",
+    ),
+  z.object({
+    baseURL: z.string().trim().min(1),
+    apiKeyEnv: z
+      .string()
+      .regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
+      .optional(),
+  }),
+);
+
+export type CustomProviders = z.infer<typeof CustomProvidersSchema>;
+
+function getCustomEndpoint(
+  provider: string,
+  customProviders?: CustomProviders,
+) {
+  if (!customProviders || !Object.hasOwn(customProviders, provider)) return;
+  const settings = customProviders[provider];
+  if (!settings) return;
+  const { baseURL, apiKeyEnv } = settings;
+  const endpoint = parseEndpoint(
+    baseURL,
+    `customProviders.${provider}.baseURL`,
+  ).href.replace(/\/+$/, "");
+  const apiKey = apiKeyEnv ? process.env[apiKeyEnv] : undefined;
+  if (apiKeyEnv && !apiKey) {
+    throw new LoadSettingError({
+      message: `Set ${apiKeyEnv} to use provider "${provider}".`,
+    });
+  }
+  return { endpoint, endpointKey: apiKey };
+}
+
+export function getModelCacheScope(
+  modelString: string,
+  customProviders?: CustomProviders,
+) {
+  const { provider } = parseModel(modelString);
+  const custom = getCustomEndpoint(provider, customProviders);
+  if (custom) return custom;
+
+  const builtIn = ProviderIdSchema.safeParse(provider);
+  if (!builtIn.success) return;
+  const endpoint = getModelEndpoint(builtIn.data);
+  const keyVar =
+    builtIn.data === "lmstudio" || builtIn.data === "local"
+      ? LOCAL_API_KEYS[builtIn.data]
+      : undefined;
+  return {
+    endpoint,
+    endpointKey: keyVar ? process.env[keyVar] || undefined : undefined,
+  };
+}
 
 /**
  * Map of provider IDs to their required environment variable names.
@@ -121,7 +275,9 @@ export const PROVIDER_ENV_VARS: Record<ProviderId, readonly string[]> = {
   togetherai: ["TOGETHERAI_API_KEY"],
   bedrock: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
   vertex: ["GOOGLE_VERTEX_PROJECT", "GOOGLE_VERTEX_LOCATION"],
-  ollama: ["OLLAMA_HOST"],
+  ollama: [],
+  lmstudio: [],
+  local: [LOCAL_ENDPOINTS.local.envVar],
   huggingface: ["HF_TOKEN"],
   deepinfra: ["DEEPINFRA_API_KEY"],
   cerebras: ["CEREBRAS_API_KEY"],
@@ -130,6 +286,30 @@ export const PROVIDER_ENV_VARS: Record<ProviderId, readonly string[]> = {
   fal: ["FAL_API_KEY"],
   replicate: ["REPLICATE_API_TOKEN"],
 } as const satisfies Record<ProviderId, readonly string[]>;
+
+export const PROVIDER_OPTIONAL_ENV_VARS: Partial<
+  Record<ProviderId, readonly string[]>
+> = {
+  ollama: [LOCAL_ENDPOINTS.ollama.envVar],
+  lmstudio: [LOCAL_ENDPOINTS.lmstudio.envVar, LOCAL_API_KEYS.lmstudio],
+  local: [LOCAL_API_KEYS.local],
+};
+
+/** Environment variable populated by an entry in the CLI's apiKeys config. */
+export function getProviderConfigEnvVar(
+  provider: ProviderId,
+): string | undefined {
+  switch (provider) {
+    case "lmstudio":
+    case "local":
+      return LOCAL_API_KEYS[provider];
+    case "ollama":
+      // Older configurations stored the host in apiKeys.json.
+      return LOCAL_ENDPOINTS.ollama.envVar;
+    default:
+      return PROVIDER_ENV_VARS[provider][0];
+  }
+}
 
 /**
  * Zod schema that parses a "provider/model-id" string into structured components.
@@ -185,12 +365,26 @@ export function parseModel(modelString: string): ParsedModel {
  * environment variables are missing. Error messages are written to stderr
  * with actionable guidance.
  */
-export function resolveModel(modelString: string) {
-  const { provider, fullId } = parseModel(modelString);
+export function resolveModel(
+  modelString: string,
+  customProviders?: CustomProviders,
+) {
+  const { provider, modelId, fullId } = parseModel(modelString);
+  const custom = getCustomEndpoint(provider, customProviders);
+  if (custom) {
+    return createOpenAICompatible({
+      name: provider,
+      baseURL: custom.endpoint,
+      apiKey: custom.endpointKey,
+    }).languageModel(modelId);
+  }
 
   const result = ProviderIdSchema.safeParse(provider);
   if (!result.success) {
-    const supported = SUPPORTED_PROVIDERS.join(", ");
+    const supported = [
+      ...SUPPORTED_PROVIDERS,
+      ...Object.keys(customProviders ?? {}),
+    ].join(", ");
     console.error(
       `Error: Unknown provider "${provider}". Supported providers: ${supported}. Run "ai-pipe --providers" to see supported providers and their required environment variables.`,
     );
@@ -202,7 +396,12 @@ export function resolveModel(modelString: string) {
 
   if (missingVars.length > 0) {
     const exportCmds = missingVars
-      .map((v) => `export ${v}=<your-key>`)
+      .map((v) => {
+        if (v === LOCAL_ENDPOINTS.local.envVar) {
+          return `export ${v}=http://127.0.0.1:8080/v1`;
+        }
+        return `export ${v}=<your-key>`;
+      })
       .join("\n  ");
     const usesApiKey = missingVars.some(
       (v) => v.endsWith("_API_KEY") || v.endsWith("_TOKEN"),
@@ -225,10 +424,23 @@ export function resolveModel(modelString: string) {
  *
  * Output is written to stdout and intended for the `--providers` CLI flag.
  */
-export function printProviders(): void {
-  const maxName = Math.max(...SUPPORTED_PROVIDERS.map((p) => p.length));
+export function printProviders(customProviders?: CustomProviders): void {
+  const entries = Object.entries(customProviders ?? {});
+  const maxName = Math.max(
+    ...SUPPORTED_PROVIDERS.map((p) => p.length),
+    ...entries.map(([name]) => name.length),
+  );
+  const envVarLabels = SUPPORTED_PROVIDERS.map((provider) => {
+    const required = PROVIDER_ENV_VARS[provider];
+    const optional = PROVIDER_OPTIONAL_ENV_VARS[provider] ?? [];
+    return [
+      ...required,
+      ...optional.map((envVar) => `${envVar} (optional)`),
+    ].join(", ");
+  });
   const maxVar = Math.max(
-    ...Object.values(PROVIDER_ENV_VARS).map((vars) => vars.join(", ").length),
+    ...envVarLabels.map((label) => label.length),
+    ...entries.map(([, settings]) => settings.apiKeyEnv?.length ?? 0),
   );
 
   console.log(
@@ -238,13 +450,24 @@ export function printProviders(): void {
     `${"─".repeat(maxName)}  ${"─".repeat(maxVar)}  ${"─".repeat(6)}`,
   );
 
-  for (const provider of SUPPORTED_PROVIDERS) {
+  for (const [index, provider] of SUPPORTED_PROVIDERS.entries()) {
     const envVars = PROVIDER_ENV_VARS[provider];
-    const envVarStr = envVars.join(", ");
+    const envVarStr = envVarLabels[index] ?? "";
     const allSet = envVars.every((v) => !!process.env[v]);
-    const status = allSet ? "✓ set" : "✗ missing";
+    const status =
+      envVars.length === 0 ? "✓ ready" : allSet ? "✓ set" : "✗ missing";
     console.log(
       `${provider.padEnd(maxName)}  ${envVarStr.padEnd(maxVar)}  ${status}`,
+    );
+  }
+  for (const [name, { apiKeyEnv }] of entries) {
+    const status = apiKeyEnv
+      ? process.env[apiKeyEnv]
+        ? "✓ set"
+        : "✗ missing"
+      : "✓ ready";
+    console.log(
+      `${name.padEnd(maxName)}  ${(apiKeyEnv ?? "").padEnd(maxVar)}  ${status}`,
     );
   }
 }

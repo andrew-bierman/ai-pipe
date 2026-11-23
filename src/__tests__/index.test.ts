@@ -1408,12 +1408,8 @@ describe("resolveOptions with aliases", () => {
         claude: "anthropic/claude-sonnet-4-5",
       },
     };
-    // Config model resolves via alias when no CLI model specified
-    // Note: in actual code, config.model is not resolved via resolveAlias
-    // (only opts.model is), but the model string goes through resolveOptions as-is
     const result = resolveOptions(defaultOpts, config);
-    // Without CLI model, config.model is used directly
-    expect(result.modelString).toBe("claude");
+    expect(result.modelString).toBe("anthropic/claude-sonnet-4-5");
   });
 
   test("alias resolution works with provider-specific config", () => {
