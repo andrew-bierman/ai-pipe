@@ -48,130 +48,6 @@ const PROVIDER_LABELS: Record<ProviderId, string> = {
 };
 
 /**
- * Popular models per provider, used for default model suggestions.
- */
-const POPULAR_MODELS: Record<string, { value: string; label: string }[]> = {
-  openai: [
-    { value: "openai/gpt-4o", label: "GPT-4o (recommended)" },
-    { value: "openai/gpt-4o-mini", label: "GPT-4o Mini (fast, cheap)" },
-    { value: "openai/o3-mini", label: "o3-mini (reasoning)" },
-  ],
-  anthropic: [
-    {
-      value: "anthropic/claude-sonnet-4-5",
-      label: "Claude Sonnet 4.5 (recommended)",
-    },
-    { value: "anthropic/claude-haiku-3-5", label: "Claude 3.5 Haiku (fast)" },
-    {
-      value: "anthropic/claude-opus-4",
-      label: "Claude Opus 4 (most capable)",
-    },
-  ],
-  google: [
-    {
-      value: "google/gemini-2.5-flash",
-      label: "Gemini 2.5 Flash (recommended)",
-    },
-    { value: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-  ],
-  perplexity: [
-    { value: "perplexity/sonar", label: "Sonar (recommended)" },
-    { value: "perplexity/sonar-pro", label: "Sonar Pro" },
-  ],
-  xai: [
-    { value: "xai/grok-3", label: "Grok 3 (recommended)" },
-    { value: "xai/grok-3-mini", label: "Grok 3 Mini (fast)" },
-  ],
-  mistral: [
-    {
-      value: "mistral/mistral-large-latest",
-      label: "Mistral Large (recommended)",
-    },
-    { value: "mistral/mistral-small-latest", label: "Mistral Small" },
-  ],
-  groq: [
-    {
-      value: "groq/llama-3.3-70b-versatile",
-      label: "Llama 3.3 70B (recommended)",
-    },
-    { value: "groq/mixtral-8x7b-32768", label: "Mixtral 8x7B" },
-  ],
-  deepseek: [
-    { value: "deepseek/deepseek-chat", label: "DeepSeek Chat (recommended)" },
-    { value: "deepseek/deepseek-reasoner", label: "DeepSeek Reasoner" },
-  ],
-  cohere: [
-    {
-      value: "cohere/command-r-plus",
-      label: "Command R+ (recommended)",
-    },
-    { value: "cohere/command-r", label: "Command R" },
-  ],
-  fireworks: [
-    {
-      value: "fireworks/accounts/fireworks/models/llama-v3p3-70b-instruct",
-      label: "Llama 3.3 70B",
-    },
-  ],
-  openrouter: [
-    {
-      value: "openrouter/auto",
-      label: "Auto (routes to best model)",
-    },
-  ],
-  azure: [{ value: "azure/gpt-4o", label: "GPT-4o on Azure" }],
-  togetherai: [
-    {
-      value: "togetherai/meta-llama/Llama-3.3-70b-Instruct",
-      label: "Llama 3.3 70B",
-    },
-  ],
-  bedrock: [
-    {
-      value: "bedrock/anthropic.claude-sonnet-4-20250514-v1:0",
-      label: "Claude Sonnet 4 on Bedrock",
-    },
-  ],
-  vertex: [
-    {
-      value: "vertex/gemini-2.5-flash",
-      label: "Gemini 2.5 Flash on Vertex",
-    },
-  ],
-  ollama: [
-    { value: "ollama/llama3", label: "Llama 3 (local)" },
-    { value: "ollama/mistral", label: "Mistral (local)" },
-  ],
-  huggingface: [
-    {
-      value: "huggingface/meta-llama/Llama-3.3-70b-Instruct",
-      label: "Llama 3.3 70B",
-    },
-  ],
-  deepinfra: [
-    {
-      value: "deepinfra/meta-llama/Llama-3.3-70B-Instruct",
-      label: "Llama 3.3 70B",
-    },
-  ],
-  cerebras: [
-    { value: "cerebras/llama3.1-8b", label: "Llama 3.1 8B (fast)" },
-    { value: "cerebras/llama-3.3-70b", label: "Llama 3.3 70B" },
-  ],
-  gateway: [
-    { value: "gateway/openai/gpt-4o", label: "GPT-4o via Gateway" },
-    {
-      value: "gateway/anthropic/claude-3.5-sonnet",
-      label: "Claude 3.5 Sonnet via Gateway",
-    },
-    {
-      value: "gateway/google/gemini-2.5-flash",
-      label: "Gemini 2.5 Flash via Gateway",
-    },
-  ],
-};
-
-/**
  * Check if a provider uses simple API key authentication
  * (single env var ending in _API_KEY or _TOKEN).
  */
@@ -307,56 +183,29 @@ export async function runInit(): Promise<void> {
     }
   }
 
-  // Step 3: Choose default model
-  // Build model options from selected providers
-  const modelOptions: { value: string; label: string; hint?: string }[] = [];
-  for (const provider of selectedProviders) {
-    if (
-      provider === "lmstudio" ||
-      provider === "local" ||
-      provider === "ollama"
-    ) {
-      modelOptions.push({
-        value: `${provider}/`,
-        label: `Enter a model ID for ${PROVIDER_LABELS[provider]}`,
-      });
-    }
-    const models = POPULAR_MODELS[provider];
-    if (models) {
-      for (const model of models) {
-        modelOptions.push({
-          ...model,
-          hint: PROVIDER_LABELS[provider],
-        });
-      }
-    }
+  // Step 3: Choose a provider and enter a model ID.
+  const selected = await p.select({
+    message: "Choose the default provider",
+    options: selectedProviders.map((provider) => ({
+      value: provider,
+      label: PROVIDER_LABELS[provider],
+    })),
+  });
+  if (p.isCancel(selected)) {
+    p.cancel("Setup cancelled.");
+    process.exit(0);
   }
 
-  let defaultModel = APP.defaultModel;
-  if (modelOptions.length > 0) {
-    const selected = await p.select({
-      message: "Choose a default model",
-      options: modelOptions,
-    });
-
-    if (p.isCancel(selected)) {
-      p.cancel("Setup cancelled.");
-      process.exit(0);
-    }
-
-    defaultModel = selected;
-    if (selected.endsWith("/")) {
-      const modelId = await p.text({
-        message: "Model ID as shown by your server",
-        validate: (value) => (value?.trim() ? undefined : "Enter a model ID"),
-      });
-      if (p.isCancel(modelId)) {
-        p.cancel("Setup cancelled.");
-        process.exit(0);
-      }
-      defaultModel = `${selected}${modelId.trim()}`;
-    }
+  p.log.info(`Find available model IDs with: ai-pipe models ${selected}`);
+  const defaultModelId = await p.text({
+    message: `Model ID for ${PROVIDER_LABELS[selected]}`,
+    validate: (value) => (value?.trim() ? undefined : "Enter a model ID"),
+  });
+  if (p.isCancel(defaultModelId)) {
+    p.cancel("Setup cancelled.");
+    process.exit(0);
   }
+  const defaultModel = `${selected}/${defaultModelId.trim()}`;
 
   // Step 4: Default temperature
   const tempInput = await p.text({

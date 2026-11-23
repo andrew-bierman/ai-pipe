@@ -1,5 +1,5 @@
-import { describe, expect, test } from "bun:test";
-import { mkdirSync } from "node:fs";
+import { afterAll, describe, expect, test } from "bun:test";
+import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import pkg from "../../package.json";
@@ -13,6 +13,9 @@ function makeTmpDir(): string {
   mkdirSync(dir, { recursive: true });
   return dir;
 }
+
+const testHome = makeTmpDir();
+afterAll(() => rmSync(testHome, { recursive: true, force: true }));
 
 const CLEAN_ENV = {
   OPENAI_API_KEY: "",
@@ -43,7 +46,12 @@ async function runCLI(
     stdin: opts?.stdin ? new Blob([opts.stdin]) : undefined,
     stdout: "pipe",
     stderr: "pipe",
-    env: { ...process.env, ...opts?.env },
+    env: {
+      ...process.env,
+      HOME: testHome,
+      USERPROFILE: testHome,
+      ...opts?.env,
+    },
   });
 
   const [stdout, stderr] = await Promise.all([

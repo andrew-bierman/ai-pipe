@@ -93,11 +93,11 @@ ai-pipe config show
 
 ### Local models
 
-Start your model server and use the model ID it reports.
+Start your model server and use the model ID it reports. Run `ai-pipe models lmstudio` or `ai-pipe models ollama` to list IDs you can pass to `-m`.
 
 ```bash
 # LM Studio, with the server running on its default port
-curl -fsS http://127.0.0.1:1234/v1/models
+ai-pipe models lmstudio
 ai-pipe -m 'lmstudio/<model-id>' "write a haiku"
 
 # Ollama, with the model already downloaded
@@ -210,6 +210,16 @@ ai-pipe --chat --budget 1.00
 # Retry up to 3 times on rate limits or transient errors
 ai-pipe --retries 3 "explain recursion"
 ```
+
+### Schema-validated JSON
+
+Pass an object-shaped JSON Schema (draft 7) to get just the validated JSON object on stdout.
+
+```bash
+ai-pipe --schema invoice.schema.json "Extract the invoice number and total" < invoice.txt
+```
+
+The command exits nonzero and writes an error to stderr if the response is invalid. Use `--json` when you want the response envelope with token usage instead.
 
 ### Response Diffing
 
@@ -630,10 +640,13 @@ bun run typecheck     # TypeScript type checking
 
 ## 🚀 Releasing
 
-1. `bun pm version patch` (or `minor` / `major`)
-2. `git push --follow-tags`
+Include at least a patch bump in any PR that changes shipped code.
 
-The release workflow handles `bun publish`, binary builds, and GitHub release.
+```sh
+bun pm version patch --no-git-tag-version
+```
+
+Use `minor` or `major` when appropriate. When a higher version lands on `main`, GitHub Actions tests it, tags the merge commit, and publishes the release binaries and packages. For a retry, re-run the failed jobs or dispatch the Release workflow on `main` or the matching version tag.
 
 ## 🗺️ Roadmap
 

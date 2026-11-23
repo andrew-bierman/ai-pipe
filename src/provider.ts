@@ -43,7 +43,10 @@ const LOCAL_API_KEYS = {
 } as const;
 
 /** The effective endpoint used by a local provider, including its default. */
-export function getModelEndpoint(provider: ProviderId): string | undefined {
+export function getModelEndpoint(
+  provider: ProviderId,
+  legacyOllamaHost?: string,
+): string | undefined {
   if (
     provider !== "ollama" &&
     provider !== "lmstudio" &&
@@ -53,7 +56,10 @@ export function getModelEndpoint(provider: ProviderId): string | undefined {
   }
 
   const { envVar, default: defaultURL } = LOCAL_ENDPOINTS[provider];
-  let endpoint = process.env[envVar]?.trim() || defaultURL;
+  let endpoint =
+    process.env[envVar]?.trim() ||
+    (provider === "ollama" ? legacyOllamaHost?.trim() : undefined) ||
+    defaultURL;
   if (!endpoint) return undefined;
 
   const bareOllamaHost = provider === "ollama" && !endpoint.includes("://");
@@ -96,6 +102,7 @@ function createLocalProvider(provider: keyof typeof LOCAL_API_KEYS) {
     name: provider,
     baseURL,
     apiKey: process.env[LOCAL_API_KEYS[provider]] || undefined,
+    supportsStructuredOutputs: provider === "lmstudio",
   });
 }
 
@@ -236,19 +243,29 @@ export function getModelCacheScope(
   customProviders?: CustomProviders,
 ) {
   const { provider } = parseModel(modelString);
+  return getProviderEndpoint(provider, customProviders);
+}
+
+export function getProviderEndpoint(
+  provider: string,
+  customProviders?: CustomProviders,
+  configKey?: string,
+) {
   const custom = getCustomEndpoint(provider, customProviders);
   if (custom) return custom;
 
   const builtIn = ProviderIdSchema.safeParse(provider);
   if (!builtIn.success) return;
-  const endpoint = getModelEndpoint(builtIn.data);
+  const endpoint = getModelEndpoint(builtIn.data, configKey);
   const keyVar =
     builtIn.data === "lmstudio" || builtIn.data === "local"
       ? LOCAL_API_KEYS[builtIn.data]
       : undefined;
   return {
     endpoint,
-    endpointKey: keyVar ? process.env[keyVar] || undefined : undefined,
+    endpointKey: keyVar
+      ? process.env[keyVar] || configKey || undefined
+      : undefined,
   };
 }
 
