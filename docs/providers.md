@@ -25,7 +25,7 @@ ai-pipe "hello"                  # uses default: openai/gpt-4o
 Download a model in LM Studio and start the server from the Developer tab or with `lms server start`. Use a model ID from the server's model list. [LM Studio server documentation](https://lmstudio.ai/docs/developer/core/server)
 
 ```bash
-curl -fsS http://127.0.0.1:1234/v1/models
+ai-pipe models lmstudio
 ai-pipe -m 'lmstudio/<model-id>' "say hello"
 ```
 
@@ -77,6 +77,17 @@ export EDGE_TOKEN="your-token"
 ai-pipe -m edge/vendor/model "say hello"
 ai-pipe -m fast "say hello"
 ```
+
+## Discovering models
+
+```sh
+ai-pipe models lmstudio
+ai-pipe models ollama
+ai-pipe models edge
+ai-pipe models anthropic
+```
+
+Local and custom providers query their server directly. Built-in cloud providers use the public [Models.dev catalog](https://models.dev/), which may include models your account cannot access. Without an argument, `models` uses the configured default provider. You can pass any valid model ID to `-m`, including IDs that a catalog omits.
 
 ## Cloud providers
 

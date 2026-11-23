@@ -44,6 +44,7 @@ import {
 import { runInit } from "./init.ts";
 import { renderMarkdown } from "./markdown.ts";
 import { loadMCPConfig, MCPManager } from "./mcp.ts";
+import { listModels } from "./models.ts";
 import { PluginManager } from "./plugins.ts";
 import {
   getModelCacheScope,
@@ -61,6 +62,10 @@ import {
   listSessions,
 } from "./session.ts";
 import { StreamingMarkdownRenderer } from "./streaming-markdown.ts";
+import {
+  loadStructuredOutput,
+  type StructuredOutput,
+} from "./structured-output.ts";
 import { applyTemplate, listTemplates, loadTemplate } from "./templates.ts";
 import { loadToolsConfig } from "./tools.ts";
 import { checkForUpdates } from "./update.ts";
@@ -114,6 +119,7 @@ export interface CLIOptions {
   file?: string[];
   image?: string[];
   json: boolean;
+  schema?: string;
   stream: boolean;
   markdown: boolean;
   cost: boolean;
@@ -148,6 +154,7 @@ export const CLIOptionsSchema = z.object({
   file: z.array(z.string()).optional(),
   image: z.array(z.string()).optional(),
   json: z.boolean(),
+  schema: z.string().min(1).optional(),
   stream: z.boolean(),
   markdown: z.boolean().optional().default(false),
   cost: z.boolean().optional().default(false),
@@ -680,6 +687,7 @@ interface ExecutePromptParams {
     name: string;
     messages: ModelMessage[];
   };
+  structuredOutput?: StructuredOutput;
   /** If provided, enables response caching (non-session, non-streaming only) */
   cacheKey?: string | null;
   /** If provided, tools available for the model to call */
@@ -711,6 +719,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
     format,
     markdown,
     showCost,
+    structuredOutput,
     session,
     cacheKey,
     tools,
@@ -758,6 +767,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
     model,
     temperature,
     maxOutputTokens,
+    ...(structuredOutput ? { output: structuredOutput.output } : {}),
     ...(tools
       ? { tools: tools as Parameters<typeof generateText>[0]["tools"] }
       : {}),
@@ -767,7 +777,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
       ? { ...baseOptions, messages }
       : { ...baseOptions, system, prompt: prompt ?? "" };
 
-  if (json || format || !stream) {
+  if (structuredOutput || json || format || !stream) {
     const result =
       retries !== undefined && retries > 0
         ? await withRetry(() => generateText(callOptions), {
@@ -779,6 +789,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
     const responseText = afterResponseTransform
       ? await afterResponseTransform(result.text)
       : result.text;
+    const structuredJson = structuredOutput?.serialize(responseText);
 
     // Store in cache if applicable (failures are non-fatal)
     if (cacheKey) {
@@ -800,7 +811,9 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
       await saveHistory(session.name, session.messages);
     }
 
-    if (format) {
+    if (structuredJson !== undefined) {
+      process.stdout.write(`${structuredJson}\n`);
+    } else if (format) {
       const outputData = buildJsonOutput(result, {
         modelString,
         text: responseText,
@@ -1006,6 +1019,29 @@ async function runAction(
       }
     }
     return;
+  }
+
+  let structuredOutput: StructuredOutput | undefined;
+  if (opts.schema !== undefined) {
+    if (
+      opts.chat ||
+      opts.diff ||
+      opts.chain ||
+      opts.json ||
+      opts.format ||
+      opts.markdown
+    ) {
+      console.error(
+        "Error: --schema is for single prompts and cannot be combined with --chat, --diff, --chain, --json, --format, or --markdown.",
+      );
+      process.exit(1);
+    }
+    try {
+      structuredOutput = await loadStructuredOutput(opts.schema);
+    } catch (err: unknown) {
+      console.error(`Error: ${formatError(err)}`);
+      process.exit(1);
+    }
   }
 
   const config = await loadCliConfig(opts.config);
@@ -1273,6 +1309,9 @@ async function runAction(
 
   // Load conversation history if session is provided
   // Sanitize session name to prevent directory traversal
+  if (structuredOutput) {
+    prompt = `${prompt}\n\n${structuredOutput.instruction}`;
+  }
   const sessionName = opts.session ? sanitizeSessionName(opts.session) : null;
   const messages: ModelMessage[] = sessionName
     ? await loadHistory(sessionName)
@@ -1290,7 +1329,10 @@ async function runAction(
   try {
     // Build cache key for non-session mode when caching is enabled
     const useCache =
-      !sessionName && opts.cache && (opts.json || opts.format || !opts.stream);
+      !sessionName &&
+      !structuredOutput &&
+      opts.cache &&
+      (opts.json || opts.format || !opts.stream);
     const cacheKey = useCache
       ? buildCacheKey({
           model: modelString,
@@ -1313,6 +1355,7 @@ async function runAction(
       stream: opts.stream,
       json: opts.json,
       format: opts.format,
+      structuredOutput,
       markdown,
       showCost: opts.cost,
       session: sessionName ? { name: sessionName, messages } : undefined,
@@ -1479,6 +1522,10 @@ export const mainCommand = defineCommand({
       description: "Output full JSON response object",
       default: false,
     },
+    schema: {
+      type: "string",
+      description: "Output validated JSON using a JSON Schema file",
+    },
     format: {
       type: "string",
       alias: "F",
@@ -1617,6 +1664,25 @@ export const mainCommand = defineCommand({
       await handleSessionCommand(promptArgs.slice(1));
       return;
     }
+    if (firstArg === "models") {
+      try {
+        const config = await loadCliConfig(args.config);
+        const defaultModel = resolveAlias(
+          config,
+          config.model ?? APP.defaultModel,
+        );
+        const provider =
+          promptArgs[1] ?? parseModelString(defaultModel).provider;
+        if (promptArgs.length > 2)
+          throw new Error("Usage: ai-pipe models [provider]");
+        const models = await listModels(provider, config);
+        if (models.length > 0) process.stdout.write(`${models.join("\n")}\n`);
+      } catch (err: unknown) {
+        console.error(`Error: ${formatError(err)}`);
+        process.exit(1);
+      }
+      return;
+    }
 
     // Parse repeatable flags manually (citty does not support repeatable options)
     const files = parseRepeatableFlag(rawArgs, "-f", "--file");
@@ -1630,6 +1696,7 @@ export const mainCommand = defineCommand({
       file: files,
       image: images,
       json: args.json,
+      schema: args.schema,
       format: args.format,
       stream: args.stream,
       cache: args.cache,
@@ -1672,6 +1739,16 @@ export const mainCommand = defineCommand({
 
 // Only run CLI when executed directly (Bun), not when imported
 if (import.meta.main) {
+  globalThis.AI_SDK_LOG_WARNINGS = ({ provider, model, warnings }) => {
+    for (const warning of warnings) {
+      const detail =
+        warning.type === "other"
+          ? warning.message
+          : (warning.details ?? `${warning.type}: ${warning.feature}`);
+      console.warn(`AI SDK warning (${provider}/${model}): ${detail}`);
+    }
+  };
+
   // When stdin is a TTY (e.g. `ai-pipe "say hello"` without piping),
   // Bun keeps the process alive because the TTY stream holds an active
   // ref on the event loop. This prevents `process.exit()` from terminating
@@ -1702,6 +1779,7 @@ if (import.meta.main) {
       const usage = await renderUsage(cmd, parent);
       const subcommands: [string, string][] = [
         ["init", "Run interactive setup wizard"],
+        ["models [provider]", "List advertised model IDs"],
         ["config", "Manage configuration (set, show, reset, path)"],
         [
           "session",

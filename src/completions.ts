@@ -49,7 +49,7 @@ _${funcName}_completions() {
   COMPREPLY=()
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
-  opts="--model -m --system -s --role -r --roles --template -T --templates --file -f --image -i --json -j --format -F --no-stream --no-cache --temperature -t --max-output-tokens --config -c --cost --markdown --chat --session -C --budget -B --retries --diff -D --providers --completions --tools --mcp --chain --verbose -v --plugins -P --no-update-check --version -V --help -h"
+  opts="--model -m --system -s --role -r --roles --template -T --templates --file -f --image -i --json -j --schema --format -F --no-stream --no-cache --temperature -t --max-output-tokens --config -c --cost --markdown --chat --session -C --budget -B --retries --diff -D --providers --completions --tools --mcp --chain --verbose -v --plugins -P --no-update-check --version -V --help -h"
   providers="${providers}"
   subcommands="init config session"
   config_subcommands="set show reset path"
@@ -83,7 +83,7 @@ _${funcName}_completions() {
       compopt -o nospace
       return 0
       ;;
-    -f|--file|-i|--image|--tools|--mcp|--chain|-P|--plugins)
+    -f|--file|-i|--image|--tools|--mcp|--chain|-P|--plugins|--schema)
       COMPREPLY=( $(compgen -f -- "\${cur}") )
       return 0
       ;;
@@ -157,6 +157,7 @@ _${funcName}() {
     '*'{-f,--file}'[Include file contents]:file:_files' \\
     '*'{-i,--image}'[Include image file (repeatable)]:file:_files' \\
     '(-j --json)'{-j,--json}'[Output full JSON response object]' \\
+    '--schema[Validate model output against a JSON Schema file]:schema:_files' \\
     '(-F --format)'{-F,--format}'[Output format (json, yaml, csv, text)]:format:(json yaml csv text)' \\
     '--no-stream[Wait for full response, then print]' \\
     '--no-cache[Disable response caching]' \\
@@ -228,6 +229,7 @@ complete -c ${name} -l templates -d 'List available templates'
 complete -c ${name} -s f -l file -d 'Include file contents in prompt (repeatable)' -r -F
 complete -c ${name} -s i -l image -d 'Include image file (repeatable)' -r -F
 complete -c ${name} -s j -l json -d 'Output full JSON response object'
+complete -c ${name} -l schema -d 'Validate model output against a JSON Schema file' -r -F
 complete -c ${name} -s F -l format -d 'Output format (json, yaml, csv, text)' -x -a 'json yaml csv text'
 complete -c ${name} -l no-stream -d 'Wait for full response, then print'
 complete -c ${name} -l no-cache -d 'Disable response caching'
@@ -273,6 +275,7 @@ complete -c ai -l templates -d 'List available templates'
 complete -c ai -s f -l file -d 'Include file contents in prompt (repeatable)' -r -F
 complete -c ai -s i -l image -d 'Include image file (repeatable)' -r -F
 complete -c ai -s j -l json -d 'Output full JSON response object'
+complete -c ai -l schema -d 'Validate model output against a JSON Schema file' -r -F
 complete -c ai -s F -l format -d 'Output format (json, yaml, csv, text)' -x -a 'json yaml csv text'
 complete -c ai -l no-stream -d 'Wait for full response, then print'
 complete -c ai -s t -l temperature -d 'Sampling temperature (${APP.temperature.min}-${APP.temperature.max})' -x
