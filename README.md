@@ -93,7 +93,7 @@ ai-pipe config show
 
 ### Local models
 
-Start your model server and use the model ID it reports. Run `ai-pipe models lmstudio` or `ai-pipe models ollama` to list IDs you can pass to `-m`.
+Start your model server and run `ai-pipe models --detect` to find models on reachable LM Studio, Ollama, and configured compatible endpoints. Run `ai-pipe models lmstudio` or `ai-pipe models ollama` to query one server directly.
 
 ```bash
 # LM Studio, with the server running on its default port
@@ -109,6 +109,8 @@ AI_PIPE_LOCAL_BASE_URL=http://127.0.0.1:8080/v1 \
 ```
 
 See [local provider configuration](docs/providers.md#local-models) for custom endpoints and authentication.
+
+Apple Intelligence uses Apple's on-device Foundation Models framework on supported Macs. To call it from ai-pipe, run a compatible HTTP adapter on that Mac and register its endpoint as a [custom provider](docs/providers.md#custom-providers). ai-pipe does not include that adapter. [Apple Foundation Models](https://developer.apple.com/documentation/foundationmodels/systemlanguagemodel)
 
 ### Cloud providers
 
@@ -220,6 +222,10 @@ ai-pipe --chat --stats
 Enter sends a message. Shift+Enter or Ctrl+J adds a line, and the up arrow recalls earlier prompts. Use `/model <id-or-alias>` to switch models, `/retry` to regenerate the last answer, and `/clear` to reset context. `/settings` shows the active request settings. Esc or Ctrl+C cancels a running response. Tab completes slash commands.
 
 Interactive chat renders Markdown as it arrives. Use `--no-markdown` for plain text. A one-shot prompt with `--markdown` renders the complete response once so terminal redraw codes stay out of redirected output.
+
+Type `/model ` followed by Tab to suggest models from the active provider. Type a provider prefix such as `/model lmstudio/` to query another provider.
+
+For coding with an agent loop and tools, [Pi](https://github.com/earendil-works/pi/tree/main/packages/coding-agent) is the better fit. ai-pipe uses Pi's terminal UI library and Vercel AI SDK's generation and MCP APIs. Its chains use explicit steps.
 
 ### Response stats
 

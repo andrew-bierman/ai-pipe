@@ -62,12 +62,19 @@ async function runCli(
   }
 }
 
-function serveModel(path: string, respond: () => Response) {
+function serveModel(path: string, respond: () => Response, models?: string[]) {
   const requests: { authorization: string | null; body: unknown }[] = [];
   const server = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
     async fetch(request) {
+      if (
+        models &&
+        request.method === "GET" &&
+        new URL(request.url).pathname === "/v1/models"
+      ) {
+        return Response.json({ data: models.map((id) => ({ id })) });
+      }
       if (new URL(request.url).pathname !== path || request.method !== "POST") {
         return new Response("Unknown endpoint", { status: 404 });
       }
@@ -512,7 +519,7 @@ test("TTY chat preserves multiline paste and renders Markdown at narrow widths",
     return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`, {
       headers: { "content-type": "text/event-stream" },
     });
-  });
+  }, ["catalog/suggested"]);
 
   const configDir = await mkdtemp(join(tmpdir(), "ai-pipe-tty-"));
   let output = "";
@@ -549,12 +556,20 @@ test("TTY chat preserves multiline paste and renders Markdown at narrow widths",
   }
   try {
     await waitFor("/help");
+    terminal.write("/model ");
+    terminal.write("\t");
+    await waitFor("lmstudio/catalog/suggested");
+    terminal.write("\r");
+    await waitFor("/model lmstudio/catalog/suggested");
+    terminal.write("\r");
+    await waitFor("lmstudio/catalog/suggested  ·  /help");
     terminal.write("\x1b[200~first line\nsecond line\x1b[201~\r");
     await waitFor("to first text");
     expect(Bun.stripANSI(output)).toContain("Example");
     expect(Bun.stripANSI(output)).not.toContain("# Example");
     expect(Bun.stripANSI(output)).toContain("echo literal");
     expect(requests[0]?.body).toMatchObject({
+      model: "catalog/suggested",
       messages: [{ role: "user", content: "first line\nsecond line" }],
     });
     terminal.write("/bye\r");

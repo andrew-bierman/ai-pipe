@@ -47,7 +47,7 @@ import {
 import { runInit } from "./init.ts";
 import { renderMarkdown } from "./markdown.ts";
 import { loadMCPConfig, MCPManager } from "./mcp.ts";
-import { listModels } from "./models.ts";
+import { detectLocalModels, listModels } from "./models.ts";
 import { PluginManager } from "./plugins.ts";
 import {
   getModelCacheScope,
@@ -1180,11 +1180,31 @@ async function runAction(
 
   // If --chat is set, enter interactive chat mode instead of one-shot execution
   if (opts.chat) {
+    let catalog:
+      | { provider: string; expiresAt: number; models: Promise<string[]> }
+      | undefined;
     await startChat({
       model,
       modelString,
       generationForModel: (id) =>
         getGenerationSettings(config, id, opts.retries),
+      modelSuggestions: async (currentModel, query) => {
+        const provider = query.includes("/")
+          ? parseModelString(query).provider
+          : parseModelString(currentModel).provider;
+        const aliases = Object.keys(config.aliases ?? {});
+        if (catalog?.provider !== provider || Date.now() >= catalog.expiresAt) {
+          catalog = {
+            provider,
+            expiresAt: Date.now() + 15_000,
+            models: listModels(provider, config).catch(() => []),
+          };
+        }
+        const models = await catalog.models;
+        return [...new Set([...aliases, ...models])]
+          .filter((id) => id.toLowerCase().includes(query.toLowerCase()))
+          .slice(0, 60);
+      },
       resolveChatModel: (id) => {
         const selected = resolveAlias(config, id);
         return {
@@ -1492,6 +1512,11 @@ export const mainCommand = defineCommand({
     description: APP.description,
   },
   args: {
+    detect: {
+      type: "boolean",
+      description:
+        "Probe configured and local endpoints with the models command",
+    },
     model: {
       type: "string",
       alias: "m",
@@ -1681,7 +1706,11 @@ export const mainCommand = defineCommand({
           promptArgs[1] ?? parseModelString(defaultModel).provider;
         if (promptArgs.length > 2)
           throw new Error("Usage: ai-pipe models [provider]");
-        const models = await listModels(provider, config);
+        if (args.detect && promptArgs[1])
+          throw new Error("Use models --detect without a provider.");
+        const models = args.detect
+          ? await detectLocalModels(config)
+          : await listModels(provider, config);
         if (models.length > 0) process.stdout.write(`${models.join("\n")}\n`);
       } catch (err: unknown) {
         console.error(`Error: ${formatError(err)}`);

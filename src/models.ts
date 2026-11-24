@@ -1,6 +1,11 @@
+import { createGatewayProvider } from "@ai-sdk/gateway";
 import { z } from "zod";
 import type { Config } from "./config.ts";
-import { getProviderEndpoint, ProviderIdSchema } from "./provider.ts";
+import {
+  getProviderConfigEnvVar,
+  getProviderEndpoint,
+  ProviderIdSchema,
+} from "./provider.ts";
 
 const CLOUD_CATALOG_URL = "https://models.dev/api.json";
 const DISCOVERY_TIMEOUT_MS = 5_000;
@@ -48,6 +53,34 @@ async function fetchModelList(
   }
 }
 
+async function listCompatibleModels(
+  url: string,
+  provider: string,
+  key?: string,
+) {
+  const listing = OpenAIModelList.safeParse(
+    await fetchModelList(url, provider, key),
+  );
+  if (!listing.success)
+    throw new Error(`Provider "${provider}" returned an invalid model list.`);
+  return listing.data.data.map(({ id }) => id);
+}
+
+export async function detectLocalModels(config: Config): Promise<string[]> {
+  const providers = [
+    "lmstudio",
+    "ollama",
+    ...Object.keys(config.customProviders ?? {}),
+  ];
+  if (process.env.AI_PIPE_LOCAL_BASE_URL) providers.push("local");
+  const results = await Promise.allSettled(
+    providers.map((provider) => listModels(provider, config)),
+  );
+  return results
+    .flatMap((result) => (result.status === "fulfilled" ? result.value : []))
+    .sort();
+}
+
 export async function listModels(
   provider: string,
   config: Config,
@@ -73,18 +106,11 @@ export async function listModels(
         throw new Error("Ollama returned an invalid model list.");
       modelIds = listing.data.models.map((model) => model.name);
     } else {
-      const payload = await fetchModelList(
+      modelIds = await listCompatibleModels(
         `${settings.endpoint}/models`,
         provider,
         settings.endpointKey,
       );
-      const listing = OpenAIModelList.safeParse(payload);
-      if (!listing.success) {
-        throw new Error(
-          `Provider "${provider}" returned an invalid model list.`,
-        );
-      }
-      modelIds = listing.data.data.map((model) => model.id);
     }
   } else {
     if (provider === "local") {
@@ -92,24 +118,73 @@ export async function listModels(
         "Set AI_PIPE_LOCAL_BASE_URL to list models from the local endpoint.",
       );
     }
-    if (!ProviderIdSchema.safeParse(provider).success) {
+    const builtIn = ProviderIdSchema.safeParse(provider);
+    if (!builtIn.success) {
       throw new Error(
         `Unknown provider "${provider}". Run ai-pipe --providers for available providers.`,
       );
     }
-    const catalog = CloudCatalog.safeParse(
-      await fetchModelList(CLOUD_CATALOG_URL, "Models.dev"),
-    );
-    if (!catalog.success)
-      throw new Error("Models.dev returned an invalid catalog.");
-    const catalogId = CLOUD_CATALOG_IDS[provider] ?? provider;
-    const listing = CloudProviderModels.safeParse(catalog.data[catalogId]);
-    if (!listing.success) {
-      throw new Error(`Models.dev has no catalog for provider "${provider}".`);
+    const keyEnv = getProviderConfigEnvVar(builtIn.data);
+    const apiKey = (keyEnv ? process.env[keyEnv] : undefined) || configKey;
+    if (provider === "openai" && apiKey) {
+      const baseURL =
+        process.env.OPENAI_BASE_URL?.trim().replace(/\/+$/, "") ||
+        "https://api.openai.com/v1";
+      modelIds = await listCompatibleModels(
+        `${baseURL}/models`,
+        provider,
+        apiKey,
+      );
+    } else if (provider === "openrouter") {
+      modelIds = await listCompatibleModels(
+        "https://openrouter.ai/api/v1/models",
+        provider,
+        apiKey,
+      );
+    } else if (provider === "gateway" && apiKey) {
+      const gateway = createGatewayProvider({
+        apiKey,
+        fetch: Object.assign(
+          (
+            input: Parameters<typeof fetch>[0],
+            init?: Parameters<typeof fetch>[1],
+          ) => {
+            const timeout = AbortSignal.timeout(DISCOVERY_TIMEOUT_MS);
+            const signal = init?.signal
+              ? AbortSignal.any([init.signal, timeout])
+              : timeout;
+            return fetch(input, { ...init, signal });
+          },
+          { preconnect: fetch.preconnect },
+        ),
+      });
+      modelIds = (await gateway.getAvailableModels()).models.map(
+        ({ id }) => id,
+      );
+    } else {
+      const catalog = CloudCatalog.safeParse(
+        await fetchModelList(CLOUD_CATALOG_URL, "Models.dev"),
+      );
+      if (!catalog.success)
+        throw new Error("Models.dev returned an invalid catalog.");
+      const catalogId = CLOUD_CATALOG_IDS[provider] ?? provider;
+      const listing = CloudProviderModels.safeParse(catalog.data[catalogId]);
+      if (!listing.success) {
+        throw new Error(
+          `Models.dev has no catalog for provider "${provider}".`,
+        );
+      }
+      modelIds = Object.keys(listing.data.models);
     }
-    modelIds = Object.keys(listing.data.models);
   }
   return [...new Set(modelIds)]
+    .filter(
+      (id) =>
+        id.trim() &&
+        Bun.stripANSI(id) === id &&
+        !id.includes("\n") &&
+        !id.includes("\r"),
+    )
     .sort()
     .map((modelId) => `${provider}/${modelId}`);
 }

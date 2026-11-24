@@ -15,6 +15,7 @@ export interface ChatOptions {
     model: LanguageModel;
     modelString: string;
   };
+  modelSuggestions?: (currentModel: string, query: string) => Promise<string[]>;
   generationForModel?: (model: string) => GenerationSettings;
   system?: string;
   temperature?: number;
@@ -96,11 +97,13 @@ export async function startChat(options: ChatOptions): Promise<void> {
   let closing = false;
   const interactive = process.stdin.isTTY && process.stdout.isTTY;
   const view = interactive
-    ? (await import("./chat-tui.ts")).createChatTui(
-        modelString,
-        options.markdown,
+    ? (await import("./chat-tui.ts")).createChatTui({
+        model: modelString,
+        markdown: options.markdown,
         interrupt,
-      )
+        suggestModels: (query) =>
+          options.modelSuggestions?.(modelString, query) ?? Promise.resolve([]),
+      })
     : createLineChat(modelString, options.markdown);
 
   function close() {
