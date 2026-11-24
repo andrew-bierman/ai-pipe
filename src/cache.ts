@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
+import type { GenerationSettings } from "./config.ts";
 import { APP } from "./constants.ts";
 
 const CACHE_DIR = join(homedir(), APP.configDirName, "cache");
@@ -32,6 +33,7 @@ export interface CacheKeyParams {
   prompt: string;
   temperature: number | undefined;
   maxOutputTokens: number | undefined;
+  generation?: GenerationSettings;
 }
 
 /**
@@ -48,6 +50,10 @@ export function buildCacheKey(params: CacheKeyParams): string {
     prompt: params.prompt,
     temperature: params.temperature ?? null,
     maxOutputTokens: params.maxOutputTokens ?? null,
+    generation:
+      params.generation && Object.keys(params.generation).length
+        ? params.generation
+        : undefined,
   };
   hasher.update(JSON.stringify(keyPayload));
   return hasher.digest("hex");

@@ -401,3 +401,31 @@ ai-pipe --providers
 ai-pipe --roles
 ai-pipe "hello world"
 ```
+
+## AI SDK generation settings
+
+Set `generation` in `config.json` for defaults. Override fields in `providers.<id>.generation`. These settings apply to prompts, chat, chain steps, and model comparisons.
+
+```json
+{
+  "generation": {
+    "timeout": { "totalMs": 60000, "chunkMs": 15000 },
+    "maxRetries": 1
+  },
+  "providers": {
+    "openai": {
+      "generation": {
+        "providerOptions": {
+          "openai": { "reasoningEffort": "low" }
+        }
+      }
+    }
+  }
+}
+```
+
+Available fields are `topP`, `topK`, `presencePenalty`, `frequencyPenalty`, `stopSequences`, `seed`, `maxRetries`, `timeout`, and `providerOptions`. Use the existing `temperature` and `maxOutputTokens` settings for those two fields. A numeric timeout is in milliseconds. Structured timeouts accept `totalMs`, `stepMs`, and `chunkMs`. `--retries` overrides the configured retry count, including zero.
+
+Provider options use the names documented by each provider. Overrides merge keys within each provider namespace and replace nested values. In chat, `/settings` shows the active request settings and provider option namespaces.
+
+[AI SDK settings](https://ai-sdk.dev/docs/ai-sdk-core/settings) · [AI SDK providers](https://ai-sdk.dev/providers)

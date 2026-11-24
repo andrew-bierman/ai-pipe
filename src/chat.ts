@@ -1,4 +1,5 @@
 import { type LanguageModel, type ModelMessage, streamText } from "ai";
+import type { GenerationSettings } from "./config.ts";
 import type { UsageInfo } from "./cost.ts";
 import { calculateCost, formatCost, parseModelString } from "./cost.ts";
 import { renderMarkdown } from "./markdown.ts";
@@ -14,6 +15,7 @@ export interface ChatOptions {
     model: LanguageModel;
     modelString: string;
   };
+  generationForModel?: (model: string) => GenerationSettings;
   system?: string;
   temperature?: number;
   maxOutputTokens?: number;
@@ -145,8 +147,35 @@ export async function startChat(options: ChatOptions): Promise<void> {
       const command = input.toLowerCase();
       if (command === "/help") {
         view.notice(
-          "/model [id]  ·  /retry  ·  /clear  ·  /bye\nEnter submits. Shift+Enter or Ctrl+J adds a line.",
+          "/model [id]  ·  /settings  ·  /retry  ·  /clear  ·  /bye\nEnter submits. Shift+Enter or Ctrl+J adds a line.",
         );
+        continue;
+      }
+      if (command === "/settings") {
+        const { providerOptions, ...settings } =
+          options.generationForModel?.(modelString) ?? {};
+        const activeSettings = {
+          model: modelString,
+          markdown: options.markdown,
+          stats: Boolean(options.showStats),
+          cost: Boolean(options.showCost),
+          budget: options.budget,
+          temperature: options.temperature,
+          maxOutputTokens: options.maxOutputTokens,
+          maxRetries: "SDK default",
+          ...settings,
+        };
+        const lines = Object.entries(activeSettings)
+          .filter(([, value]) => value !== undefined)
+          .map(
+            ([key, value]) =>
+              `${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`,
+          );
+        if (providerOptions)
+          lines.push(
+            `provider options: ${Object.keys(providerOptions).join(", ")}`,
+          );
+        view.notice(lines.join("\n"));
         continue;
       }
       if (command === CLEAR_COMMAND) {
@@ -190,6 +219,7 @@ export async function startChat(options: ChatOptions): Promise<void> {
       active = controller;
       try {
         const result = streamText({
+          ...options.generationForModel?.(modelString),
           model,
           messages: [
             ...messages.slice(0, lastPromptIndex),

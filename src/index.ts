@@ -4,6 +4,7 @@ import {
   generateText,
   type LanguageModel,
   type ModelMessage,
+  RetryError,
   streamText,
 } from "ai";
 import { defineCommand, renderUsage, runMain, showUsage } from "citty";
@@ -20,6 +21,8 @@ import { startChat } from "./chat.ts";
 import { generateCompletions } from "./completions.ts";
 import {
   type Config,
+  type GenerationSettings,
+  getGenerationSettings,
   getProviderDefaults,
   listRoles,
   loadConfig,
@@ -53,7 +56,6 @@ import {
   printProviders,
   resolveModel,
 } from "./provider.ts";
-import { withRetry } from "./retry.ts";
 import {
   deleteSession,
   exportSessionJson,
@@ -697,8 +699,7 @@ interface ExecutePromptParams {
   tools?: Record<string, unknown>;
   /** If provided, warn when cost exceeds this budget (in USD) */
   budget?: number;
-  /** Number of retries on transient/rate-limit errors (0 = no retries) */
-  retries?: number;
+  generation?: GenerationSettings;
   /** Optional transform applied to response text before output (plugin afterResponse) */
   afterResponseTransform?: (text: string) => Promise<string>;
 }
@@ -728,7 +729,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
     cacheKey,
     tools,
     budget,
-    retries,
+    generation,
     afterResponseTransform,
   } = params;
 
@@ -769,6 +770,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
   // Build the common model call options with proper type narrowing
   // Cast tools to satisfy AI SDK's ToolSet type constraint
   const baseOptions = {
+    ...generation,
     model,
     temperature,
     maxOutputTokens,
@@ -784,12 +786,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
 
   if (structuredOutput || json || format || !stream) {
     const startedAt = performance.now();
-    const result =
-      retries !== undefined && retries > 0
-        ? await withRetry(() => generateText(callOptions), {
-            maxRetries: retries,
-          })
-        : await generateText(callOptions);
+    const result = await generateText(callOptions);
     const elapsedMs = performance.now() - startedAt;
 
     // Apply afterResponse plugin transform if provided
@@ -845,58 +842,50 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
     displayCostIfEnabled({ usage: result.usage, modelString, showCost });
     checkBudget({ usage: result.usage, modelString, budget });
   } else {
-    const consumeStream = async () => {
-      const startedAt = performance.now();
-      let firstTextMs: number | undefined;
-      // Capture API errors via the onError callback to prevent bun from
-      // dumping raw stack traces with request bodies, response headers,
-      // and cookies. Without this, bun's native ReadableStream error
-      // handling writes the full error to stderr before JS catch blocks fire.
-      let capturedApiError: unknown = null;
-      const result = streamText({
-        ...callOptions,
-        onError: ({ error }) => {
-          capturedApiError = error;
-        },
-      });
+    const startedAt = performance.now();
+    let firstTextMs: number | undefined;
+    // Capture API errors via the onError callback to prevent bun from
+    // dumping raw stack traces with request bodies, response headers,
+    // and cookies. Without this, bun's native ReadableStream error
+    // handling writes the full error to stderr before JS catch blocks fire.
+    let capturedApiError: unknown = null;
+    const result = streamText({
+      ...callOptions,
+      onError: ({ error }) => {
+        capturedApiError = error;
+      },
+    });
 
-      let fullResponse = "";
-      for await (const chunk of result.textStream) {
-        if (showStats && chunk) firstTextMs ??= performance.now() - startedAt;
-        if (!markdown) process.stdout.write(chunk);
-        fullResponse += chunk;
-      }
-      const elapsedMs = performance.now() - startedAt;
-      if (capturedApiError) throw capturedApiError;
-
-      const sourcesText = formatSourcesText((await result.sources) ?? []);
-      process.stdout.write(
-        markdown
-          ? renderMarkdown(fullResponse + sourcesText)
-          : `${sourcesText}\n`,
-      );
-
-      if (session) {
-        const text = afterResponseTransform
-          ? await afterResponseTransform(fullResponse)
-          : fullResponse;
-        session.messages.push({ role: "assistant", content: text });
-        await saveHistory(session.name, session.messages);
-      } else if (afterResponseTransform) {
-        await afterResponseTransform(fullResponse);
-      }
-
-      const usage = await result.usage;
-      if (showStats) printResponseStats({ usage, elapsedMs, firstTextMs });
-      displayCostIfEnabled({ usage, modelString, showCost });
-      checkBudget({ usage, modelString, budget });
-    };
-
-    if (retries !== undefined && retries > 0) {
-      await withRetry(consumeStream, { maxRetries: retries });
-    } else {
-      await consumeStream();
+    let fullResponse = "";
+    for await (const chunk of result.textStream) {
+      if (showStats && chunk) firstTextMs ??= performance.now() - startedAt;
+      if (!markdown) process.stdout.write(chunk);
+      fullResponse += chunk;
     }
+    const elapsedMs = performance.now() - startedAt;
+    if (capturedApiError) throw capturedApiError;
+
+    const sourcesText = formatSourcesText((await result.sources) ?? []);
+    process.stdout.write(
+      markdown
+        ? renderMarkdown(fullResponse + sourcesText)
+        : `${sourcesText}\n`,
+    );
+
+    if (session) {
+      const text = afterResponseTransform
+        ? await afterResponseTransform(fullResponse)
+        : fullResponse;
+      session.messages.push({ role: "assistant", content: text });
+      await saveHistory(session.name, session.messages);
+    } else if (afterResponseTransform) {
+      await afterResponseTransform(fullResponse);
+    }
+
+    const usage = await result.usage;
+    if (showStats) printResponseStats({ usage, elapsedMs, firstTextMs });
+    displayCostIfEnabled({ usage, modelString, showCost });
+    checkBudget({ usage, modelString, budget });
   }
 }
 
@@ -908,6 +897,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
  * response headers.
  */
 function formatError(err: unknown, modelString?: string): string {
+  if (RetryError.isInstance(err)) err = err.lastError;
   if (err instanceof Error && "statusCode" in err) {
     const statusCode = (err as Error & { statusCode: number }).statusCode;
     // Determine the provider name for the error message
@@ -1116,6 +1106,8 @@ async function runAction(
     const diffOptions: DiffOptions = {
       models,
       customProviders: config.customProviders,
+      generationForModel: (id) =>
+        getGenerationSettings(config, id, opts.retries),
       prompt,
       system: diffSystem,
       temperature: opts.temperature,
@@ -1191,6 +1183,8 @@ async function runAction(
     await startChat({
       model,
       modelString,
+      generationForModel: (id) =>
+        getGenerationSettings(config, id, opts.retries),
       resolveChatModel: (id) => {
         const selected = resolveAlias(config, id);
         return {
@@ -1220,6 +1214,7 @@ async function runAction(
         defaultModel: model,
         defaultModelString: modelString,
         config,
+        maxRetries: opts.retries,
         temperature,
         maxOutputTokens,
         verbose: opts.verbose,
@@ -1329,6 +1324,7 @@ async function runAction(
     messages.push({ role: "user", content: prompt });
   }
 
+  const generation = getGenerationSettings(config, modelString, opts.retries);
   try {
     // Build cache key for non-session mode when caching is enabled
     const useCache =
@@ -1344,6 +1340,7 @@ async function runAction(
           prompt,
           temperature,
           maxOutputTokens,
+          generation,
         })
       : null;
 
@@ -1366,7 +1363,7 @@ async function runAction(
       cacheKey,
       tools,
       budget: opts.budget,
-      retries: opts.retries,
+      generation,
       afterResponseTransform: pluginManager
         ? async (text: string) =>
             pluginManager.afterResponse({ text, model: modelString })

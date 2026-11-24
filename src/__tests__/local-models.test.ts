@@ -435,13 +435,14 @@ test("piped chat switches models and retries without duplicating context", async
       {
         config: { aliases: { next: "lmstudio/another/model" } },
         stdin:
-          "First\n/model unknown/missing\n/model next\n/retry\n/clear\nSecond\n/bye\n",
+          "First\n/model unknown/missing\n/model next\n/settings\n/retry\n/clear\nSecond\n/bye\n",
       },
     );
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe("Answer\nAnswer\nAnswer\n");
     expect(result.stderr).toContain('Unknown provider "unknown"');
     expect(result.stderr).toContain("Model: lmstudio/another/model");
+    expect(result.stderr).toContain("maxRetries: SDK default");
     const firstPrompt = [{ role: "user", content: "First" }];
     expect(requests.map(({ body }) => body)).toEqual([
       expect.objectContaining({ model: MODEL, messages: firstPrompt }),
@@ -566,3 +567,56 @@ test("TTY chat preserves multiline paste and renders Markdown at narrow widths",
     await rm(configDir, { recursive: true, force: true });
   }
 }, 10_000);
+
+test("generation settings reach the SDK and CLI retries override config", async () => {
+  const { server, requests } = serveModel("/v1/chat/completions", () =>
+    requests.length % 2 === 1
+      ? Response.json(
+          { error: { message: "Try again" } },
+          {
+            status: 429,
+            headers: { "retry-after-ms": "1" },
+          },
+        )
+      : chatCompletion(),
+  );
+  try {
+    const env = { LM_STUDIO_BASE_URL: new URL("/v1", server.url).href };
+    const config = {
+      generation: {
+        topP: 0.8,
+        maxRetries: 1,
+        providerOptions: { lmstudio: { user: "global" } },
+      },
+      providers: {
+        lmstudio: {
+          generation: {
+            seed: 42,
+            providerOptions: { lmstudio: { user: "provider" } },
+          },
+        },
+      },
+    };
+    const args = ["-m", `lmstudio/${MODEL}`, "--no-stream", "Hello"];
+    const success = await runCli(args, env, { config });
+    expect(success).toEqual({
+      stdout: "A local answer\n",
+      stderr: "",
+      exitCode: 0,
+    });
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.body).toMatchObject({
+      top_p: 0.8,
+      seed: 42,
+      user: "provider",
+    });
+
+    const failure = await runCli(["--retries", "0", ...args], env, { config });
+    expect(failure.exitCode).toBe(1);
+    expect(failure.stdout).toBe("");
+    expect(failure.stderr).toContain("Rate limited");
+    expect(requests).toHaveLength(3);
+  } finally {
+    await server.stop(true);
+  }
+});

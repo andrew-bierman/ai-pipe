@@ -217,7 +217,7 @@ ai-pipe --retries 3 "explain recursion"
 ai-pipe --chat --stats
 ```
 
-Enter sends a message. Shift+Enter or Ctrl+J adds a line, and the up arrow recalls earlier prompts. Use `/model <id-or-alias>` to switch models, `/retry` to regenerate the last answer, and `/clear` to reset context. Esc or Ctrl+C cancels a running response. Tab completes slash commands.
+Enter sends a message. Shift+Enter or Ctrl+J adds a line, and the up arrow recalls earlier prompts. Use `/model <id-or-alias>` to switch models, `/retry` to regenerate the last answer, and `/clear` to reset context. `/settings` shows the active request settings. Esc or Ctrl+C cancels a running response. Tab completes slash commands.
 
 Interactive chat renders Markdown as it arrives. Use `--no-markdown` for plain text. A one-shot prompt with `--markdown` renders the complete response once so terminal redraw codes stay out of redirected output.
 

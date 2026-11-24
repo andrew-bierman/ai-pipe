@@ -256,48 +256,6 @@ complete -c ${name} -l no-update-check -d 'Disable update notifications'
 complete -c ${name} -s V -l version -d 'Print version'
 complete -c ${name} -s h -l help -d 'Print help'
 
-# ai alias completions
-complete -c ai -n '__fish_use_subcommand' -a 'init' -d 'Run interactive setup wizard'
-complete -c ai -n '__fish_use_subcommand' -a 'config' -d 'Manage configuration'
-complete -c ai -n '__fish_use_subcommand' -a 'session' -d 'Manage conversation sessions'
-complete -c ai -n '__fish_seen_subcommand_from config' -a 'set' -d 'Set a config value'
-complete -c ai -n '__fish_seen_subcommand_from config' -a 'show' -d 'Show current config'
-complete -c ai -n '__fish_seen_subcommand_from config' -a 'reset' -d 'Reset config to defaults'
-complete -c ai -n '__fish_seen_subcommand_from config' -a 'path' -d 'Print config directory path'
-complete -c ai -n '__fish_seen_subcommand_from session' -a 'list' -d 'List all saved sessions'
-complete -c ai -n '__fish_seen_subcommand_from session' -a 'export' -d 'Export a session (json or md)'
-complete -c ai -n '__fish_seen_subcommand_from session' -a 'import' -d 'Import a session from file'
-complete -c ai -n '__fish_seen_subcommand_from session' -a 'delete' -d 'Delete a session'
-complete -c ai -s m -l model -d 'Model in provider/model-id format' -x -a '${SUPPORTED_PROVIDERS.map((p) => `${p}/`).join(" ")}'
-complete -c ai -s s -l system -d 'System prompt' -x
-complete -c ai -s r -l role -d 'Role name from roles directory' -x
-complete -c ai -l roles -d 'List available roles'
-complete -c ai -s T -l template -d 'Template name from templates directory' -x
-complete -c ai -l templates -d 'List available templates'
-complete -c ai -s f -l file -d 'Include file contents in prompt (repeatable)' -r -F
-complete -c ai -s i -l image -d 'Include image file (repeatable)' -r -F
-complete -c ai -s j -l json -d 'Output full JSON response object'
-complete -c ai -l schema -d 'Validate model output against a JSON Schema file' -r -F
-complete -c ai -s F -l format -d 'Output format (json, yaml, csv, text)' -x -a 'json yaml csv text'
-complete -c ai -l no-stream -d 'Wait for full response, then print'
-complete -c ai -s t -l temperature -d 'Sampling temperature (${APP.temperature.min}-${APP.temperature.max})' -x
-complete -c ai -l max-output-tokens -d 'Maximum tokens to generate' -x
-complete -c ai -s c -l config -d 'Path to config directory' -x -a '(__fish_complete_directories)'
-complete -c ai -l cost -d 'Show token usage and cost after response'
-complete -c ai -l stats -d 'Print token counts and timing to stderr'
-complete -c ai -l markdown -d 'Render response as formatted markdown'
-complete -c ai -l chat -d 'Start interactive chat mode'
-complete -c ai -s C -l session -d 'Session name for conversation continuity' -x
-complete -c ai -s B -l budget -d 'Max dollar budget per request' -x
-complete -c ai -l providers -d 'List supported providers'
-complete -c ai -l completions -d 'Generate shell completions' -x -a '${shells}'
-complete -c ai -l retries -d 'Number of retries on rate limit or transient errors' -x
-complete -c ai -l tools -d 'Path to tools configuration file (JSON)' -r -F
-complete -c ai -l mcp -d 'Path to MCP server configuration file (JSON)' -r -F
-complete -c ai -l chain -d 'Path to chain config JSON file' -r -F
-complete -c ai -s v -l verbose -d 'Show intermediate chain outputs on stderr'
-complete -c ai -s P -l plugins -d 'Path to plugins configuration file (JSON)' -r -F
-complete -c ai -s D -l diff -d 'Compare models (comma-separated)' -x
-complete -c ai -s V -l version -d 'Print version'
-complete -c ai -s h -l help -d 'Print help'`;
+# Reuse the same completions for the short command.
+complete -c ai -w ${name}`;
 }

@@ -46,6 +46,7 @@ const CHAT_COMMANDS = [
   { name: "help", description: "Show chat commands" },
   { name: "clear", description: "Reset conversation context" },
   { name: "model", description: "Show or switch the model" },
+  { name: "settings", description: "Show active request settings" },
   { name: "retry", description: "Regenerate the last answer" },
   { name: "bye", description: "Exit chat" },
 ];

@@ -6,6 +6,7 @@ import { APP } from "./constants.ts";
 import {
   CustomProvidersSchema,
   ProviderIdSchema,
+  parseModel,
   SUPPORTED_PROVIDERS,
 } from "./provider.ts";
 
@@ -19,6 +20,32 @@ const ApiKeysSchema = z
       message: `apiKeys keys must be valid providers: ${SUPPORTED_PROVIDERS.join(", ")}`,
     },
   );
+
+const MillisecondsSchema = z.number().int().positive();
+const GenerationSettingsSchema = z.strictObject({
+  topP: z.number().min(0).max(1).optional(),
+  topK: z.number().int().positive().optional(),
+  presencePenalty: z.number().optional(),
+  frequencyPenalty: z.number().optional(),
+  stopSequences: z.array(z.string().min(1)).optional(),
+  seed: z.number().int().optional(),
+  maxRetries: z.number().int().nonnegative().optional(),
+  timeout: z
+    .union([
+      MillisecondsSchema,
+      z.strictObject({
+        totalMs: MillisecondsSchema.optional(),
+        stepMs: MillisecondsSchema.optional(),
+        chunkMs: MillisecondsSchema.optional(),
+      }),
+    ])
+    .optional(),
+  providerOptions: z
+    .record(z.string(), z.record(z.string(), z.json()))
+    .optional(),
+});
+
+export type GenerationSettings = z.infer<typeof GenerationSettingsSchema>;
 
 /**
  * Zod schema for per-provider config overrides.
@@ -35,6 +62,7 @@ export const ProviderConfigSchema = z.object({
     .max(APP.temperature.max)
     .optional(),
   maxOutputTokens: z.number().int().positive().optional(),
+  generation: GenerationSettingsSchema.optional(),
 });
 
 /** Type for a single provider's config overrides. */
@@ -56,6 +84,7 @@ export const ConfigSchema = z.object({
     .max(APP.temperature.max)
     .optional(),
   maxOutputTokens: z.number().int().positive().optional(),
+  generation: GenerationSettingsSchema.optional(),
   providers: z.record(z.string(), ProviderConfigSchema).optional(),
   customProviders: CustomProvidersSchema.optional(),
   aliases: z.record(z.string(), z.string()).optional(),
@@ -88,6 +117,33 @@ export function getProviderDefaults(
   providerId: string,
 ): ProviderConfig {
   return config.providers?.[providerId] ?? {};
+}
+
+export function getGenerationSettings(
+  config: Config,
+  model: string,
+  maxRetries?: number,
+): GenerationSettings {
+  const base = config.generation;
+  const override = getProviderDefaults(
+    config,
+    parseModel(model).provider,
+  ).generation;
+  const providerOptions = Object.fromEntries(
+    Object.entries({
+      ...base?.providerOptions,
+      ...override?.providerOptions,
+    }).map(([namespace, values]) => [
+      namespace,
+      { ...base?.providerOptions?.[namespace], ...values },
+    ]),
+  );
+  return {
+    ...base,
+    ...override,
+    ...(Object.keys(providerOptions).length ? { providerOptions } : {}),
+    ...(maxRetries === undefined ? {} : { maxRetries }),
+  };
 }
 
 /**
@@ -149,12 +205,15 @@ export async function loadConfig(configDir?: string): Promise<Config> {
 
   const parsed = ConfigSchema.safeParse(settings);
   if (!parsed.success) {
-    const customIssue = parsed.error.issues.find(
-      (issue) => issue.path[0] === "customProviders",
+    const issue = parsed.error.issues.find(
+      ({ path }) =>
+        path[0] === "customProviders" ||
+        path[0] === "generation" ||
+        (path[0] === "providers" && path[2] === "generation"),
     );
-    if (customIssue) {
+    if (issue) {
       throw new Error(
-        `Invalid config.json setting ${customIssue.path.join(".")}: ${customIssue.message}`,
+        `Invalid config.json setting ${issue.path.join(".")}: ${issue.message}`,
       );
     }
   }
