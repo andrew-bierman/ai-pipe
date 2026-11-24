@@ -415,3 +415,154 @@ test("a custom provider cannot replace a built-in provider name", async () => {
   expect(stderr).toContain("customProviders");
   expect(exitCode).toBe(1);
 });
+
+test("piped chat switches models and retries without duplicating context", async () => {
+  const { server, requests } = serveModel("/v1/chat/completions", () => {
+    const chunk = {
+      ...COMPLETION,
+      choices: [
+        { index: 0, delta: { content: "Answer" }, finish_reason: "stop" },
+      ],
+    };
+    return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`, {
+      headers: { "content-type": "text/event-stream" },
+    });
+  });
+  try {
+    const result = await runCli(
+      ["--chat", "-m", `lmstudio/${MODEL}`],
+      { LM_STUDIO_BASE_URL: new URL("/v1", server.url).href },
+      {
+        config: { aliases: { next: "lmstudio/another/model" } },
+        stdin:
+          "First\n/model unknown/missing\n/model next\n/retry\n/clear\nSecond\n/bye\n",
+      },
+    );
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe("Answer\nAnswer\nAnswer\n");
+    expect(result.stderr).toContain('Unknown provider "unknown"');
+    expect(result.stderr).toContain("Model: lmstudio/another/model");
+    const firstPrompt = [{ role: "user", content: "First" }];
+    expect(requests.map(({ body }) => body)).toEqual([
+      expect.objectContaining({ model: MODEL, messages: firstPrompt }),
+      expect.objectContaining({
+        model: "another/model",
+        messages: firstPrompt,
+      }),
+      expect.objectContaining({
+        model: "another/model",
+        messages: [{ role: "user", content: "Second" }],
+      }),
+    ]);
+  } finally {
+    await server.stop(true);
+  }
+});
+
+test("redirected Markdown renders a split fence once without terminal controls", async () => {
+  const { server } = serveModel("/v1/chat/completions", () => {
+    const chunks = ["``", "`sh\necho '**literal**'\n", "```"].map(
+      (content, index) => ({
+        ...COMPLETION,
+        choices: [
+          {
+            index: 0,
+            delta: { content },
+            finish_reason: index === 2 ? "stop" : null,
+          },
+        ],
+      }),
+    );
+    return new Response(
+      `${chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("")}data: [DONE]\n\n`,
+      { headers: { "content-type": "text/event-stream" } },
+    );
+  });
+  try {
+    const result = await runCli(
+      ["-m", `lmstudio/${MODEL}`, "--markdown", "Show a shell example"],
+      { LM_STUDIO_BASE_URL: new URL("/v1", server.url).href },
+    );
+    expect(result.stderr).toBe("");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.match(/echo/g)).toHaveLength(1);
+    expect(result.stdout).toContain("echo '**literal**'");
+    expect(result.stdout).not.toContain("\x1b");
+  } finally {
+    await server.stop(true);
+  }
+});
+
+test("TTY chat preserves multiline paste and renders Markdown at narrow widths", async () => {
+  const markdown = [
+    "# Example",
+    "",
+    "```sh",
+    "echo literal ".repeat(12),
+    "```",
+  ].join("\n");
+  const { server, requests } = serveModel("/v1/chat/completions", () => {
+    const chunk = {
+      ...COMPLETION,
+      choices: [
+        { index: 0, delta: { content: markdown }, finish_reason: "stop" },
+      ],
+    };
+    return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`, {
+      headers: { "content-type": "text/event-stream" },
+    });
+  });
+
+  const configDir = await mkdtemp(join(tmpdir(), "ai-pipe-tty-"));
+  let output = "";
+  const decoder = new TextDecoder();
+  const terminal = new Bun.Terminal({
+    cols: 56,
+    rows: 22,
+    data(_, chunk) {
+      output += decoder.decode(chunk, { stream: true });
+    },
+  });
+  const proc = Bun.spawn(
+    [process.execPath, CLI, "--chat", "--stats", "-m", `lmstudio/${MODEL}`],
+    {
+      cwd: configDir,
+      env: {
+        HOME: configDir,
+        TERM: "xterm-256color",
+        LM_STUDIO_BASE_URL: new URL("/v1", server.url).href,
+      },
+      terminal,
+    },
+  );
+  async function waitFor(text: string) {
+    const deadline = performance.now() + 3_000;
+    while (!Bun.stripANSI(output).includes(text)) {
+      if (performance.now() >= deadline || proc.exitCode !== null) {
+        throw new Error(
+          `Expected terminal output "${text}": ${Bun.stripANSI(output)}`,
+        );
+      }
+      await Bun.sleep(15);
+    }
+  }
+  try {
+    await waitFor("/help");
+    terminal.write("\x1b[200~first line\nsecond line\x1b[201~\r");
+    await waitFor("to first text");
+    expect(Bun.stripANSI(output)).toContain("Example");
+    expect(Bun.stripANSI(output)).not.toContain("# Example");
+    expect(Bun.stripANSI(output)).toContain("echo literal");
+    expect(requests[0]?.body).toMatchObject({
+      messages: [{ role: "user", content: "first line\nsecond line" }],
+    });
+    terminal.write("/bye\r");
+    expect(await proc.exited).toBe(0);
+  } finally {
+    if (proc.exitCode === null) proc.kill();
+    await proc.exited;
+    terminal.close();
+    await server.stop(true);
+    await rm(configDir, { recursive: true, force: true });
+  }
+}, 10_000);

@@ -218,9 +218,8 @@ describe("SUPPORTED_PROVIDERS", () => {
     }
   });
 
-  test("is a readonly tuple", () => {
-    // @ts-expect-error -- should not allow push on readonly
-    expect(() => (SUPPORTED_PROVIDERS as string[]).push("test")).toThrow();
+  test("keeps the supported provider list frozen", () => {
+    expect(Object.isFrozen(SUPPORTED_PROVIDERS)).toBe(true);
   });
 });
 

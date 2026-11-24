@@ -118,80 +118,46 @@ function lazyProvider(create: () => ProviderV3): ProviderV3 {
   };
 }
 
-function createOllamaProvider() {
+function createOllamaProvider(): ReturnType<typeof createOllama> {
   return createOllama({ baseURL: getModelEndpoint("ollama") });
 }
 
-/**
- * Central AI SDK provider registry.
- *
- * All supported LLM providers are registered here using the Vercel AI SDK's
- * `createProviderRegistry`. Models are resolved via "provider/model-id" strings
- * with "/" as the separator.
- */
-export const registry = createProviderRegistry(
-  {
-    openai,
-    anthropic,
-    google,
-    perplexity,
-    xai,
-    mistral,
-    groq,
-    deepseek,
-    cohere,
-    fireworks,
-    openrouter,
-    azure,
-    togetherai,
-    bedrock,
-    vertex,
-    ollama: {
-      ...lazyProvider(createOllamaProvider),
-      rerankingModel: (modelId: string) =>
-        createOllamaProvider().rerankingModel(modelId),
-    },
-    lmstudio: lazyProvider(() => createLocalProvider("lmstudio")),
-    local: lazyProvider(() => createLocalProvider("local")),
-    huggingface,
-    deepinfra,
-    cerebras,
-    gateway,
-    luma,
-    fal,
-    replicate,
+const providers = {
+  openai,
+  anthropic,
+  google,
+  perplexity,
+  xai,
+  mistral,
+  groq,
+  deepseek,
+  cohere,
+  fireworks,
+  openrouter,
+  azure,
+  togetherai,
+  bedrock,
+  vertex,
+  ollama: {
+    ...lazyProvider(createOllamaProvider),
+    rerankingModel: (modelId: string) =>
+      createOllamaProvider().rerankingModel(modelId),
   },
-  { separator: "/" },
-);
+  lmstudio: lazyProvider(() => createLocalProvider("lmstudio")),
+  local: lazyProvider(() => createLocalProvider("local")),
+  huggingface,
+  deepinfra,
+  cerebras,
+  gateway,
+  luma,
+  fal,
+  replicate,
+};
 
-/** Frozen tuple of all supported provider IDs. Used for validation and iteration. */
-export const SUPPORTED_PROVIDERS = Object.freeze([
-  "openai",
-  "anthropic",
-  "google",
-  "perplexity",
-  "xai",
-  "mistral",
-  "groq",
-  "deepseek",
-  "cohere",
-  "fireworks",
-  "openrouter",
-  "azure",
-  "togetherai",
-  "bedrock",
-  "vertex",
-  "ollama",
-  "lmstudio",
-  "local",
-  "huggingface",
-  "deepinfra",
-  "cerebras",
-  "gateway",
-  "luma",
-  "fal",
-  "replicate",
-] as const);
+export const registry = createProviderRegistry(providers, { separator: "/" });
+export const SUPPORTED_PROVIDERS = Object.freeze(
+  Object.keys(providers) as (keyof typeof providers)[],
+);
 
 /** Zod schema for validating a provider ID against the supported providers list. */
 export const ProviderIdSchema = z.enum(SUPPORTED_PROVIDERS);
@@ -386,6 +352,7 @@ export function parseModel(modelString: string): ParsedModel {
 export function resolveModel(
   modelString: string,
   customProviders?: CustomProviders,
+  exitOnError = true,
 ) {
   const { provider, modelId, fullId } = parseModel(modelString);
   const custom = getCustomEndpoint(provider, customProviders);
@@ -403,9 +370,9 @@ export function resolveModel(
       ...SUPPORTED_PROVIDERS,
       ...Object.keys(customProviders ?? {}),
     ].join(", ");
-    console.error(
-      `Error: Unknown provider "${provider}". Supported providers: ${supported}. Run "ai-pipe --providers" to see supported providers and their required environment variables.`,
-    );
+    const message = `Unknown provider "${provider}". Supported providers: ${supported}. Run "ai-pipe --providers" to see supported providers and their required environment variables.`;
+    if (!exitOnError) throw new Error(message);
+    console.error(`Error: ${message}`);
     process.exit(1);
   }
 
@@ -427,9 +394,9 @@ export function resolveModel(
     const apiKeysHint = usesApiKey
       ? ` Or add the key(s) to ~/.ai-pipe/apiKeys.json.`
       : "";
-    console.error(
-      `Error: Missing required environment variable(s): ${missingVars.join(", ")}.\nSet them with:\n  ${exportCmds}${apiKeysHint}`,
-    );
+    const message = `Missing required environment variable(s): ${missingVars.join(", ")}.\nSet them with:\n  ${exportCmds}${apiKeysHint}`;
+    if (!exitOnError) throw new Error(message);
+    console.error(`Error: ${message}`);
     process.exit(1);
   }
 

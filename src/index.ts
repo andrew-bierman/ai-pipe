@@ -62,7 +62,6 @@ import {
   listSessions,
 } from "./session.ts";
 import { printResponseStats } from "./stats.ts";
-import { StreamingMarkdownRenderer } from "./streaming-markdown.ts";
 import {
   loadStructuredOutput,
   type StructuredOutput,
@@ -122,7 +121,7 @@ export interface CLIOptions {
   json: boolean;
   schema?: string;
   stream: boolean;
-  markdown: boolean;
+  markdown?: boolean;
   cost: boolean;
   stats?: boolean;
   chat: boolean;
@@ -158,7 +157,7 @@ export const CLIOptionsSchema = z.object({
   json: z.boolean(),
   schema: z.string().min(1).optional(),
   stream: z.boolean(),
-  markdown: z.boolean().optional().default(false),
+  markdown: z.boolean().optional(),
   cost: z.boolean().optional().default(false),
   stats: z.boolean().optional(),
   chat: z.boolean().optional().default(false),
@@ -457,7 +456,7 @@ export function resolveOptions(
       providerDefaults.maxOutputTokens ??
       config.maxOutputTokens ??
       undefined,
-    markdown: opts.markdown,
+    markdown: opts.markdown ?? false,
   };
 }
 
@@ -849,7 +848,6 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
     const consumeStream = async () => {
       const startedAt = performance.now();
       let firstTextMs: number | undefined;
-      let elapsedMs: number;
       // Capture API errors via the onError callback to prevent bun from
       // dumping raw stack traces with request bodies, response headers,
       // and cookies. Without this, bun's native ReadableStream error
@@ -862,62 +860,30 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
         },
       });
 
-      // When markdown is enabled, progressively re-render as tokens arrive.
-      if (markdown) {
-        const renderer = new StreamingMarkdownRenderer();
-        for await (const chunk of result.textStream) {
-          if (showStats && chunk) firstTextMs ??= performance.now() - startedAt;
-          renderer.append(chunk);
-        }
+      let fullResponse = "";
+      for await (const chunk of result.textStream) {
+        if (showStats && chunk) firstTextMs ??= performance.now() - startedAt;
+        if (!markdown) process.stdout.write(chunk);
+        fullResponse += chunk;
+      }
+      const elapsedMs = performance.now() - startedAt;
+      if (capturedApiError) throw capturedApiError;
 
-        elapsedMs = performance.now() - startedAt;
+      const sourcesText = formatSourcesText((await result.sources) ?? []);
+      process.stdout.write(
+        markdown
+          ? renderMarkdown(fullResponse + sourcesText)
+          : `${sourcesText}\n`,
+      );
 
-        // If onError captured an API error, throw it now for clean formatting
-        if (capturedApiError) throw capturedApiError;
-
-        renderer.finish();
-
-        // Apply afterResponse plugin transform to collected buffer
-        const streamedText = afterResponseTransform
-          ? await afterResponseTransform(renderer.getBuffer())
-          : renderer.getBuffer();
-
-        // Save to session history if applicable
-        if (session) {
-          session.messages.push({
-            role: "assistant",
-            content: streamedText,
-          });
-          await saveHistory(session.name, session.messages);
-        }
-      } else {
-        let fullResponse = "";
-        for await (const chunk of result.textStream) {
-          if (showStats && chunk) firstTextMs ??= performance.now() - startedAt;
-          process.stdout.write(chunk);
-          fullResponse += chunk;
-        }
-
-        elapsedMs = performance.now() - startedAt;
-
-        // If onError captured an API error, throw it now for clean formatting
-        if (capturedApiError) throw capturedApiError;
-
-        // Append sources after stream completes
-        const streamSources = await result.sources;
-        const sourcesText = formatSourcesText(streamSources ?? []);
-        process.stdout.write(`${sourcesText}\n`);
-
-        // Apply afterResponse plugin transform to collected response
-        const streamedText = afterResponseTransform
+      if (session) {
+        const text = afterResponseTransform
           ? await afterResponseTransform(fullResponse)
           : fullResponse;
-
-        // Save to session history if applicable
-        if (session) {
-          session.messages.push({ role: "assistant", content: streamedText });
-          await saveHistory(session.name, session.messages);
-        }
+        session.messages.push({ role: "assistant", content: text });
+        await saveHistory(session.name, session.messages);
+      } else if (afterResponseTransform) {
+        await afterResponseTransform(fullResponse);
       }
 
       const usage = await result.usage;
@@ -1225,10 +1191,18 @@ async function runAction(
     await startChat({
       model,
       modelString,
+      resolveChatModel: (id) => {
+        const selected = resolveAlias(config, id);
+        return {
+          model: resolveModel(selected, config.customProviders, false),
+          modelString: selected,
+        };
+      },
       system: systemPrompt,
       temperature,
       maxOutputTokens,
-      markdown,
+      markdown:
+        opts.markdown ?? Boolean(process.stdin.isTTY && process.stdout.isTTY),
       showCost: opts.cost,
       showStats: opts.stats,
       budget: opts.budget,
@@ -1576,7 +1550,7 @@ export const mainCommand = defineCommand({
     markdown: {
       type: "boolean",
       description: "Render markdown output",
-      default: false,
+      negativeDescription: "Display plain text in chat",
     },
     stats: {
       type: "boolean",

@@ -1,5 +1,22 @@
 # ai-pipe Code Quality & Developer Experience Audit
 
+## November 2026 update
+
+The February audit below describes 1.0.8. Today, `src/index.ts` still has about 1,800 lines and remains the main place where CLI responsibilities overlap.
+
+| Area | Finding and decision |
+| --- | --- |
+| Terminal rendering | The ANSI redraw loop counted JavaScript string length as terminal width and could write cursor controls into a pipe. Bun's native Markdown renderer replaces the JavaScript renderers. Pi TUI owns terminal input, width-aware wrapping, and redraw. Vercel's existing remend package repairs partial Markdown in chat. |
+| Provider registration | The provider registry and its duplicate list could drift. Provider IDs now come from the registry, with typed credential metadata and user-defined compatible endpoints. |
+| Model requests | Vercel AI SDK already handles streaming, structured output, and MCP. The CLI also wraps SDK retries in its own retry loop. Consolidate on the SDK's `maxRetries` after testing pre-response failures, partial output, and retry logging. |
+| CLI flags | Citty defines the flags, Zod validates the parsed options, and completions repeat many of the same flags. Generate shell completions from the CLI metadata when it can preserve shell-specific model, role, and file completion. This has a better payoff than changing parsers. |
+
+Streamdown's React renderer targets web interfaces. Its remend package is the part this terminal CLI needs. Vercel's Chat SDK targets messaging platforms and its Workflow SDK targets durable execution. The existing AI SDK is the appropriate layer for this CLI's local and cloud model calls.
+
+Sources [Bun Markdown](https://bun.sh/reference/globals/bun/markdown/ansi), [Streamdown configuration](https://streamdown.ai/docs/configuration), and [AI SDK settings](https://ai-sdk.dev/docs/ai-sdk-core/settings).
+
+---
+
 **Date:** 2026-02-10
 **Version audited:** 1.0.8
 **Auditor scope:** All source files in `src/`, all test files in `src/__tests__/`, `package.json`, `tsconfig.json`

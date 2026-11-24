@@ -1,6 +1,6 @@
 import type { UsageInfo } from "./cost.ts";
 
-export function printResponseStats({
+export function formatResponseStats({
   usage,
   elapsedMs,
   firstTextMs,
@@ -10,7 +10,7 @@ export function printResponseStats({
   elapsedMs: number;
   firstTextMs?: number;
   label?: string;
-}): void {
+}): string {
   const parts = [`${(elapsedMs / 1000).toFixed(2)}s elapsed`];
   if (firstTextMs !== undefined) {
     parts.push(`${(firstTextMs / 1000).toFixed(2)}s to first text`);
@@ -26,5 +26,11 @@ export function printResponseStats({
       );
     }
   }
-  console.error(`Stats${label ? ` (${label})` : ""}: ${parts.join(" · ")}`);
+  return `Stats${label ? ` (${label})` : ""}: ${parts.join(" · ")}`;
+}
+
+export function printResponseStats(
+  stats: Parameters<typeof formatResponseStats>[0],
+): void {
+  console.error(formatResponseStats(stats));
 }
