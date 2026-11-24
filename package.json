@@ -1,6 +1,6 @@
 {
   "name": "ai-pipe",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "A lean CLI for calling LLMs from the terminal. Text in, text out.",
   "keywords": [
     "ai",
@@ -77,6 +77,7 @@
     "@ai-sdk/togetherai": "^2.0.101",
     "@ai-sdk/xai": "^3.0.153",
     "@clack/prompts": "^1.9.0",
+    "@earendil-works/pi-tui": "1.6.0",
     "@openrouter/ai-sdk-provider": "^2.10.0",
     "ai": "^6.0.336",
     "ai-sdk-ollama": "^3.8.8",

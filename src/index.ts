@@ -61,7 +61,7 @@ import {
   importSession,
   listSessions,
 } from "./session.ts";
-import { StreamingMarkdownRenderer } from "./streaming-markdown.ts";
+import { printResponseStats } from "./stats.ts";
 import {
   loadStructuredOutput,
   type StructuredOutput,
@@ -121,8 +121,9 @@ export interface CLIOptions {
   json: boolean;
   schema?: string;
   stream: boolean;
-  markdown: boolean;
+  markdown?: boolean;
   cost: boolean;
+  stats?: boolean;
   chat: boolean;
   temperature?: number;
   maxOutputTokens?: number;
@@ -156,8 +157,9 @@ export const CLIOptionsSchema = z.object({
   json: z.boolean(),
   schema: z.string().min(1).optional(),
   stream: z.boolean(),
-  markdown: z.boolean().optional().default(false),
+  markdown: z.boolean().optional(),
   cost: z.boolean().optional().default(false),
+  stats: z.boolean().optional(),
   chat: z.boolean().optional().default(false),
   temperature: z
     .number()
@@ -454,7 +456,7 @@ export function resolveOptions(
       providerDefaults.maxOutputTokens ??
       config.maxOutputTokens ??
       undefined,
-    markdown: opts.markdown,
+    markdown: opts.markdown ?? false,
   };
 }
 
@@ -682,6 +684,7 @@ interface ExecutePromptParams {
   format?: OutputFormat;
   markdown: boolean;
   showCost: boolean;
+  showStats?: boolean;
   /** If provided, saves assistant response to session history */
   session?: {
     name: string;
@@ -719,6 +722,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
     format,
     markdown,
     showCost,
+    showStats,
     structuredOutput,
     session,
     cacheKey,
@@ -755,6 +759,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
           : `${cached.text}\n`;
         process.stdout.write(text);
       }
+      if (showStats) console.error("Stats: cache hit");
       displayCostIfEnabled({ usage: cached.usage, modelString, showCost });
       checkBudget({ usage: cached.usage, modelString, budget });
       return;
@@ -778,12 +783,14 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
       : { ...baseOptions, system, prompt: prompt ?? "" };
 
   if (structuredOutput || json || format || !stream) {
+    const startedAt = performance.now();
     const result =
       retries !== undefined && retries > 0
         ? await withRetry(() => generateText(callOptions), {
             maxRetries: retries,
           })
         : await generateText(callOptions);
+    const elapsedMs = performance.now() - startedAt;
 
     // Apply afterResponse plugin transform if provided
     const responseText = afterResponseTransform
@@ -834,10 +841,13 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
       process.stdout.write(output);
     }
 
+    if (showStats) printResponseStats({ usage: result.usage, elapsedMs });
     displayCostIfEnabled({ usage: result.usage, modelString, showCost });
     checkBudget({ usage: result.usage, modelString, budget });
   } else {
     const consumeStream = async () => {
+      const startedAt = performance.now();
+      let firstTextMs: number | undefined;
       // Capture API errors via the onError callback to prevent bun from
       // dumping raw stack traces with request bodies, response headers,
       // and cookies. Without this, bun's native ReadableStream error
@@ -850,64 +860,36 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
         },
       });
 
-      // When markdown is enabled, progressively re-render as tokens arrive.
-      if (markdown) {
-        const renderer = new StreamingMarkdownRenderer();
-        for await (const chunk of result.textStream) {
-          renderer.append(chunk);
-        }
+      let fullResponse = "";
+      for await (const chunk of result.textStream) {
+        if (showStats && chunk) firstTextMs ??= performance.now() - startedAt;
+        if (!markdown) process.stdout.write(chunk);
+        fullResponse += chunk;
+      }
+      const elapsedMs = performance.now() - startedAt;
+      if (capturedApiError) throw capturedApiError;
 
-        // If onError captured an API error, throw it now for clean formatting
-        if (capturedApiError) throw capturedApiError;
+      const sourcesText = formatSourcesText((await result.sources) ?? []);
+      process.stdout.write(
+        markdown
+          ? renderMarkdown(fullResponse + sourcesText)
+          : `${sourcesText}\n`,
+      );
 
-        renderer.finish();
-
-        // Apply afterResponse plugin transform to collected buffer
-        const streamedText = afterResponseTransform
-          ? await afterResponseTransform(renderer.getBuffer())
-          : renderer.getBuffer();
-
-        // Save to session history if applicable
-        if (session) {
-          session.messages.push({
-            role: "assistant",
-            content: streamedText,
-          });
-          await saveHistory(session.name, session.messages);
-        }
-      } else {
-        let fullResponse = "";
-        for await (const chunk of result.textStream) {
-          process.stdout.write(chunk);
-          fullResponse += chunk;
-        }
-
-        // If onError captured an API error, throw it now for clean formatting
-        if (capturedApiError) throw capturedApiError;
-
-        // Append sources after stream completes
-        const streamSources = await result.sources;
-        const sourcesText = formatSourcesText(streamSources ?? []);
-        process.stdout.write(`${sourcesText}\n`);
-
-        // Apply afterResponse plugin transform to collected response
-        const streamedText = afterResponseTransform
+      if (session) {
+        const text = afterResponseTransform
           ? await afterResponseTransform(fullResponse)
           : fullResponse;
-
-        // Save to session history if applicable
-        if (session) {
-          session.messages.push({ role: "assistant", content: streamedText });
-          await saveHistory(session.name, session.messages);
-        }
+        session.messages.push({ role: "assistant", content: text });
+        await saveHistory(session.name, session.messages);
+      } else if (afterResponseTransform) {
+        await afterResponseTransform(fullResponse);
       }
 
-      displayCostIfEnabled({
-        usage: await result.usage,
-        modelString,
-        showCost,
-      });
-      checkBudget({ usage: await result.usage, modelString, budget });
+      const usage = await result.usage;
+      if (showStats) printResponseStats({ usage, elapsedMs, firstTextMs });
+      displayCostIfEnabled({ usage, modelString, showCost });
+      checkBudget({ usage, modelString, budget });
     };
 
     if (retries !== undefined && retries > 0) {
@@ -1143,6 +1125,17 @@ async function runAction(
 
     try {
       const results = await runDiff(diffOptions);
+      if (opts.stats) {
+        for (const result of results) {
+          if (result.durationMs > 0) {
+            printResponseStats({
+              usage: result.usage,
+              elapsedMs: result.durationMs,
+              label: result.model,
+            });
+          }
+        }
+      }
       if (opts.json) {
         process.stdout.write(`${formatDiffJson(results)}\n`);
       } else {
@@ -1198,11 +1191,20 @@ async function runAction(
     await startChat({
       model,
       modelString,
+      resolveChatModel: (id) => {
+        const selected = resolveAlias(config, id);
+        return {
+          model: resolveModel(selected, config.customProviders, false),
+          modelString: selected,
+        };
+      },
       system: systemPrompt,
       temperature,
       maxOutputTokens,
-      markdown,
+      markdown:
+        opts.markdown ?? Boolean(process.stdin.isTTY && process.stdout.isTTY),
       showCost: opts.cost,
+      showStats: opts.stats,
       budget: opts.budget,
     });
     return;
@@ -1221,6 +1223,7 @@ async function runAction(
         temperature,
         maxOutputTokens,
         verbose: opts.verbose,
+        showStats: opts.stats,
       });
 
       if (opts.format) {
@@ -1358,6 +1361,7 @@ async function runAction(
       structuredOutput,
       markdown,
       showCost: opts.cost,
+      showStats: opts.stats,
       session: sessionName ? { name: sessionName, messages } : undefined,
       cacheKey,
       tools,
@@ -1546,6 +1550,11 @@ export const mainCommand = defineCommand({
     markdown: {
       type: "boolean",
       description: "Render markdown output",
+      negativeDescription: "Display plain text in chat",
+    },
+    stats: {
+      type: "boolean",
+      description: "Print token counts and timing to stderr",
       default: false,
     },
     cost: {
@@ -1702,6 +1711,7 @@ export const mainCommand = defineCommand({
       cache: args.cache,
       markdown: args.markdown,
       cost: args.cost,
+      stats: args.stats,
       chat: args.chat,
       temperature:
         args.temperature !== undefined

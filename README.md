@@ -211,6 +211,25 @@ ai-pipe --chat --budget 1.00
 ai-pipe --retries 3 "explain recursion"
 ```
 
+### Interactive chat
+
+```sh
+ai-pipe --chat --stats
+```
+
+Enter sends a message. Shift+Enter or Ctrl+J adds a line, and the up arrow recalls earlier prompts. Use `/model <id-or-alias>` to switch models, `/retry` to regenerate the last answer, and `/clear` to reset context. Esc or Ctrl+C cancels a running response. Tab completes slash commands.
+
+Interactive chat renders Markdown as it arrives. Use `--no-markdown` for plain text. A one-shot prompt with `--markdown` renders the complete response once so terminal redraw codes stay out of redirected output.
+
+### Response stats
+
+Use `--stats` with a prompt, chat, chain, or model comparison to print timing and token counts to stderr. Streaming calls also report time to first text. Throughput is the provider-reported output token count divided by the full request time. Cache hits are reported separately.
+
+```sh
+ai-pipe --stats "summarize this" < notes.txt
+ai-pipe --chat --stats
+```
+
 ### Schema-validated JSON
 
 Pass an object-shaped JSON Schema (draft 7) to get just the validated JSON object on stdout.
@@ -670,7 +689,7 @@ Use `minor` or `major` when appropriate. When a higher version lands on `main`, 
 - [x] **Interactive chat mode** — back-and-forth conversation with `--chat`
 - [x] **MCP support** — Model Context Protocol via `@ai-sdk/mcp`
 - [x] **Provider-specific defaults** — per-provider temperature/maxTokens in config
-- [x] **Streaming markdown** — progressive markdown rendering during streaming
+- [x] **Streaming Markdown in chat** — progressive rendering in the interactive terminal
 - [x] **Config commands** — `ai-pipe init` wizard, `config set/show/reset/path`
 - [x] **citty migration** — replaced Commander.js with citty (UnJS)
 - [x] **Prompt templates** — reusable prompt snippets in `~/.ai-pipe/templates/`

@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { type Config, resolveAlias } from "./config.ts";
 import { resolveModel } from "./provider.ts";
+import { printResponseStats } from "./stats.ts";
 
 /**
  * Zod schema for a single chain step.
@@ -35,6 +36,7 @@ export interface ChainOptions {
   maxOutputTokens?: number;
   /** Print intermediate outputs to stderr. */
   verbose?: boolean;
+  showStats?: boolean;
 }
 
 /**
@@ -67,6 +69,7 @@ export async function executeChain(options: ChainOptions): Promise<string> {
       );
     }
 
+    const startedAt = performance.now();
     const result = await generateText({
       model,
       system: step.system,
@@ -75,6 +78,13 @@ export async function executeChain(options: ChainOptions): Promise<string> {
       maxOutputTokens: options.maxOutputTokens,
     });
 
+    if (options.showStats) {
+      printResponseStats({
+        usage: result.usage,
+        elapsedMs: performance.now() - startedAt,
+        label: `step ${i + 1}: ${modelString}`,
+      });
+    }
     currentInput = result.text;
 
     if (options.verbose) {

@@ -816,12 +816,12 @@ describe("CLIOptionsSchema additional", () => {
     expect(result.cost).toBe(false);
   });
 
-  test("markdown defaults to false", () => {
+  test("markdown is unspecified until the output mode determines the default", () => {
     const result = CLIOptionsSchema.parse({
       json: false,
       stream: true,
     });
-    expect(result.markdown).toBe(false);
+    expect(result.markdown).toBeUndefined();
   });
 
   test("rejects non-string model", () => {

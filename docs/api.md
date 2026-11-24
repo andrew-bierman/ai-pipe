@@ -34,7 +34,7 @@ Prompt words are joined with spaces. If no prompt is given and no stdin is avail
 |------|-------|------|---------|-------------|
 | `--json` | `-j` | boolean | `false` | Output the full JSON response object (text, model, usage, finishReason). |
 | `--no-stream` | | boolean | `false` | Wait for the full response before printing. Streaming is on by default. |
-| `--markdown` | | boolean | `false` | Render the response as formatted markdown in the terminal with ANSI colors, headings, code highlighting, and other formatting via `Bun.markdown.render()`. |
+| `--markdown` | | boolean | `false` | Render the response as formatted markdown in the terminal with ANSI colors, headings, code highlighting, and other formatting via `Bun.markdown.ansi()`. |
 | `--cost` | | boolean | `false` | Show estimated cost of the request on stderr after the response. |
 
 ### Generation Parameters
