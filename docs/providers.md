@@ -81,13 +81,16 @@ ai-pipe -m fast "say hello"
 ## Discovering models
 
 ```sh
+ai-pipe models --detect
 ai-pipe models lmstudio
 ai-pipe models ollama
 ai-pipe models edge
 ai-pipe models anthropic
 ```
 
-Local and custom providers query their server directly. Built-in cloud providers use the public [Models.dev catalog](https://models.dev/), which may include models your account cannot access. Without an argument, `models` uses the configured default provider. You can pass any valid model ID to `-m`, including IDs that a catalog omits.
+Local and custom providers query their servers directly. `--detect` probes those servers in parallel and skips unreachable endpoints. OpenAI and Vercel AI Gateway use live listings when credentials are available. OpenRouter uses its live catalog. Other cloud providers use [Models.dev](https://models.dev/), whose catalog can differ from account access and lag behind new models.
+
+Without an argument, `models` uses the configured default provider. Any valid model ID can be passed to `-m`, even if it is absent from a listing.
 
 ## Cloud providers
 

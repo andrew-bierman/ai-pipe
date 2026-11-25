@@ -46,15 +46,22 @@ const CHAT_COMMANDS = [
   { name: "help", description: "Show chat commands" },
   { name: "clear", description: "Reset conversation context" },
   { name: "model", description: "Show or switch the model" },
+  { name: "settings", description: "Show active request settings" },
   { name: "retry", description: "Regenerate the last answer" },
   { name: "bye", description: "Exit chat" },
 ];
 
-export function createChatTui(
-  model: string,
-  markdown: boolean,
-  interrupt: () => void,
-) {
+export function createChatTui({
+  model,
+  markdown,
+  interrupt,
+  suggestModels,
+}: {
+  model: string;
+  markdown: boolean;
+  interrupt: () => void;
+  suggestModels: (query: string) => Promise<string[]>;
+}) {
   const tui = new TuiMainScreen(new ProcessTerminal());
   const transcript = new Container();
   const status = new Text();
@@ -74,7 +81,22 @@ export function createChatTui(
     { paddingX: 1 },
   );
   editor.setAutocompleteProvider(
-    new CombinedAutocompleteProvider(CHAT_COMMANDS, process.cwd(), null),
+    new CombinedAutocompleteProvider(
+      CHAT_COMMANDS.map((command) =>
+        command.name === "model"
+          ? {
+              ...command,
+              getArgumentCompletions: async (query: string) =>
+                (await suggestModels(query)).map((id) => ({
+                  label: id,
+                  value: id,
+                })),
+            }
+          : command,
+      ),
+      process.cwd(),
+      null,
+    ),
   );
 
   tui.addChild(new Text(bold("ai-pipe chat")));

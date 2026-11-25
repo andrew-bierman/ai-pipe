@@ -1,7 +1,7 @@
 import { generateText, type LanguageModel } from "ai";
 import { z } from "zod";
 
-import { type Config, resolveAlias } from "./config.ts";
+import { type Config, getGenerationSettings, resolveAlias } from "./config.ts";
 import { resolveModel } from "./provider.ts";
 import { printResponseStats } from "./stats.ts";
 
@@ -34,6 +34,7 @@ export interface ChainOptions {
   config: Config;
   temperature?: number;
   maxOutputTokens?: number;
+  maxRetries?: number;
   /** Print intermediate outputs to stderr. */
   verbose?: boolean;
   showStats?: boolean;
@@ -71,6 +72,7 @@ export async function executeChain(options: ChainOptions): Promise<string> {
 
     const startedAt = performance.now();
     const result = await generateText({
+      ...getGenerationSettings(options.config, modelString, options.maxRetries),
       model,
       system: step.system,
       prompt,

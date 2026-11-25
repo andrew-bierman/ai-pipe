@@ -1,4 +1,5 @@
 import { generateText } from "ai";
+import type { GenerationSettings } from "./config.ts";
 import type { UsageInfo } from "./cost.ts";
 import { calculateCost, formatCost, parseModelString } from "./cost.ts";
 import { type CustomProviders, resolveModel } from "./provider.ts";
@@ -16,6 +17,7 @@ export interface DiffResult {
 export interface DiffOptions {
   models: string[];
   customProviders?: CustomProviders;
+  generationForModel?: (model: string) => GenerationSettings;
   prompt: string;
   system?: string;
   temperature?: number;
@@ -34,6 +36,7 @@ export async function runDiff(options: DiffOptions): Promise<DiffResult[]> {
       const start = performance.now();
 
       const result = await generateText({
+        ...options.generationForModel?.(modelString),
         model,
         system: options.system,
         prompt: options.prompt,
