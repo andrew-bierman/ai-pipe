@@ -168,14 +168,22 @@ export async function startChat(options: ChatOptions): Promise<void> {
         continue;
       }
       if (command === "/settings") {
-        const { providerOptions, ...settings } = getActiveGenerationSettings();
+        const {
+          temperature,
+          maxOutputTokens,
+          maxRetries = "SDK default",
+          providerOptions,
+          ...settings
+        } = getActiveGenerationSettings();
         const activeSettings = {
           model: modelString,
           markdown: options.markdown,
           stats: Boolean(options.showStats),
           cost: Boolean(options.showCost),
           budget: options.budget,
-          maxRetries: "SDK default",
+          temperature,
+          maxOutputTokens,
+          maxRetries,
           ...settings,
         };
         const lines = Object.entries(activeSettings)
