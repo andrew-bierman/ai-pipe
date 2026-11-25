@@ -474,6 +474,7 @@ test.each([
     temperature: 0,
     maxTokens: 73,
     retries: 2,
+    fallback: { temperature: 0.9, maxTokens: 100, retries: "SDK default" },
   },
   {
     mode: "CLI overrides",
@@ -488,10 +489,11 @@ test.each([
     temperature: 0.3,
     maxTokens: 19,
     retries: 0,
+    fallback: { temperature: 0.3, maxTokens: 19, retries: 0 },
   },
 ])(
   "chat switches generation settings with $mode",
-  async ({ flags, temperature, maxTokens, retries }) => {
+  async ({ flags, temperature, maxTokens, retries, fallback }) => {
     const { server, requests } = serveModel("/v1/chat/completions", () => {
       const chunk = {
         ...COMPLETION,
@@ -516,7 +518,7 @@ test.each([
             temperature: 0.9,
             maxOutputTokens: 100,
             generation: { frequencyPenalty: 0.2, seed: 10 },
-            customProviders: { edge: { baseURL } },
+            customProviders: { edge: { baseURL }, plain: { baseURL } },
             aliases: { next: "edge/second" },
             providers: {
               lmstudio: {
@@ -540,20 +542,20 @@ test.each([
             },
           },
           stdin:
-            "/model next\n/settings\nFirst\n/model edge/third\n/settings\nSecond\n/bye\n",
+            "/model next\n/settings\nFirst\n/model edge/third\n/settings\nSecond\n/model plain/fourth\n/settings\nThird\n/bye\n",
         },
       );
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toBe("Answer\nAnswer\n");
+      expect(result.stdout).toBe("Answer\nAnswer\nAnswer\n");
       for (const model of ["edge/second", "edge/third"]) {
         const settings = result.stderr
           .split(`model: ${model}\n`)[1]
           ?.split("Model: ")[0];
+        expect(settings).toContain(
+          `temperature: ${temperature}\nmaxOutputTokens: ${maxTokens}\nmaxRetries: ${retries}\n`,
+        );
         expect(settings?.trim().split("\n")).toEqual(
           expect.arrayContaining([
-            `temperature: ${temperature}`,
-            `maxOutputTokens: ${maxTokens}`,
-            `maxRetries: ${retries}`,
             "topP: 0.4",
             "topK: 12",
             "frequencyPenalty: 0.2",
@@ -565,8 +567,15 @@ test.each([
         );
         expect(settings).not.toContain("presencePenalty");
       }
-      expect(requests.map(({ body }) => body)).toEqual(
-        ["second", "third"].map((model) =>
+      const fallbackSettings = result.stderr.split("model: plain/fourth\n")[1];
+      expect(fallbackSettings).toContain(
+        `temperature: ${fallback.temperature}\nmaxOutputTokens: ${fallback.maxTokens}\nmaxRetries: ${fallback.retries}\n`,
+      );
+      expect(fallbackSettings).toContain("seed: 10");
+      expect(fallbackSettings).not.toMatch(/topP:|provider options:/);
+
+      expect(requests.map(({ body }) => body)).toEqual([
+        ...["second", "third"].map((model) =>
           expect.objectContaining({
             model,
             temperature,
@@ -578,7 +587,16 @@ test.each([
             user: "destination",
           }),
         ),
-      );
+        expect.objectContaining({
+          model: "fourth",
+          temperature: fallback.temperature,
+          max_tokens: fallback.maxTokens,
+          frequency_penalty: 0.2,
+          seed: 10,
+        }),
+      ]);
+      expect(requests[2]?.body).not.toHaveProperty("top_p");
+      expect(requests[2]?.body).not.toHaveProperty("user");
       for (const { body } of requests) {
         expect(body).not.toHaveProperty("presence_penalty");
       }
