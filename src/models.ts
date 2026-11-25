@@ -1,5 +1,6 @@
 import { createGatewayProvider } from "@ai-sdk/gateway";
 import { z } from "zod";
+import { APPLE_MODEL_ID, hasAppleFm } from "./apple.ts";
 import type { Config } from "./config.ts";
 import {
   getProviderConfigEnvVar,
@@ -73,6 +74,7 @@ export async function detectLocalModels(config: Config): Promise<string[]> {
     ...Object.keys(config.customProviders ?? {}),
   ];
   if (process.env.AI_PIPE_LOCAL_BASE_URL) providers.push("local");
+  if (hasAppleFm()) providers.push("apple");
   const results = await Promise.allSettled(
     providers.map((provider) => listModels(provider, config)),
   );
@@ -85,6 +87,14 @@ export async function listModels(
   provider: string,
   config: Config,
 ): Promise<string[]> {
+  if (provider === "apple") {
+    if (!hasAppleFm()) {
+      throw new Error(
+        "apple/on-device requires macOS 27 and the built-in /usr/bin/fm.",
+      );
+    }
+    return [`apple/${APPLE_MODEL_ID}`];
+  }
   const configKey =
     config.apiKeys && Object.hasOwn(config.apiKeys, provider)
       ? config.apiKeys[provider]

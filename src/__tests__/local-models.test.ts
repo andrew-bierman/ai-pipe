@@ -635,3 +635,138 @@ test("generation settings reach the SDK and CLI retries override config", async 
     await server.stop(true);
   }
 });
+
+test("an agent executes only its authorized MCP tool and prints the final answer", async () => {
+  const testHome = await mkdtemp(join(tmpdir(), "ai-pipe-agent-"));
+  const mcpPath = join(testHome, "server.ts");
+  const configPath = join(testHome, "mcp.json");
+  const lookup = { name: "lookup", inputSchema: { type: "object" } };
+  const { server, requests } = serveModel("/v1/chat/completions", () =>
+    requests.length === 2
+      ? chatCompletion("The limit is 10 MB.")
+      : Response.json({
+          ...COMPLETION,
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: "assistant",
+                content: "I will check.",
+                tool_calls: [
+                  {
+                    id: "lookup-1",
+                    type: "function",
+                    function: { name: "docs__lookup", arguments: "{}" },
+                  },
+                ],
+              },
+              finish_reason: "tool_calls",
+            },
+          ],
+          usage: { prompt_tokens: 7, completion_tokens: 2, total_tokens: 9 },
+        }),
+  );
+  try {
+    await Bun.write(
+      mcpPath,
+      `
+      for await (const line of console) {
+        const { id, method, params } = JSON.parse(line);
+        if (id === undefined) continue;
+        const result = {
+          initialize: {
+            protocolVersion: "2024-11-05",
+            capabilities: { tools: {} },
+            serverInfo: { name: "fixture", version: "1.0.0" },
+          },
+          "tools/list": {
+            tools: [${JSON.stringify(lookup)}, { ...${JSON.stringify(lookup)}, name: "private__lookup" }],
+          },
+          "tools/call": {
+            content: [{ type: "text", text: params?.name === "lookup" ? "10 MB" : "Unexpected tool" }],
+          },
+        }[method];
+        console.log(JSON.stringify({ jsonrpc: "2.0", id, result }));
+      }
+    `,
+    );
+    await Bun.write(
+      configPath,
+      JSON.stringify({
+        servers: { docs: { command: process.execPath, args: [mcpPath] } },
+      }),
+    );
+    const result = await runCli(
+      [
+        "-m",
+        `lmstudio/${MODEL}`,
+        "--json",
+        "--agent",
+        "--mcp",
+        configPath,
+        "--agent-tools",
+        "docs__lookup",
+        "--agent-steps",
+        "2",
+        "Find the upload limit",
+      ],
+      { LM_STUDIO_BASE_URL: new URL("/v1", server.url).href },
+      { testHome },
+    );
+    expect(result.stderr).toBe("");
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      text: "The limit is 10 MB.",
+      usage: { inputTokens: 17, outputTokens: 5, totalTokens: 22 },
+    });
+    expect(requests).toHaveLength(2);
+    expect(requests[0]?.body).toMatchObject({
+      tools: [{ function: { name: "docs__lookup" } }],
+    });
+    expect(requests[1]?.body).toMatchObject({
+      messages: expect.arrayContaining([
+        expect.objectContaining({
+          role: "tool",
+          content: expect.stringContaining("10 MB"),
+        }),
+      ]),
+    });
+    const mcpServer = { command: process.execPath, args: [mcpPath] };
+    await Bun.write(
+      configPath,
+      JSON.stringify({
+        servers: { docs: mcpServer, docs__private: mcpServer },
+      }),
+    );
+    const ambiguous = await runCli(
+      [
+        "-m",
+        `lmstudio/${MODEL}`,
+        "--agent",
+        "--mcp",
+        configPath,
+        "--agent-tools",
+        "docs__private__lookup",
+        "Find the upload limit",
+      ],
+      { LM_STUDIO_BASE_URL: new URL("/v1", server.url).href },
+      { testHome },
+    );
+    expect(ambiguous.exitCode).toBe(1);
+    expect(ambiguous.stdout).toBe("");
+    expect(ambiguous.stderr).toContain(
+      'Ambiguous MCP tool name "docs__private__lookup"',
+    );
+    expect(requests).toHaveLength(2);
+  } finally {
+    await server.stop(true);
+    await rm(testHome, { recursive: true, force: true });
+  }
+});
+
+test("an agent requires explicit tool execution authorization", async () => {
+  const result = await runCli(["--agent", "--mcp", "unused.json", "Hello"]);
+  expect(result.exitCode).toBe(1);
+  expect(result.stdout).toBe("");
+  expect(result.stderr).toContain("--agent-tools allowlist");
+});

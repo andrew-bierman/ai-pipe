@@ -86,14 +86,16 @@ export class MCPManager {
    *
    * @param config - The validated MCP config object.
    */
-  async connect(config: MCPConfig): Promise<void> {
+  async connect(config: MCPConfig, signal?: AbortSignal): Promise<void> {
     const entries = Object.entries(config.servers);
 
     for (const [name, serverConfig] of entries) {
+      signal?.throwIfAborted();
       try {
-        const connected = await this.connectServer(name, serverConfig);
+        const connected = await this.connectServer(name, serverConfig, signal);
         this.servers.push(connected);
       } catch (err) {
+        signal?.throwIfAborted();
         const message = err instanceof Error ? err.message : String(err);
         console.warn(
           `Warning: Failed to connect to MCP server "${name}": ${message}`,
@@ -108,8 +110,10 @@ export class MCPManager {
   private async connectServer(
     name: string,
     config: ServerConfig,
+    signal?: AbortSignal,
   ): Promise<ConnectedServer> {
     let client: MCPClient;
+    const initializationOptions = signal ? { signal } : undefined;
 
     if (isStdioConfig(config)) {
       const transport = new Experimental_StdioMCPTransport({
@@ -118,9 +122,10 @@ export class MCPManager {
         env: config.env,
         stderr: "pipe",
       });
-      client = await createMCPClient({ transport });
+      client = await createMCPClient({ transport, initializationOptions });
     } else {
       client = await createMCPClient({
+        initializationOptions,
         transport: {
           type: "sse",
           url: config.url,
@@ -139,18 +144,44 @@ export class MCPManager {
    *
    * @returns A record of AI SDK tools keyed by prefixed tool name.
    */
-  async getTools(): Promise<Record<string, Tool>> {
+  async getTools(
+    allowedNames?: ReadonlySet<string>,
+    signal?: AbortSignal,
+  ): Promise<Record<string, Tool>> {
     const tools: Record<string, Tool> = {};
 
     for (const server of this.servers) {
-      const serverTools = await server.client.tools();
+      const serverTools = signal
+        ? await this.getToolsWithSignal(server.client, signal)
+        : await server.client.tools();
       for (const [toolName, toolDef] of Object.entries(serverTools)) {
         const prefixedName = `${server.name}__${toolName}`;
+        if (allowedNames) {
+          if (!allowedNames.has(prefixedName)) continue;
+          if (Object.hasOwn(tools, prefixedName)) {
+            throw new Error(
+              `Ambiguous MCP tool name "${prefixedName}". Rename one of the servers in the MCP config.`,
+            );
+          }
+        }
         tools[prefixedName] = toolDef as Tool;
       }
     }
 
     return tools;
+  }
+
+  private async getToolsWithSignal(client: MCPClient, signal: AbortSignal) {
+    let page = await client.listTools({ options: { signal } });
+    const tools = [...page.tools];
+    while (page.nextCursor != null) {
+      page = await client.listTools({
+        params: { cursor: page.nextCursor },
+        options: { signal },
+      });
+      tools.push(...page.tools);
+    }
+    return client.toolsFromDefinitions({ tools });
   }
 
   /**
