@@ -448,6 +448,17 @@ export function resolveOptions(
     modelString,
     system:
       opts.system ?? providerDefaults.system ?? config.system ?? undefined,
+    ...resolveSamplingOptions(opts, config, providerDefaults),
+    markdown: opts.markdown ?? false,
+  };
+}
+
+function resolveSamplingOptions(
+  opts: CLIOptions,
+  config: Config,
+  providerDefaults: ReturnType<typeof getProviderDefaults>,
+) {
+  return {
     temperature:
       opts.temperature ??
       providerDefaults.temperature ??
@@ -458,7 +469,6 @@ export function resolveOptions(
       providerDefaults.maxOutputTokens ??
       config.maxOutputTokens ??
       undefined,
-    markdown: opts.markdown ?? false,
   };
 }
 
@@ -1186,8 +1196,14 @@ async function runAction(
     await startChat({
       model,
       modelString,
-      generationForModel: (id) =>
-        getGenerationSettings(config, id, opts.retries),
+      generationForModel: (id) => ({
+        ...getGenerationSettings(config, id, opts.retries),
+        ...resolveSamplingOptions(
+          opts,
+          config,
+          getProviderDefaults(config, parseModelString(id).provider),
+        ),
+      }),
       modelSuggestions: async (currentModel, query) => {
         const provider = query.includes("/")
           ? parseModelString(query).provider
@@ -1213,8 +1229,6 @@ async function runAction(
         };
       },
       system: systemPrompt,
-      temperature,
-      maxOutputTokens,
       markdown:
         opts.markdown ?? Boolean(process.stdin.isTTY && process.stdout.isTTY),
       showCost: opts.cost,
