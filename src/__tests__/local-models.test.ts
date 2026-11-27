@@ -467,6 +467,145 @@ test("piped chat switches models and retries without duplicating context", async
   }
 });
 
+test.each([
+  {
+    mode: "provider defaults",
+    flags: [],
+    temperature: 0,
+    maxTokens: 73,
+    retries: 2,
+    fallback: { temperature: 0.9, maxTokens: 100, retries: "SDK default" },
+  },
+  {
+    mode: "CLI overrides",
+    flags: [
+      "--temperature",
+      "0.3",
+      "--maxOutputTokens",
+      "19",
+      "--retries",
+      "0",
+    ],
+    temperature: 0.3,
+    maxTokens: 19,
+    retries: 0,
+    fallback: { temperature: 0.3, maxTokens: 19, retries: 0 },
+  },
+])(
+  "chat switches generation settings with $mode",
+  async ({ flags, temperature, maxTokens, retries, fallback }) => {
+    const { server, requests } = serveModel("/v1/chat/completions", () => {
+      const chunk = {
+        ...COMPLETION,
+        choices: [
+          { index: 0, delta: { content: "Answer" }, finish_reason: "stop" },
+        ],
+      };
+      return new Response(
+        `data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`,
+        {
+          headers: { "content-type": "text/event-stream" },
+        },
+      );
+    });
+    try {
+      const baseURL = new URL("/v1", server.url).href;
+      const result = await runCli(
+        ["--chat", "-m", `lmstudio/${MODEL}`, ...flags],
+        { LM_STUDIO_BASE_URL: baseURL },
+        {
+          config: {
+            temperature: 0.9,
+            maxOutputTokens: 100,
+            generation: { frequencyPenalty: 0.2, seed: 10 },
+            customProviders: { edge: { baseURL }, plain: { baseURL } },
+            aliases: { next: "edge/second" },
+            providers: {
+              lmstudio: {
+                temperature: 0.6,
+                maxOutputTokens: 42,
+                generation: { seed: 25, presencePenalty: 0.8 },
+              },
+              edge: {
+                temperature: 0,
+                maxOutputTokens: 73,
+                generation: {
+                  topP: 0.4,
+                  topK: 12,
+                  stopSequences: ["end"],
+                  seed: 40,
+                  maxRetries: 2,
+                  timeout: { totalMs: 2000 },
+                  providerOptions: { edge: { user: "destination" } },
+                },
+              },
+            },
+          },
+          stdin:
+            "/model next\n/settings\nFirst\n/model edge/third\n/settings\nSecond\n/model plain/fourth\n/settings\nThird\n/bye\n",
+        },
+      );
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toBe("Answer\nAnswer\nAnswer\n");
+      for (const model of ["edge/second", "edge/third"]) {
+        const settings = result.stderr
+          .split(`model: ${model}\n`)[1]
+          ?.split("Model: ")[0];
+        expect(settings).toContain(
+          `temperature: ${temperature}\nmaxOutputTokens: ${maxTokens}\nmaxRetries: ${retries}\n`,
+        );
+        expect(settings?.trim().split("\n")).toEqual(
+          expect.arrayContaining([
+            "topP: 0.4",
+            "topK: 12",
+            "frequencyPenalty: 0.2",
+            'stopSequences: ["end"]',
+            "seed: 40",
+            'timeout: {"totalMs":2000}',
+            "provider options: edge",
+          ]),
+        );
+        expect(settings).not.toContain("presencePenalty");
+      }
+      const fallbackSettings = result.stderr.split("model: plain/fourth\n")[1];
+      expect(fallbackSettings).toContain(
+        `temperature: ${fallback.temperature}\nmaxOutputTokens: ${fallback.maxTokens}\nmaxRetries: ${fallback.retries}\n`,
+      );
+      expect(fallbackSettings).toContain("seed: 10");
+      expect(fallbackSettings).not.toMatch(/topP:|provider options:/);
+
+      expect(requests.map(({ body }) => body)).toEqual([
+        ...["second", "third"].map((model) =>
+          expect.objectContaining({
+            model,
+            temperature,
+            max_tokens: maxTokens,
+            top_p: 0.4,
+            frequency_penalty: 0.2,
+            stop: ["end"],
+            seed: 40,
+            user: "destination",
+          }),
+        ),
+        expect.objectContaining({
+          model: "fourth",
+          temperature: fallback.temperature,
+          max_tokens: fallback.maxTokens,
+          frequency_penalty: 0.2,
+          seed: 10,
+        }),
+      ]);
+      expect(requests[2]?.body).not.toHaveProperty("top_p");
+      expect(requests[2]?.body).not.toHaveProperty("user");
+      for (const { body } of requests) {
+        expect(body).not.toHaveProperty("presence_penalty");
+      }
+    } finally {
+      await server.stop(true);
+    }
+  },
+);
+
 test("redirected Markdown renders a split fence once without terminal controls", async () => {
   const { server } = serveModel("/v1/chat/completions", () => {
     const chunks = ["``", "`sh\necho '**literal**'\n", "```"].map(

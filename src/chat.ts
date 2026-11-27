@@ -8,6 +8,11 @@ import { formatResponseStats } from "./stats.ts";
 export const EXIT_COMMANDS = new Set(["exit", "quit", "/bye"]);
 export const CLEAR_COMMAND = "/clear";
 
+type ChatGenerationSettings = GenerationSettings & {
+  temperature?: number;
+  maxOutputTokens?: number;
+};
+
 export interface ChatOptions {
   model: LanguageModel;
   modelString: string;
@@ -16,7 +21,7 @@ export interface ChatOptions {
     modelString: string;
   };
   modelSuggestions?: (currentModel: string, query: string) => Promise<string[]>;
-  generationForModel?: (model: string) => GenerationSettings;
+  generationForModel?: (model: string) => ChatGenerationSettings;
   system?: string;
   temperature?: number;
   maxOutputTokens?: number;
@@ -117,6 +122,14 @@ export async function startChat(options: ChatOptions): Promise<void> {
     else close();
   }
 
+  function getActiveGenerationSettings(): ChatGenerationSettings {
+    return {
+      temperature: options.temperature,
+      maxOutputTokens: options.maxOutputTokens,
+      ...options.generationForModel?.(modelString),
+    };
+  }
+
   function reset() {
     messages.length = 0;
     if (options.system)
@@ -155,17 +168,22 @@ export async function startChat(options: ChatOptions): Promise<void> {
         continue;
       }
       if (command === "/settings") {
-        const { providerOptions, ...settings } =
-          options.generationForModel?.(modelString) ?? {};
+        const {
+          temperature,
+          maxOutputTokens,
+          maxRetries = "SDK default",
+          providerOptions,
+          ...settings
+        } = getActiveGenerationSettings();
         const activeSettings = {
           model: modelString,
           markdown: options.markdown,
           stats: Boolean(options.showStats),
           cost: Boolean(options.showCost),
           budget: options.budget,
-          temperature: options.temperature,
-          maxOutputTokens: options.maxOutputTokens,
-          maxRetries: "SDK default",
+          temperature,
+          maxOutputTokens,
+          maxRetries,
           ...settings,
         };
         const lines = Object.entries(activeSettings)
@@ -222,14 +240,12 @@ export async function startChat(options: ChatOptions): Promise<void> {
       active = controller;
       try {
         const result = streamText({
-          ...options.generationForModel?.(modelString),
+          ...getActiveGenerationSettings(),
           model,
           messages: [
             ...messages.slice(0, lastPromptIndex),
             { role: "user", content: prompt },
           ],
-          temperature: options.temperature,
-          maxOutputTokens: options.maxOutputTokens,
           abortSignal: controller.signal,
           onError: ({ error }) => {
             streamError = error;
