@@ -26,6 +26,7 @@ import { createProviderRegistry } from "ai";
 import { createOllama } from "ai-sdk-ollama";
 import { z } from "zod";
 
+import { apple, hasAppleFm } from "./apple.ts";
 import { APP } from "./constants.ts";
 
 const LOCAL_ENDPOINTS = {
@@ -145,6 +146,7 @@ const providers = {
   },
   lmstudio: lazyProvider(() => createLocalProvider("lmstudio")),
   local: lazyProvider(() => createLocalProvider("local")),
+  apple,
   huggingface,
   deepinfra,
   cerebras,
@@ -262,6 +264,7 @@ export const PROVIDER_ENV_VARS: Record<ProviderId, readonly string[]> = {
   ollama: [],
   lmstudio: [],
   local: [LOCAL_ENDPOINTS.local.envVar],
+  apple: [],
   huggingface: ["HF_TOKEN"],
   deepinfra: ["DEEPINFRA_API_KEY"],
   cerebras: ["CEREBRAS_API_KEY"],
@@ -440,7 +443,13 @@ export function printProviders(customProviders?: CustomProviders): void {
     const envVarStr = envVarLabels[index] ?? "";
     const allSet = envVars.every((v) => !!process.env[v]);
     const status =
-      envVars.length === 0 ? "✓ ready" : allSet ? "✓ set" : "✗ missing";
+      provider === "apple" && !hasAppleFm()
+        ? "✗ requires macOS 27"
+        : envVars.length === 0
+          ? "✓ ready"
+          : allSet
+            ? "✓ set"
+            : "✗ missing";
     console.log(
       `${provider.padEnd(maxName)}  ${envVarStr.padEnd(maxVar)}  ${status}`,
     );

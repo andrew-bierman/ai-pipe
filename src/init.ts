@@ -3,11 +3,13 @@ import { join } from "node:path";
 
 import * as p from "@clack/prompts";
 import pkg from "../package.json";
+import { APPLE_MODEL_ID, hasAppleFm } from "./apple.ts";
 import { APP } from "./constants.ts";
 import {
   PROVIDER_ENV_VARS,
   PROVIDER_OPTIONAL_ENV_VARS,
   type ProviderId,
+  ProviderIdSchema,
   SUPPORTED_PROVIDERS,
 } from "./provider.ts";
 
@@ -38,6 +40,7 @@ const PROVIDER_LABELS: Record<ProviderId, string> = {
   ollama: "Ollama (Local)",
   lmstudio: "LM Studio",
   local: "OpenAI-compatible endpoint",
+  apple: "Apple Intelligence",
   huggingface: "Hugging Face",
   deepinfra: "DeepInfra",
   cerebras: "Cerebras",
@@ -111,9 +114,11 @@ export async function runInit(): Promise<void> {
   }
 
   // Step 1: Select providers
-  const providers = await p.multiselect({
+  const providers = await p.multiselect<string>({
     message: "Which providers would you like to set up?",
-    options: SUPPORTED_PROVIDERS.map((id) => ({
+    options: SUPPORTED_PROVIDERS.filter(
+      (id) => id !== "apple" || hasAppleFm(),
+    ).map((id) => ({
       value: id,
       label: PROVIDER_LABELS[id],
       hint: [
@@ -167,6 +172,10 @@ export async function runInit(): Promise<void> {
       }
 
       apiKeys[provider] = apiKey;
+    } else if (provider === "apple") {
+      p.log.info(
+        "Enable Apple Intelligence in System Settings before making requests.",
+      );
     } else if (
       provider === "lmstudio" ||
       provider === "local" ||
@@ -184,23 +193,27 @@ export async function runInit(): Promise<void> {
   }
 
   // Step 3: Choose a provider and enter a model ID.
-  const selected = await p.select({
+  const selectedProvider = await p.select<string>({
     message: "Choose the default provider",
     options: selectedProviders.map((provider) => ({
       value: provider,
       label: PROVIDER_LABELS[provider],
     })),
   });
-  if (p.isCancel(selected)) {
+  if (p.isCancel(selectedProvider)) {
     p.cancel("Setup cancelled.");
     process.exit(0);
   }
 
+  const selected = ProviderIdSchema.parse(selectedProvider);
   p.log.info(`Find available model IDs with: ai-pipe models ${selected}`);
-  const defaultModelId = await p.text({
-    message: `Model ID for ${PROVIDER_LABELS[selected]}`,
-    validate: (value) => (value?.trim() ? undefined : "Enter a model ID"),
-  });
+  const defaultModelId =
+    selected === "apple"
+      ? APPLE_MODEL_ID
+      : await p.text({
+          message: `Model ID for ${PROVIDER_LABELS[selected]}`,
+          validate: (value) => (value?.trim() ? undefined : "Enter a model ID"),
+        });
   if (p.isCancel(defaultModelId)) {
     p.cancel("Setup cancelled.");
     process.exit(0);

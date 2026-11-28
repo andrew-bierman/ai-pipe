@@ -49,7 +49,7 @@ _${funcName}_completions() {
   COMPREPLY=()
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
-  opts="--model -m --system -s --role -r --roles --template -T --templates --file -f --image -i --json -j --schema --format -F --no-stream --no-cache --temperature -t --max-output-tokens --config -c --cost --stats --markdown --chat --session -C --budget -B --retries --diff -D --providers --completions --tools --mcp --chain --verbose -v --plugins -P --no-update-check --version -V --help -h"
+  opts="--model -m --system -s --role -r --roles --template -T --templates --file -f --image -i --json -j --schema --format -F --no-stream --no-cache --temperature -t --max-output-tokens --config -c --cost --stats --markdown --chat --session -C --budget -B --retries --diff -D --providers --completions --tools --mcp --agent --agent-tools --agent-steps --chain --verbose -v --plugins -P --no-update-check --version -V --help -h"
   providers="${providers}"
   subcommands="init config session"
   config_subcommands="set show reset path"
@@ -174,6 +174,9 @@ _${funcName}() {
     '--completions[Generate shell completions]:shell:(${shells})' \\
     '--retries[Number of retries on rate limit or transient errors]:retries:' \\
     '--tools[Path to tools configuration file (JSON)]:file:_files' \\
+    '--agent[Run a bounded MCP tool loop]' \\
+    '--agent-tools[Authorized MCP tool names]:names:' \\
+    '--agent-steps[Maximum agent model calls]:count:' \\
     '--mcp[Path to MCP server configuration file (JSON)]:file:_files' \\
     '--chain[Path to chain config JSON file]:file:_files' \\
     '(-v --verbose)'{-v,--verbose}'[Show intermediate chain outputs on stderr]' \\
@@ -247,6 +250,9 @@ complete -c ${name} -l providers -d 'List supported providers'
 complete -c ${name} -l completions -d 'Generate shell completions' -x -a '${shells}'
 complete -c ${name} -l retries -d 'Number of retries on rate limit or transient errors' -x
 complete -c ${name} -l tools -d 'Path to tools configuration file (JSON)' -r -F
+complete -c ${name} -l agent -d 'Run a bounded MCP tool loop'
+complete -c ${name} -l agent-tools -d 'Authorized MCP tool names' -r
+complete -c ${name} -l agent-steps -d 'Maximum agent model calls' -r
 complete -c ${name} -l mcp -d 'Path to MCP server configuration file (JSON)' -r -F
 complete -c ${name} -l chain -d 'Path to chain config JSON file' -r -F
 complete -c ${name} -s v -l verbose -d 'Show intermediate chain outputs on stderr'

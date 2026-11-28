@@ -5,7 +5,10 @@ import {
   type LanguageModel,
   type ModelMessage,
   RetryError,
+  stepCountIs,
   streamText,
+  ToolLoopAgent,
+  type ToolSet,
 } from "ai";
 import { defineCommand, renderUsage, runMain, showUsage } from "citty";
 import { z } from "zod";
@@ -142,6 +145,9 @@ export interface CLIOptions {
   format?: OutputFormat;
   tools?: string;
   mcp?: string;
+  agent?: boolean;
+  agentTools?: string;
+  agentSteps?: number;
   budget?: number;
   chain?: string;
   verbose?: boolean;
@@ -182,6 +188,9 @@ export const CLIOptionsSchema = z.object({
   format: OutputFormatSchema.optional(),
   tools: z.string().optional(),
   mcp: z.string().optional(),
+  agent: z.boolean().optional(),
+  agentTools: z.string().optional(),
+  agentSteps: z.number().int().min(2).max(20).optional(),
   budget: z.number().positive().optional(),
   chain: z.string().optional(),
   verbose: z.boolean().optional().default(false),
@@ -264,12 +273,12 @@ export function buildJsonOutput(
     reasoningText?: string | undefined | null;
     providerMetadata?: Record<string, unknown> | undefined;
   },
-  opts: { modelString: string; text?: string },
+  opts: { modelString: string; text?: string; usage?: JsonOutput["usage"] },
 ): JsonOutput {
   const output: JsonOutput = {
     text: opts.text ?? result.text,
     model: opts.modelString,
-    usage: result.usage,
+    usage: opts.usage ?? result.usage,
     finishReason: result.finishReason,
   };
   const sources = extractSources(result.sources ?? []);
@@ -700,6 +709,7 @@ interface ExecutePromptParams {
   /** If provided, warn when cost exceeds this budget (in USD) */
   budget?: number;
   generation?: GenerationSettings;
+  agent?: { tools: ToolSet; steps: number };
   /** Optional transform applied to response text before output (plugin afterResponse) */
   afterResponseTransform?: (text: string) => Promise<string>;
 }
@@ -730,6 +740,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
     tools,
     budget,
     generation,
+    agent,
     afterResponseTransform,
   } = params;
 
@@ -784,9 +795,27 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
       ? { ...baseOptions, messages }
       : { ...baseOptions, system, prompt: prompt ?? "" };
 
-  if (structuredOutput || json || format || !stream) {
+  if (agent || structuredOutput || json || format || !stream) {
     const startedAt = performance.now();
-    const result = await generateText(callOptions);
+    const result = agent
+      ? await new ToolLoopAgent({
+          ...baseOptions,
+          instructions: system,
+          allowSystemInMessages: true,
+          tools: agent.tools,
+          stopWhen: stepCountIs(agent.steps),
+          timeout:
+            typeof generation?.timeout === "number"
+              ? generation.timeout
+              : { totalMs: 60_000, ...generation?.timeout },
+        }).generate(messages ? { messages } : { prompt: prompt ?? "" })
+      : await generateText(callOptions);
+    if (agent && result.finishReason === "tool-calls") {
+      throw new Error(
+        "Agent stopped before producing a final answer. Check the configured tools and step limit.",
+      );
+    }
+    const usage = agent ? result.totalUsage : result.usage;
     const elapsedMs = performance.now() - startedAt;
 
     // Apply afterResponse plugin transform if provided
@@ -819,6 +848,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
       process.stdout.write(`${structuredJson}\n`);
     } else if (format) {
       const outputData = buildJsonOutput(result, {
+        usage,
         modelString,
         text: responseText,
       });
@@ -826,6 +856,7 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
       process.stdout.write(`${output}\n`);
     } else if (json) {
       const output = buildJsonOutput(result, {
+        usage,
         modelString,
         text: responseText,
       });
@@ -838,9 +869,9 @@ async function executePrompt(params: ExecutePromptParams): Promise<void> {
       process.stdout.write(output);
     }
 
-    if (showStats) printResponseStats({ usage: result.usage, elapsedMs });
-    displayCostIfEnabled({ usage: result.usage, modelString, showCost });
-    checkBudget({ usage: result.usage, modelString, budget });
+    if (showStats) printResponseStats({ usage, elapsedMs });
+    displayCostIfEnabled({ usage, modelString, showCost });
+    checkBudget({ usage, modelString, budget });
   } else {
     const startedAt = performance.now();
     let firstTextMs: number | undefined;
@@ -946,6 +977,24 @@ async function runAction(
     process.exit(1);
   }
   const opts = parsed.data;
+  const allowedTools = opts.agentTools?.split(",").map((name) => name.trim());
+  if (opts.agent) {
+    if (!opts.mcp || !allowedTools?.length || allowedTools.includes("")) {
+      console.error(
+        "Error: --agent requires --mcp and a comma-separated --agent-tools allowlist.",
+      );
+      process.exit(1);
+    }
+    if (opts.chat || opts.chain || opts.diff || opts.tools) {
+      console.error(
+        "Error: --agent is a one-shot mode and cannot be combined with --chat, --chain, --diff, or --tools.",
+      );
+      process.exit(1);
+    }
+  } else if (opts.agentTools !== undefined || opts.agentSteps !== undefined) {
+    console.error("Error: --agent-tools and --agent-steps require --agent.");
+    process.exit(1);
+  }
 
   // Handle info flags first
   if (opts.providers) {
@@ -1281,73 +1330,77 @@ async function runAction(
         )
       : {};
 
-  // Load MCP tools if --mcp flag is provided
   let mcpManager: MCPManager | undefined;
-  let mcpTools: Record<string, unknown> = {};
-  if (opts.mcp) {
-    try {
-      const mcpConfig = await loadMCPConfig(opts.mcp);
-      mcpManager = new MCPManager();
-      await mcpManager.connect(mcpConfig);
-      mcpTools = await mcpManager.getTools();
-    } catch (err: unknown) {
-      console.error(`Error loading MCP config: ${formatError(err)}`);
-      process.exit(1);
-    }
-  }
-
-  // Merge static tools and MCP tools
-  const allTools = { ...staticTools, ...mcpTools };
-  const tools: Record<string, unknown> | undefined =
-    Object.keys(allTools).length > 0 ? allTools : undefined;
-
-  // Load plugins if --plugins flag is provided (or auto-load from default path)
   let pluginManager: PluginManager | undefined;
-  const defaultPluginsPath = join(HOME_DIR, ".ai-pipe", "plugins.json");
-  const pluginsConfigPath = opts.plugins ?? defaultPluginsPath;
   try {
-    const pluginsFile = Bun.file(pluginsConfigPath);
-    if (await pluginsFile.exists()) {
-      pluginManager = new PluginManager();
-      await pluginManager.loadPlugins(pluginsConfigPath);
+    const selectedNames = opts.agent ? new Set(allowedTools) : undefined;
+    let mcpTools: ToolSet = {};
+    if (opts.mcp) {
+      try {
+        const mcpConfig = await loadMCPConfig(opts.mcp);
+        mcpManager = new MCPManager();
+        const discoverySignal = selectedNames
+          ? AbortSignal.timeout(15_000)
+          : undefined;
+        await mcpManager.connect(mcpConfig, discoverySignal);
+        mcpTools = await mcpManager.getTools(selectedNames, discoverySignal);
+      } catch (err) {
+        throw new Error(`Could not load MCP config: ${formatError(err)}`);
+      }
     }
-  } catch (err: unknown) {
-    console.error(`Error loading plugins: ${formatError(err)}`);
-    process.exit(1);
-  }
 
-  // Run beforeRequest plugin hooks to transform the prompt
-  if (pluginManager) {
-    prompt = await pluginManager.beforeRequest({
-      prompt,
-      model: modelString,
-      system: systemPrompt,
-    });
-  }
-
-  // Load conversation history if session is provided
-  // Sanitize session name to prevent directory traversal
-  if (structuredOutput) {
-    prompt = `${prompt}\n\n${structuredOutput.instruction}`;
-  }
-  const sessionName = opts.session ? sanitizeSessionName(opts.session) : null;
-  const messages: ModelMessage[] = sessionName
-    ? await loadHistory(sessionName)
-    : [];
-
-  // Add current user message to messages if using session
-  // Only add system message if history is empty (first message in conversation)
-  if (sessionName) {
-    if (systemPrompt && messages.length === 0) {
-      messages.unshift({ role: "system", content: systemPrompt });
+    let agent: ExecutePromptParams["agent"];
+    if (selectedNames) {
+      for (const name of selectedNames) {
+        if (!Object.hasOwn(mcpTools, name) || !mcpTools[name]?.execute) {
+          throw new Error(
+            `MCP tool "${name}" is unavailable or cannot execute.`,
+          );
+        }
+      }
+      agent = { tools: mcpTools, steps: opts.agentSteps ?? 5 };
     }
-    messages.push({ role: "user", content: prompt });
-  }
 
-  const generation = getGenerationSettings(config, modelString, opts.retries);
-  try {
+    const allTools = { ...staticTools, ...mcpTools };
+    const tools = Object.keys(allTools).length > 0 ? allTools : undefined;
+
+    const defaultPluginsPath = join(HOME_DIR, ".ai-pipe", "plugins.json");
+    const pluginsConfigPath = opts.plugins ?? defaultPluginsPath;
+    try {
+      if (await Bun.file(pluginsConfigPath).exists()) {
+        pluginManager = new PluginManager();
+        await pluginManager.loadPlugins(pluginsConfigPath);
+      }
+    } catch (err) {
+      throw new Error(`Could not load plugins: ${formatError(err)}`);
+    }
+    if (pluginManager) {
+      prompt = await pluginManager.beforeRequest({
+        prompt,
+        model: modelString,
+        system: systemPrompt,
+      });
+    }
+
+    if (structuredOutput) {
+      prompt = `${prompt}\n\n${structuredOutput.instruction}`;
+    }
+    const sessionName = opts.session ? sanitizeSessionName(opts.session) : null;
+    const messages: ModelMessage[] = sessionName
+      ? await loadHistory(sessionName)
+      : [];
+
+    if (sessionName) {
+      if (systemPrompt && messages.length === 0) {
+        messages.unshift({ role: "system", content: systemPrompt });
+      }
+      messages.push({ role: "user", content: prompt });
+    }
+
+    const generation = getGenerationSettings(config, modelString, opts.retries);
     // Build cache key for non-session mode when caching is enabled
     const useCache =
+      !agent &&
       !sessionName &&
       !structuredOutput &&
       opts.cache &&
@@ -1364,6 +1417,7 @@ async function runAction(
         })
       : null;
 
+    const activePluginManager = pluginManager;
     await executePrompt({
       model,
       modelString,
@@ -1381,17 +1435,19 @@ async function runAction(
       showStats: opts.stats,
       session: sessionName ? { name: sessionName, messages } : undefined,
       cacheKey,
-      tools,
+      tools: agent ? undefined : tools,
+      agent,
       budget: opts.budget,
       generation,
-      afterResponseTransform: pluginManager
+      afterResponseTransform: activePluginManager
         ? async (text: string) =>
-            pluginManager.afterResponse({ text, model: modelString })
+            activePluginManager.afterResponse({ text, model: modelString })
         : undefined,
     });
   } catch (err: unknown) {
     console.error(`Error: ${formatError(err, modelString)}`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   } finally {
     // Clean up MCP server connections on exit
     if (mcpManager) {
@@ -1644,6 +1700,19 @@ export const mainCommand = defineCommand({
       type: "string",
       description: "Path to MCP server configuration file (JSON)",
     },
+    agent: {
+      type: "boolean",
+      description:
+        "Run a bounded tool loop with explicitly authorized MCP tools",
+    },
+    agentTools: {
+      type: "string",
+      description: "Comma-separated MCP tool names authorized to execute",
+    },
+    agentSteps: {
+      type: "string",
+      description: "Maximum agent model calls (2–20, default 5)",
+    },
     budget: {
       type: "string",
       alias: "B",
@@ -1760,6 +1829,10 @@ export const mainCommand = defineCommand({
           : undefined,
       tools: args.tools,
       mcp: args.mcp,
+      agent: args.agent,
+      agentTools: args.agentTools,
+      agentSteps:
+        args.agentSteps === undefined ? undefined : Number(args.agentSteps),
       budget:
         args.budget !== undefined ? Number.parseFloat(args.budget) : undefined,
       chain: args.chain,

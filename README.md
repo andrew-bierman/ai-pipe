@@ -13,7 +13,7 @@ A powerful CLI for calling LLMs from the terminal. Text in, text out. Built on t
 ## ✨ Features
 
 - 🤖 **20+ AI Providers** — OpenAI, Anthropic, Google, Perplexity, xAI, Mistral, Groq, DeepSeek, Cohere, Fireworks, OpenRouter, Azure AI, Together AI, Amazon Bedrock, Google Vertex AI, Ollama, Hugging Face, DeepInfra, Cerebras, Luma, fal.ai, Replicate
-- 🖥️ **Local Models** — LM Studio, Ollama, and OpenAI-compatible model servers
+- 🖥️ **Local Models** — Apple Intelligence, LM Studio, Ollama, and OpenAI-compatible model servers
 - 📡 **Streaming by Default** — tokens print as they arrive
 - 🔄 **Pipe-friendly** — reads from stdin, writes to stdout, errors to stderr
 - 📎 **File Attachments** — include file contents in prompts with `-f`
@@ -225,7 +225,28 @@ Interactive chat renders Markdown as it arrives. Use `--no-markdown` for plain t
 
 Type `/model ` followed by Tab to suggest models from the active provider. Type a provider prefix such as `/model lmstudio/` to query another provider.
 
-For coding with an agent loop and tools, [Pi](https://github.com/earendil-works/pi/tree/main/packages/coding-agent) is the better fit. ai-pipe uses Pi's terminal UI library and Vercel AI SDK's generation and MCP APIs. Its chains use explicit steps.
+### Apple Intelligence
+
+On a Mac with macOS 27 and Apple Intelligence enabled, use the system on-device model:
+
+```sh
+ai-pipe -m apple/on-device "Summarize these notes" < notes.txt
+```
+
+ai-pipe calls Apple's built-in `fm` executable with the on-device model selected. The adapter supports text prompts and buffers output until the process completes. Apple tool calls, image inputs, and `--schema` are unavailable through this adapter. For tool loops, choose a provider with tool support.
+
+### Agent tool loops
+
+Use `--agent` for a single prompt that can call MCP tools and use their results to answer. Pick a model that supports tool calling and name each tool the model is authorized to run:
+
+```sh
+ai-pipe --agent --mcp ./mcp.json --agent-tools docs__search \
+  --agent-steps 5 "Find the documented upload limit"
+```
+
+Tool names take the form `server__tool`, using the server key from the MCP configuration. The allowlist authorizes those tools to execute without further prompts, so use trusted server configs and grant only the tools needed for the task. MCP startup and discovery have a separate 15-second deadline. The generation defaults are five steps and 60 seconds. Change the call limit with `--agent-steps` (2–20) and the timeout with `generation.timeout` in config.
+
+Agent mode buffers the final answer for stdout and bypasses the response cache. It supports JSON output and includes token usage across steps. Use `--chain` for fixed sequences of prompts.
 
 ### Response stats
 
@@ -284,6 +305,7 @@ Models are queried in parallel for speed. Each result shows the model name, resp
 | TogetherAI | `TOGETHERAI_API_KEY` | `togetherai/meta-llama/Llama-3.3-70b-Instruct` |
 | Bedrock | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `bedrock/anthropic.claude-sonnet-4-2025-02-19` |
 | Vertex | `GOOGLE_VERTEX_PROJECT`, `GOOGLE_VERTEX_LOCATION` | `vertex/google/cloud/llama-3.1` |
+| Apple Intelligence | macOS 27 with Apple Intelligence enabled | `apple/on-device` |
 | Ollama | Optional `OLLAMA_HOST` | `ollama/llama3` |
 | LM Studio | Optional `LM_STUDIO_BASE_URL`, `LM_STUDIO_API_KEY` | `lmstudio/<model-id>` |
 | OpenAI-compatible local server | `AI_PIPE_LOCAL_BASE_URL`, optional `AI_PIPE_LOCAL_API_KEY` | `local/<model-id>` |
@@ -606,6 +628,9 @@ Options:
   -i, --image <path>           Include image in prompt for vision models (repeatable)
   -j, --json                   Output full JSON response object
   -F, --format <fmt>           Output format (json, yaml, csv, text)
+      --agent                  Run one prompt with a bounded MCP tool loop
+      --agent-tools <names>    Comma-separated tool execution allowlist
+      --agent-steps <count>    Maximum model calls (2–20, default 5)
   --no-stream                  Wait for full response, then print
   --markdown                   Render markdown output
   --cost                       Show estimated cost of the request
